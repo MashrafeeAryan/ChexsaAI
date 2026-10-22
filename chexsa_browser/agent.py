@@ -154,6 +154,8 @@ class BrowserAgent:
                         raise BrowserError(result.code, result.message)
                     self.state.failures = 0
                 except BrowserError as error:
+                    if error.code == "rate_limited":
+                        return self._finish("uncertain" if self.state.submission != "none" else "blocked", str(error))
                     self.state.failures += 1
                     self.state.history.append({"action": "recovery", "status": "error", "message": str(error), "code": error.code})
                     self._save()

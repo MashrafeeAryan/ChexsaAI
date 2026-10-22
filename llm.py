@@ -53,7 +53,21 @@ class LLM:
         # These settings choose which provider and model Chexsa uses.
         self.provider = os.getenv("LLM_PROVIDER", "gemini")
         self.model = os.getenv("LLM_MODEL", "gemini-3.8-flash")
+        # Compatible endpoints often serve text-only models. Images are opt-in.
+        self.supports_vision = os.getenv("LLM_SUPPORTS_VISION", "1" if self.provider == "gemini" else "0").lower() in ("1", "true", "yes")
+        self.request_timeout = float(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
+        if self.request_timeout < 1:
+            raise ValueError("LLM_TIMEOUT_SECONDS must be at least 1.")
+        self.reasoning_effort = os.getenv("LLM_REASONING_EFFORT", "low" if self.model in ("openai/gpt-oss-120b", "openai/gpt-oss-20b") else "")
         self.client = self._create_client()
+
+    @property
+    def request_options(self):
+        options = {"timeout": getattr(self, "request_timeout", 30)}
+        effort = getattr(self, "reasoning_effort", "")
+        if effort:
+            options["reasoning_effort"] = effort
+        return options
 
     def _create_client(self):
         """Create the client needed by the selected provider."""
@@ -79,6 +93,8 @@ class LLM:
             return OpenAI(
                 api_key=api_key,
                 base_url=base_url,
+                timeout=self.request_timeout,
+                max_retries=0,
             )
 
         raise ValueError(f"Unknown LLM provider: {self.provider}")
@@ -91,7 +107,12 @@ class LLM:
             "Classify the user's request as chat, browser, or desktop. "
             "Use chat for greetings, explanations, or answers that need no app interaction. "
             "Use browser for interacting with websites or searching the web. "
+            "Opening a website includes launching or attaching to Chrome; the browser agent handles that itself. "
             "Use desktop for controlling Windows apps or local computer actions. "
+            "Choose by the user's destination and goal, not by the fact that a browser is a Windows app. "
+            "Examples: 'open YouTube' -> browser; 'open a website in Chrome' -> browser; "
+            "'open YouTube and search for jazz' -> browser; 'open Notepad' -> desktop; "
+            "'change Chrome settings' -> desktop; 'hello' -> chat. "
             "Return exactly chat, browser, or desktop with no other text.\n\n"
             f"REQUEST:\n{request}"
         )
@@ -100,14 +121,14 @@ class LLM:
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt,
-                config={"http_options": {"timeout": 60000}},
+                config={"http_options": {"timeout": int(getattr(self, "request_timeout", 30) * 1000)}},
             )
             text = response.text
         else:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                timeout=60,
+                **self.request_options,
             )
             text = response.choices[0].message.content
 
@@ -121,10 +142,10 @@ class LLM:
         """Answer in the terminal without opening a browser or desktop app."""
         prompt = "You are Chexsa. Reply to the user's message directly. Do not claim to have used a browser or computer tool.\n\n" + request
         if self.provider == "gemini":
-            response = self.client.models.generate_content(model=self.model, contents=prompt, config={"http_options": {"timeout": 60000}})
+            response = self.client.models.generate_content(model=self.model, contents=prompt, config={"http_options": {"timeout": int(getattr(self, "request_timeout", 30) * 1000)}})
             text = response.text
         else:
-            response = self.client.chat.completions.create(model=self.model, messages=[{"role": "user", "content": prompt}], timeout=60)
+            response = self.client.chat.completions.create(model=self.model, messages=[{"role": "user", "content": prompt}], **self.request_options)
             text = response.choices[0].message.content
         if not text:
             raise RuntimeError("The model returned an empty response.")
@@ -179,6 +200,7 @@ Rules:
 - For common Windows apps, launch them with a normal executable or Windows command.
 - If the user asks for writing, create the requested text inside type_text.
 - Set done=true only when the task is complete.
+- If an action is still needed, set done=false. Only finish with action="none" after observing the result.
 - Never return action="none" with done=false.
 
 USER REQUEST:
@@ -213,6 +235,7 @@ PREVIOUS STEPS:
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
+                **self.request_options,
             )
             text = response.choices[0].message.content
 

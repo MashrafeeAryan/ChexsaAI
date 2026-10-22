@@ -10,6 +10,13 @@ from llm import LLM
 
 
 class LLMTests(unittest.TestCase):
+    def test_compatible_models_default_to_text_only_and_can_opt_into_vision(self):
+        settings = {"LLM_PROVIDER": "openai_compatible", "LLM_API_KEY": "fixture-key", "LLM_BASE_URL": "https://provider.example.test/v1"}
+        with patch.dict("os.environ", settings, clear=True), patch("llm.OpenAI"):
+            self.assertFalse(LLM().supports_vision)
+            with patch.dict("os.environ", {"LLM_SUPPORTS_VISION": "1"}):
+                self.assertTrue(LLM().supports_vision)
+
     def test_chat_is_routed_and_answered_without_browser_tools(self):
         for provider in ("gemini", "openai_compatible"):
             with self.subTest(provider=provider):
@@ -42,7 +49,7 @@ class LLMTests(unittest.TestCase):
                 else:
                     settings.update(LLM_API_KEY="fixture-key", LLM_BASE_URL="https://provider.example.test/v1")
                     constructor = "llm.OpenAI"
-                    expected = {"api_key": "fixture-key", "base_url": settings["LLM_BASE_URL"]}
+                    expected = {"api_key": "fixture-key", "base_url": settings["LLM_BASE_URL"], "timeout": 30, "max_retries": 0}
                     client.chat.completions.create.return_value = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"ok":true}'))], usage=None)
                 with patch.dict("os.environ", settings, clear=True), patch(constructor, return_value=client) as build:
                     llm = LLM()

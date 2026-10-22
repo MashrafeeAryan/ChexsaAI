@@ -40,7 +40,7 @@ class ModelTests(unittest.TestCase):
         for provider in ("gemini", "openai_compatible"):
             with self.subTest(provider=provider):
                 client = MagicMock()
-                model = BrowserModel(SimpleNamespace(provider=provider, model="configured-model", client=client))
+                model = BrowserModel(SimpleNamespace(provider=provider, model="configured-model", client=client, supports_vision=True))
                 if provider == "gemini":
                     client.models.generate_content.return_value = SimpleNamespace(text='{"result":"ok"}', usage_metadata=SimpleNamespace(prompt_token_count=12, candidates_token_count=3))
                 else:
@@ -53,3 +53,69 @@ class ModelTests(unittest.TestCase):
                 else:
                     arguments = client.chat.completions.create.call_args.kwargs
                     self.assertTrue(arguments["messages"][0]["content"][1]["image_url"]["url"].startswith("data:image/png;base64,"))
+
+    def test_text_only_provider_receives_string_content(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"ok":true}'))], usage=None)
+        model = BrowserModel(SimpleNamespace(provider="openai_compatible", model="text-model", client=client, supports_vision=False))
+        self.assertEqual(model._ask("Return JSON"), {"ok": True})
+        self.assertEqual(client.chat.completions.create.call_args.kwargs["messages"][0]["content"], "Return JSON")
+        with self.assertRaises(BrowserError):
+            model._ask("Return JSON", b"image bytes")
+        self.assertEqual(client.chat.completions.create.call_count, 1)
+
+    def test_text_only_model_cannot_choose_visual_actions(self):
+        from unittest.mock import Mock
+        self.observation.screenshot = b"image bytes"
+        state = TaskState("t", TaskSpec("Open a website"))
+        for action in ("capture_screenshot", "click_coordinates", "type_focused"):
+            self.model._ask = Mock(return_value={"action": action, "arguments": {}})
+            with self.assertRaises(BrowserError):
+                self.model.choose(state, self.observation)
+            prompt, image = self.model._ask.call_args.args
+            self.assertEqual(image, b"")
+            import json
+            actions = json.loads(prompt.split("ACTIONS:\n", 1)[1].split("\nTASK:", 1)[0])
+            self.assertNotIn(action, actions)
+
+    def test_text_only_verification_does_not_send_images(self):
+        from unittest.mock import Mock
+        self.observation.screenshot = b"image bytes"
+        self.model._ask = Mock(return_value={"complete": False, "evidence": []})
+        self.model.verify(TaskState("t", TaskSpec("goal")), None, self.observation)
+        self.assertEqual(self.model._ask.call_args.args[1], b"")
+
+    def test_invalid_provider_json_is_retried_once_without_browser_actions(self):
+        from unittest.mock import Mock
+        self.model._ask_once = Mock(side_effect=[BrowserError("invalid_model_output", "Bad JSON"), {"ok": True}])
+        self.assertEqual(self.model._ask("Return JSON"), {"ok": True})
+        self.assertEqual(self.model._ask_once.call_count, 2)
+        self.model._ask_once = Mock(side_effect=BrowserError("invalid_model_output", "Bad JSON"))
+        with self.assertRaises(BrowserError):
+            self.model._ask("Return JSON")
+        self.assertEqual(self.model._ask_once.call_count, 2)
+
+    def test_short_rate_limit_wait_is_bounded_and_announced(self):
+        import httpx
+        from openai import RateLimitError
+        from unittest.mock import Mock, patch
+        error = RateLimitError("Limited", response=httpx.Response(429, headers={"retry-after": "2"}, request=httpx.Request("POST", "https://provider.example.test")), body=None)
+        self.model._ask_once = Mock(side_effect=[error, {"ok": True}])
+        with patch("chexsa_browser.model.time.sleep") as sleep, patch("builtins.print") as announce:
+            self.assertEqual(self.model._ask("Return JSON"), {"ok": True})
+            sleep.assert_called_once_with(2.1)
+            announce.assert_called_once()
+        self.model._ask_once = Mock(side_effect=error)
+        with patch("chexsa_browser.model.time.sleep") as sleep, patch("builtins.print"):
+            with self.assertRaises(BrowserError) as caught:
+                self.model._ask("Return JSON")
+            self.assertEqual(caught.exception.code, "rate_limited")
+            sleep.assert_called_once()
+
+    def test_planning_uses_overview_instead_of_all_controls(self):
+        import json
+        from unittest.mock import Mock
+        self.observation.context = json.dumps({"url": "https://example.test", "title": "Example", "controls": {"elements": ["large control list"]}})
+        self.model._ask = Mock(return_value={"inputs": {}, "subgoals": ["Open website"], "completion": ["Website visible"]})
+        self.model.plan("Open website", self.observation)
+        self.assertNotIn("large control list", self.model._ask.call_args.args[0])
