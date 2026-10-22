@@ -165,11 +165,13 @@ class BrowserAgent:
         except KeyboardInterrupt:
             if self.state:
                 return self._finish("cancelled", "Task cancelled.")
-            return TaskResult("cancelled", "Task cancelled.", "")
+            self.last_result = TaskResult("cancelled", "Task cancelled.", "")
+            return self.last_result
         except Exception as error:
             if self.state:
                 return self._finish("uncertain" if self.state.submission != "none" else "failed", f"Chexsa stopped: {error}")
-            return TaskResult("failed", f"Chexsa could not start the task: {error}", "")
+            self.last_result = TaskResult("failed", f"Chexsa could not start the task: {error}", "")
+            return self.last_result
         finally:
             if self.state:
                 self.state.metrics["latency_ms"] = round((time.monotonic() - started) * 1000)

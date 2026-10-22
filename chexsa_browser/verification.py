@@ -14,7 +14,7 @@ def normalize(text):
 
 
 def evidence_text(observation):
-    return "\n".join([item["text"] for item in observation.text.values()] + [value for e in observation.elements for value in (e.name, e.value) if value])
+    return "\n".join([observation.url, observation.title] + [item["text"] for item in observation.text.values()] + [value for e in observation.elements for value in (e.name, e.value) if value])
 
 
 def is_submission(request, observation):

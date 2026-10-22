@@ -34,6 +34,20 @@ class FakeModel:
 
 
 class BrowserAgentTests(unittest.TestCase):
+    def test_navigation_can_be_verified_by_actual_url_and_title(self):
+        state = TaskState("t", TaskSpec("Open example.test"))
+        observation = Observation("o1", "p", "https://example.test/", "Example website", [], [], {})
+        self.assertTrue(completion_is_supported(state, observation, {"complete": True, "evidence": ["https://example.test/", "Example website"]}))
+        self.assertFalse(completion_is_supported(state, observation, {"complete": True, "evidence": ["Title: Example website"]}))
+
+    def test_startup_failure_is_available_to_cli(self):
+        backend = FakeBackend()
+        backend.observe = lambda: (_ for _ in ()).throw(RuntimeError("Cannot observe"))
+        agent = BrowserAgent(backend, FakeModel(), emit=lambda text: None)
+        result = agent.run_task("Open a website")
+        self.assertEqual(result.status, "failed")
+        self.assertIs(agent.last_result, result)
+
     def test_completion_requires_real_evidence(self):
         backend = FakeBackend()
         agent = BrowserAgent(backend, FakeModel(), emit=lambda text: None)
