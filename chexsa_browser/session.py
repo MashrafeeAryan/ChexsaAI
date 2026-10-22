@@ -28,6 +28,7 @@ class BrowserSession:
         self.epochs = {}
         self._frame_clients = {}
         self._page_ids = {}
+        self._root_frames = {}
 
     def connect(self):
         if self.browser and self.browser.is_connected():
@@ -127,8 +128,15 @@ class BrowserSession:
         self.clients[target] = client
         self.epochs[target] = 0
         client.send("Page.enable")
-        client.on("Page.frameNavigated", lambda event: self._changed(target))
-        client.on("Page.frameDetached", lambda event: self._changed(target))
+        self._root_frames[target] = client.send("Page.getFrameTree")["frameTree"]["frame"]["id"]
+        client.on("Page.frameNavigated", lambda event: self._frame_changed(target, event["frame"]["id"]))
+        client.on("Page.frameDetached", lambda event: self._frame_changed(target, event["frameId"]))
+
+    def _frame_changed(self, target, frame_id):
+        # Unrelated subframe navigation must not invalidate a live main-page field.
+        # Detached child nodes still fail the recorded-node connectivity check.
+        if frame_id == self._root_frames.get(target):
+            self._changed(target)
 
     def _changed(self, target):
         self.epochs[target] = self.epochs.get(target, 0) + 1
@@ -155,6 +163,7 @@ class BrowserSession:
         for obsolete in previous - found - set(self._page_ids.values()):
             old = self.clients.pop(obsolete, None)
             self.epochs.pop(obsolete, None)
+            self._root_frames.pop(obsolete, None)
             if old:
                 try:
                     old.detach()
@@ -178,6 +187,7 @@ class BrowserSession:
                 self._page_ids.pop(page)
                 self.clients.pop(target, None)
                 self.epochs.pop(target, None)
+                self._root_frames.pop(target, None)
         return [page for context in self.browser.contexts for page in context.pages if not page.is_closed()]
 
     def close(self):
@@ -189,3 +199,4 @@ class BrowserSession:
         self.clients.clear()
         self._frame_clients.clear()
         self._page_ids.clear()
+        self._root_frames.clear()

@@ -17,6 +17,15 @@ def page(name, closed=False, focused=False):
 
 
 class BrowserSessionTests(unittest.TestCase):
+    def test_unrelated_subframe_navigation_keeps_main_page_refs_valid(self):
+        session = BrowserSession()
+        session.epochs["target"] = 4
+        session._root_frames["target"] = "main"
+        session._frame_changed("target", "advertising-frame")
+        self.assertEqual(session.epochs["target"], 4)
+        session._frame_changed("target", "main")
+        self.assertEqual(session.epochs["target"], 5)
+
     def session(self, pages):
         session = BrowserSession()
         session.browser = Mock()
