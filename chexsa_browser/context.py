@@ -119,12 +119,19 @@ class ContextView:
         # Reserve space for changes and text; never cut serialized control records.
         controls = [e for e in region.elements if e.capabilities or e.role in ("heading", "status", "alert")] if region else []
         data["controls"] = self.page(observation, controls, budget=self.budget // 3)
+        # A compact index avoids a discovery round-trip for a search/form field
+        # outside the automatically selected landmark. Full records stay local.
+        fields = [e for e in observation.elements if e.region != self.selected and "type" in e.capabilities]
+        data["field_index"] = [{"ref": e.ref, "role": e.role, "name": short(e.name, 80), "actions": ["type"], "context": short(" > ".join(e.context), 80)} for e in fields[:6]]
+        data["fields_omitted"] = max(0, len(fields) - len(data["field_index"]))
         data["changes"] = []
         data["text"] = []
         if discovery is not None:
             data["discovery"] = discovery
         for change in observation.changes:
             candidate = data["changes"] + [change]
+            if len(json.dumps(candidate, ensure_ascii=False)) > self.budget // 5:
+                break
             if len(json.dumps({**data, "changes": candidate}, ensure_ascii=False)) > self.budget - 700:
                 break
             data["changes"] = candidate
@@ -153,6 +160,9 @@ class ContextView:
             elif data["tabs"]:
                 data["tabs"].pop()
                 data["tabs_omitted"] += 1
+            elif data["field_index"]:
+                data["field_index"].pop()
+                data["fields_omitted"] += 1
             else:
                 break
         observation.context = json.dumps(data, ensure_ascii=False)

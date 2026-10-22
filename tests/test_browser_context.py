@@ -14,6 +14,18 @@ def snapshot(count=500, generation="o1"):
 
 
 class ContextTests(unittest.TestCase):
+    def test_editable_fields_outside_focused_region_have_current_refs(self):
+        from chexsa_browser.models import Region
+        observation = snapshot(2)
+        button, field = observation.elements
+        field.role, field.name, field.capabilities = "searchbox", "Search", ("type",)
+        button.region, field.region = "navigation", "search"
+        observation.regions = [Region("navigation", "navigation", [button], ref="nav"), Region("search", "search", [field], ref="search")]
+        data = json.loads(ContextView(3000).render(observation))
+        self.assertEqual(data["field_index"][0]["ref"], field.ref)
+        self.assertEqual(data["field_index"][0]["actions"], ["type"])
+        self.assertLessEqual(len(observation.context), 3000)
+
     def test_large_page_is_bounded_and_every_control_can_be_paged(self):
         observation = snapshot()
         view = ContextView(3000)
