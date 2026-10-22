@@ -14,6 +14,18 @@ def snapshot(count=500, generation="o1"):
 
 
 class ContextTests(unittest.TestCase):
+    def test_compact_controls_keep_real_values_and_boolean_states(self):
+        from chexsa_browser.context import record
+        element = snapshot(1).elements[0]
+        element.value = "saved value"
+        element.states = {"disabled": False, "readonly": False, "checked": False, "selected": True}
+        data = record(element)
+        self.assertEqual(data["value"], "saved value")
+        self.assertEqual(data["state"], {"checked": False, "selected": True})
+        self.assertNotIn("context", data)
+        element.states["disabled"] = True
+        self.assertTrue(record(element)["state"]["disabled"])
+
     def test_editable_fields_outside_focused_region_have_current_refs(self):
         from chexsa_browser.models import Region
         observation = snapshot(2)

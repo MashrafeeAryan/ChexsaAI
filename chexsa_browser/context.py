@@ -11,7 +11,15 @@ def short(value, limit):
 
 
 def record(element):
-    return {"ref": element.ref, "role": element.role, "name": short(element.name, 180), "value": short(element.value, 300), "state": {k: v for k, v in element.states.items() if k in ("disabled", "readonly", "checked", "expanded", "selected", "focused", "required", "invalid")}, "actions": element.capabilities, "context": short(" > ".join(element.context), 240)}
+    item = {"ref": element.ref, "role": element.role, "name": short(element.name, 180), "actions": element.capabilities}
+    flags = {k: v for k, v in element.states.items() if k in ("disabled", "readonly", "checked", "expanded", "selected", "focused", "required", "invalid") and (v or k in ("checked", "selected", "expanded"))}
+    if element.value:
+        item["value"] = short(element.value, 300)
+    if flags:
+        item["state"] = flags
+    if element.context:
+        item["context"] = short(" > ".join(element.context), 240)
+    return item
 
 
 def changes(previous, current):
@@ -165,5 +173,5 @@ class ContextView:
                 data["fields_omitted"] += 1
             else:
                 break
-        observation.context = json.dumps(data, ensure_ascii=False)
+        observation.context = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         return observation.context
