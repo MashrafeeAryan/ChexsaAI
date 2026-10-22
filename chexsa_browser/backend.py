@@ -34,14 +34,18 @@ class BrowserBackend:
         self.session.connect()
 
     def observe(self):
-        for _ in range(3):
+        for attempt in range(3):
             self.registry.invalidate()
             page = self.session.ensure_page()
             try:
                 return self._observe_page(page)
-            except Exception:
-                if not page.is_closed() and self.session.browser and self.session.browser.is_connected():
+            except Exception as error:
+                closed = page.is_closed() or not self.session.browser or not self.session.browser.is_connected()
+                transient = isinstance(error, BrowserError) and error.code == "stale_observation" or any(message in str(error).lower() for message in ("frame with the given frameid is not found", "execution context was destroyed", "cannot find context with specified id"))
+                if not closed and (not transient or attempt == 2):
                     raise
+                if not closed:
+                    page.wait_for_timeout(150)
         self.registry.invalidate()
         raise BrowserError("page_closed", "Chrome's tabs kept closing during observation. Open a tab and retry.")
 
