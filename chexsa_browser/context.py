@@ -114,7 +114,7 @@ class ContextView:
             region = observation.regions[0]
         self._automatic = observation.regions[0].key if observation.regions else None
         self.selected = region.key if region else None
-        overview = [{"ref": r.ref, "label": short(r.label, 160), "controls": sum(bool(e.capabilities) for e in r.elements)} for r in observation.regions[:12]]
+        overview = [{"ref": r.ref, "label": short(r.label, 160), "controls": sum(bool(e.capabilities) for e in r.elements), "examples": [short(e.name, 60) for e in r.elements if e.capabilities and e.name][:3]} for r in observation.regions[:12]]
         data = {"observation_id": observation.id, "page_id": observation.page_id, "url": short(observation.url, 500), "title": short(observation.title, 180), "tabs": [{**tab, "title": short(tab["title"], 100), "url": short(tab["url"], 180)} for tab in observation.tabs[:12]], "tabs_omitted": max(0, len(observation.tabs) - 12), "regions": overview, "regions_omitted": max(0, len(observation.regions) - 12), "focused_region": region.ref if region else "page", "issues": observation.issues[:5]}
         # Reserve space for changes and text; never cut serialized control records.
         controls = [e for e in region.elements if e.capabilities or e.role in ("heading", "status", "alert")] if region else []
