@@ -6,6 +6,36 @@ from agent import Agent, AgentDecision
 
 
 class AgentTests(unittest.TestCase):
+    def test_done_with_action_executes_before_completion(self):
+        launched = []
+        observations = []
+
+        def observe():
+            observations.append(list(launched))
+            return list(launched)
+
+        def decide(request, state, history):
+            if not history:
+                return AgentDecision(action="launch_app", arguments={"command": "notepad.exe"}, done=True, response="Opened")
+            self.assertEqual(state, ["notepad.exe"])
+            return AgentDecision(done=True, response="Opened")
+
+        agent = Agent(observe, decide, lambda action, arguments: launched.append(arguments["command"]))
+        self.assertEqual(agent.run("Open Notepad"), "Opened")
+        self.assertEqual(observations, [[], ["notepad.exe"]])
+
+    def test_failed_action_marked_done_is_not_reported_as_completed(self):
+        def execute(action, arguments):
+            raise RuntimeError("Could not launch")
+
+        def decide(request, state, history):
+            if history:
+                self.assertEqual(history[0].error, "Could not launch")
+                return AgentDecision(done=True, response="Launch failed")
+            return AgentDecision(action="launch_app", arguments={"command": "missing.exe"}, done=True, response="Opened")
+
+        self.assertEqual(Agent(lambda: [], decide, execute).run("Open app"), "Launch failed")
+
     def test_runs_action_then_finishes(self):
         """The agent should execute an action and then finish."""
 

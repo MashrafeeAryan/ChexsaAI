@@ -64,7 +64,7 @@ class Agent:
                 f"done={decision.done}"
             )
 
-            if decision.done:
+            if decision.done and not decision.action:
                 return decision.response or "Task complete."
 
             if not decision.action:
@@ -72,6 +72,8 @@ class Agent:
 
             step = self._run_step(decision)
             history.append(step)
+            # An action is still a proposal even when the model marks it done.
+            # Execute it, then observe again before accepting completion.
 
         return f"Stopped after {self.max_steps} steps before the task was complete."
 
