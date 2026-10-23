@@ -34,6 +34,24 @@ class FakeModel:
 
 
 class BrowserAgentTests(unittest.TestCase):
+    def test_clarification_survives_provider_failure(self):
+        backend, model = FakeBackend(), FakeModel()
+        agent = BrowserAgent(backend, model, emit=lambda text: None)
+        agent.state = TaskState("t", TaskSpec("Send email to fixture@example.test"), status="blocked", question="What message?")
+        model.plan = lambda *args: (_ for _ in ()).throw(RuntimeError("Model unavailable"))
+        agent.run("Hello, how are you?")
+        self.assertEqual(agent.state.question, "What message?")
+        self.assertIn("fixture@example.test", agent.state.spec.goal)
+        self.assertIn("Hello, how are you?", agent.state.spec.goal)
+        self.assertEqual(agent.last_result.status, "blocked")
+
+    def test_schema_placeholder_is_not_shown_as_success_message(self):
+        backend, model = FakeBackend(), FakeModel()
+        model.verify = lambda *args: {"complete": True, "evidence": ["Ready"], "progress": "verified fact"}
+        result = BrowserAgent(backend, model, emit=lambda text: None).run_task("task")
+        self.assertEqual(result.status, "success")
+        self.assertEqual(result.message, "The requested outcome was verified.")
+
     def test_email_without_body_asks_before_any_action(self):
         backend, model = FakeBackend(), FakeModel()
         model.plan = lambda *args: TaskSpec("Send email", inputs={"recipient": "fixture@example.test", "subject": "Hello", "body": ""})

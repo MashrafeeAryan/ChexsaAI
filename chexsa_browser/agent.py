@@ -27,6 +27,8 @@ class BrowserAgent:
             self.journal.save(self.state)
 
     def _finish(self, status, message):
+        if status == "success" and message.strip().casefold() in ("verified fact", "verified fact or empty string"):
+            message = "The requested outcome was verified."
         self.state.status = status
         self.state.result_message = message
         self.state.metrics.update({key: value - self._usage_start.get(key, 0) for key, value in getattr(self.model, "usage", {}).items()})
@@ -38,8 +40,12 @@ class BrowserAgent:
         if self.state and self.state.status == "blocked" and self.state.question:
             request = self.state.spec.goal + "\nUser clarification: " + request
             self.state.spec.goal = request
+            try:
+                spec = self.model.plan(request, self.backend.observe(), self.state)
+            except Exception as error:
+                return self._finish("blocked", f"Your answer was saved, but Chexsa could not continue: {error}").message
+            self.state.spec = spec
             self.state.question = ""
-            self.state.spec = self.model.plan(request, self.backend.observe(), self.state)
             result = self.run_task(state=self.state)
         else:
             result = self.run_task(request)
