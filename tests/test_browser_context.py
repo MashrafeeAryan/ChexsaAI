@@ -14,6 +14,11 @@ def snapshot(count=500, generation="o1"):
 
 
 class ContextTests(unittest.TestCase):
+    def test_empty_editable_fields_explicitly_show_empty_value(self):
+        from chexsa_browser.context import record
+        element = snapshot(1).elements[0]
+        element.capabilities = ("type",)
+        self.assertEqual(record(element)["value"], "")
     def test_compact_controls_keep_real_values_and_boolean_states(self):
         from chexsa_browser.context import record
         element = snapshot(1).elements[0]

@@ -151,7 +151,7 @@ class BrowserModel:
         formats = {action: list(required) + [field + "?" for field in optional] for action, (required, optional) in FIELDS.items() if self.supports_vision or action not in visual_actions}
         if any(item.get("code") == "unsafe_batch" for item in state.history):
             formats.pop("batch", None)
-        history = [{"action": item.get("action"), "status": item.get("status"), "message": str(item.get("message", ""))[:600]} for item in state.history[-8:]]
+        history = [{"action": item.get("action"), "arguments": item.get("arguments", {}), "status": item.get("status"), "message": str(item.get("message", ""))[:600], "code": item.get("code", "")} for item in state.history[-8:]]
         prompt = RULES + '\nFormat: {"action":"...","arguments":{},"effect":{}}. finish arguments: {"response":"..."}; ask_user arguments: {"question":"..."}. Action fields with ? are optional.\nACTIONS:\n' + json.dumps(formats, separators=(",", ":")) + "\nTASK:\n" + json.dumps({"goal": state.spec.goal, "inputs": state.spec.inputs, "subgoals": state.spec.subgoals, "completion": state.spec.completion, "progress": state.progress[-10:], "submission": state.submission, "recent_actions": history}, separators=(",", ":")) + "\nCURRENT PAGE DATA:\n" + observation.context
         if not self.supports_vision:
             prompt += "\nMODEL CAPABILITY: text only. Screenshots and coordinate actions are unavailable. Use navigate, refs, find_elements, or inspect_region."

@@ -14,7 +14,7 @@ def short(value, limit):
 def record(element):
     item = {"ref": element.ref, "role": element.role, "name": short(element.name, 180), "actions": element.capabilities}
     flags = {k: v for k, v in element.states.items() if k in ("disabled", "readonly", "checked", "expanded", "selected", "focused", "required", "invalid") and (v or k in ("checked", "selected", "expanded"))}
-    if element.value:
+    if element.value or "type" in element.capabilities:
         item["value"] = short(element.value, 300)
     if flags:
         item["state"] = flags
