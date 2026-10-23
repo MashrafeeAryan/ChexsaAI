@@ -62,6 +62,7 @@ def main():
     parser.add_argument("--model", help="Temporarily test another model; does not edit .env")
     parser.add_argument("--diagnostics", action="store_true", help="Print model JSON decisions from these isolated test pages")
     args = parser.parse_args()
+    sys.stdout.reconfigure(errors="backslashreplace")
     if args.runs < 1:
         parser.error("--runs must be positive")
     load_dotenv(ROOT / ".env")
@@ -100,7 +101,7 @@ def main():
                         started = time.monotonic()
                         process = subprocess.run([sys.executable, "-u", "-c", entry], input=request + "\nexit\n", text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=ROOT, env=env, timeout=210)
                         print(process.stdout, flush=True)
-                        outcome = {"request": request, "seconds": round(time.monotonic() - started, 2), "run": run + 1}
+                        outcome = {"request": request, "seconds": round(time.monotonic() - started, 2), "run": run + 1, "model": env.get("LLM_MODEL"), "provider": env.get("LLM_PROVIDER")}
                         if expected == "details":
                             passed = "Chexsa [blocked]" in process.stdout and "What message should I send?" in process.stdout and "[BROWSER]" not in process.stdout
                         elif expected:
