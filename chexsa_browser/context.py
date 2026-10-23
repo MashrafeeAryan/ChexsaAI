@@ -1,6 +1,7 @@
 """Bounded complete records, local search, and explicit observation-scoped paging."""
 
 import json
+import hashlib
 
 from .models import BrowserError
 
@@ -49,20 +50,26 @@ class ContextView:
         self.selected = None
         self._automatic = None
 
-    def _offset(self, observation, cursor):
+    def _cursor(self, observation, scope, offset):
+        key = hashlib.sha256(scope.encode()).hexdigest()[:10]
+        return f"{observation.id}:{key}:{offset}"
+
+    def _offset(self, observation, cursor, scope):
         if not cursor:
             return 0
         try:
-            generation, value = cursor.rsplit(":", 1)
+            generation, key, value = cursor.rsplit(":", 2)
             offset = int(value)
-            if generation != observation.id or offset < 0:
+            if generation != observation.id or cursor != self._cursor(observation, scope, offset) or offset < 0:
                 raise ValueError
             return offset
         except (ValueError, AttributeError):
-            raise BrowserError("stale_cursor", "The continuation cursor is invalid or belongs to an old observation.")
+            raise BrowserError("stale_cursor", "Use the next_cursor returned by the same query or region in this observation; this cursor does not belong to it.")
 
-    def page(self, observation, elements, cursor=None, budget=None):
-        start = self._offset(observation, cursor)
+    def page(self, observation, elements, cursor=None, budget=None, scope="page"):
+        start = self._offset(observation, cursor, scope)
+        if start > len(elements):
+            raise BrowserError("stale_cursor", "This cursor is beyond the available results.")
         records, used = [], 0
         for element in elements[start:]:
             item = record(element)
@@ -77,33 +84,34 @@ class ContextView:
             records.append(item)
             used += size
         end = start + len(records)
-        return {"observation_id": observation.id, "elements": records, "omitted": max(0, len(elements) - end), "next_cursor": f"{observation.id}:{end}" if end < len(elements) else None}
+        return {"observation_id": observation.id, "elements": records, "omitted": max(0, len(elements) - end), "next_cursor": self._cursor(observation, scope, end) if end < len(elements) else None}
 
     def find(self, observation, query, cursor=None):
         if not isinstance(query, str) or len(query) > 1000:
             raise BrowserError("invalid_arguments", "Search query must be a string of at most 1000 characters.")
         words = query.casefold().split()
         matches = [e for e in observation.elements if all(word in f"{e.role} {e.name} {' '.join(e.context)}".casefold() for word in words)]
-        return self.page(observation, matches, cursor)
+        return self.page(observation, matches, cursor, scope="find:" + " ".join(words))
 
     def inspect(self, observation, ref="page", cursor=None):
         if ref == "page":
-            return self.page(observation, observation.elements, cursor)
+            return self.page(observation, [e for e in observation.elements if e.capabilities or e.role in ("heading", "status", "alert")], cursor)
         region = next((r for r in observation.regions if r.ref == ref or r.key == ref), None)
         if region:
             self.selected = region.key
-            return self.page(observation, [e for e in region.elements if e.capabilities or e.role in ("heading", "status", "alert")], cursor)
+            return self.page(observation, [e for e in region.elements if e.capabilities or e.role in ("heading", "status", "alert")], cursor, scope="region:" + region.key)
         element = next((e for e in observation.elements if e.ref == ref), None)
         if not element:
             raise BrowserError("stale_target", "Unknown region or element. Observe again.")
-        offset = self._offset(observation, cursor)
+        scope = "field:" + element.identity
+        offset = self._offset(observation, cursor, scope)
         raw = json.dumps({"name": element.name, "value": element.value, "context": element.context}, ensure_ascii=False)
         chunk = raw[offset:offset + self.budget // 4]
         end = offset + len(chunk)
-        return {"ref": ref, "observation_id": observation.id, "text_chunk": chunk, "next_cursor": f"{observation.id}:{end}" if end < len(raw) else None}
+        return {"ref": ref, "observation_id": observation.id, "text_chunk": chunk, "next_cursor": self._cursor(observation, scope, end) if end < len(raw) else None}
 
     def tabs(self, observation, cursor=None):
-        offset = self._offset(observation, cursor)
+        offset = self._offset(observation, cursor, "tabs")
         items, size = [], 0
         for tab in observation.tabs[offset:]:
             item = {**tab, "title": short(tab["title"], 100), "url": short(tab["url"], 180)}
@@ -113,7 +121,7 @@ class ContextView:
             items.append(item)
             size += length
         end = offset + len(items)
-        return {"tabs": items, "omitted": len(observation.tabs) - end, "next_cursor": f"{observation.id}:{end}" if end < len(observation.tabs) else None}
+        return {"tabs": items, "omitted": len(observation.tabs) - end, "next_cursor": self._cursor(observation, "tabs", end) if end < len(observation.tabs) else None}
 
     def render(self, observation, discovery=None):
         region = next((r for r in observation.regions if r.key == self.selected), None)
@@ -125,8 +133,10 @@ class ContextView:
         overview = [{"ref": r.ref, "label": short(r.label, 160), "controls": sum(bool(e.capabilities) for e in r.elements), "examples": [short(e.name, 60) for e in r.elements if e.capabilities and e.name][:3]} for r in observation.regions[:12]]
         data = {"observation_id": observation.id, "page_id": observation.page_id, "url": short(observation.url, 500), "title": short(observation.title, 180), "tabs": [{**tab, "title": short(tab["title"], 100), "url": short(tab["url"], 180)} for tab in observation.tabs[:12]], "tabs_omitted": max(0, len(observation.tabs) - 12), "regions": overview, "regions_omitted": max(0, len(observation.regions) - 12), "focused_region": region.ref if region else "page", "issues": observation.issues[:5]}
         # Reserve space for changes and text; never cut serialized control records.
-        controls = [e for e in region.elements if e.capabilities or e.role in ("heading", "status", "alert")] if region else []
-        data["controls"] = self.page(observation, controls, budget=self.budget // 3)
+        source = region.elements if region and region.key != "page" else observation.elements
+        controls = [e for e in source if e.capabilities or e.role in ("heading", "status", "alert")]
+        control_scope = "region:" + region.key if region and region.key != "page" else "page"
+        data["controls"] = self.page(observation, controls, budget=self.budget // 2, scope=control_scope)
         # A compact index avoids a discovery round-trip for a search/form field
         # outside the automatically selected landmark. Full records stay local.
         fields = [e for e in observation.elements if e.region != self.selected and "type" in e.capabilities]
@@ -164,7 +174,7 @@ class ContextView:
             elif data["controls"]["elements"]:
                 data["controls"]["elements"].pop()
                 data["controls"]["omitted"] += 1
-                data["controls"]["next_cursor"] = f'{observation.id}:{len(data["controls"]["elements"])}'
+                data["controls"]["next_cursor"] = self._cursor(observation, control_scope, len(data["controls"]["elements"]))
             elif data["tabs"]:
                 data["tabs"].pop()
                 data["tabs_omitted"] += 1

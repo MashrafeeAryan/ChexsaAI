@@ -73,6 +73,21 @@ class ContextTests(unittest.TestCase):
         with self.assertRaises(BrowserError):
             ContextView().inspect(snapshot(generation="o2"), cursor="o1:20")
 
+    def test_cursor_cannot_be_reused_for_a_different_query_or_section(self):
+        observation, view = snapshot(), ContextView(3000)
+        first = view.find(observation, "Message")
+        self.assertIsNotNone(first["next_cursor"])
+        with self.assertRaises(BrowserError):
+            view.find(observation, "Message 499", first["next_cursor"])
+        with self.assertRaises(BrowserError):
+            view.tabs(observation, first["next_cursor"])
+        controls = json.loads(view.render(observation))["controls"]
+        with self.assertRaises(BrowserError):
+            view.find(observation, "Message", controls["next_cursor"])
+        expanded = view.inspect(observation, "page", controls["next_cursor"])
+        self.assertTrue(expanded["elements"])
+        self.assertNotEqual(expanded["elements"][0]["ref"], controls["elements"][0]["ref"])
+
     def test_ref_refresh_does_not_create_false_changes(self):
         first, second = snapshot(2), snapshot(2, "o2")
         second.elements[0].ref = "e100"
