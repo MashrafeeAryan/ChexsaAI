@@ -34,6 +34,7 @@ The main code for controlling websites is in `chexsa_browser/`.
 | [targets.py](chexsa_browser/targets.py) | Connects short IDs such as `e17` to real page elements. Rejects IDs that are out of date. |
 | [actions.py](chexsa_browser/actions.py) | Checks browser actions and performs clicks, typing, scrolling, uploads, tab changes, and other supported actions. |
 | [visual.py](chexsa_browser/visual.py) | Takes screenshots and handles clicks by screen position and typing into the clicked field. Checks that the target is still valid. |
+| [structured.py](chexsa_browser/structured.py) | Describes the exact JSON format supported Groq models must return. Browser safety checks still run afterward. |
 | [model.py](chexsa_browser/model.py) | Talks to the AI to plan a browser task, choose its next action, and check results. |
 | [agent.py](chexsa_browser/agent.py) | Leads the whole browser task. Remembers the goal, runs steps, checks progress, and handles problems. |
 | [verification.py](chexsa_browser/verification.py) | Checks evidence of success or failure. For email, checks the draft before sending and looks for a fresh sending result. |
@@ -72,6 +73,7 @@ fake pages: they do not send real email or need an email account.
 | [tests/test_browser_entrypoints.py](tests/test_browser_entrypoints.py) | Terminal and voice mode use the current browser engine, including task listing, resume, and cleanup. |
 | [tests/test_browser_fixtures.py](tests/test_browser_fixtures.py) | The fake browser pages still contain the controls and sending outcomes needed by the tests. |
 | [tests/test_browser_journal.py](tests/test_browser_journal.py) | Task progress survives a restart, uncertain sends are not replayed, and completed tasks are not run again. |
+| [tests/test_browser_structured.py](tests/test_browser_structured.py) | Checks strict AI output formats, input names, and that normal browser guards still apply. |
 | [tests/test_browser_model.py](tests/test_browser_model.py) | AI plans and actions are checked, supplied email addresses are kept, and supported AI clients receive the right request format. |
 | [tests/test_browser_regions.py](tests/test_browser_regions.py) | Different dialogs with the same name stay separate, and forms stay inside the correct dialog. |
 | [tests/test_browser_runtime.py](tests/test_browser_runtime.py) | Starting the browser engine connects its parts correctly and cleans up after a failed connection. |
