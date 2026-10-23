@@ -171,7 +171,12 @@ class BrowserModel:
             if set(arguments) != {key} or not isinstance(arguments[key], str) or not arguments[key].strip():
                 raise BrowserError("invalid_model_output", f"{action} requires {key}.")
         else:
-            validate(request)
+            try:
+                validate(request)
+            except BrowserError as error:
+                if action == "batch":
+                    raise BrowserError("unsafe_batch", f"Batch rejected: {error}. Choose one individual action.") from error
+                raise
         return request
 
     def verify(self, state, before, after, result=None):

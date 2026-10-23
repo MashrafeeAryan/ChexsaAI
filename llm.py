@@ -58,7 +58,7 @@ class LLM:
         self.request_timeout = float(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
         if self.request_timeout < 1:
             raise ValueError("LLM_TIMEOUT_SECONDS must be at least 1.")
-        self.reasoning_effort = os.getenv("LLM_REASONING_EFFORT", "low" if self.model in ("openai/gpt-oss-120b", "openai/gpt-oss-20b") else "")
+        self.reasoning_effort = os.getenv("LLM_REASONING_EFFORT", "medium" if self.model in ("openai/gpt-oss-120b", "openai/gpt-oss-20b") else "")
         self.client = self._create_client()
 
     @property

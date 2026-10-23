@@ -143,3 +143,10 @@ class ModelTests(unittest.TestCase):
         self.model._ask.return_value = {"action": "batch", "arguments": {"actions": [{"action": "type", "arguments": {"ref": "e1", "text": "Hello"}}]}}
         with self.assertRaises(BrowserError):
             self.model.choose(state, self.observation)
+
+    def test_malformed_batch_also_disables_batch_on_recovery(self):
+        from unittest.mock import Mock
+        self.model._ask = Mock(return_value={"action": "batch", "arguments": {"actions": [{"ref": "e1", "text": "Hello"}]}})
+        with self.assertRaises(BrowserError) as caught:
+            self.model.choose(TaskState("t", TaskSpec("Fill form")), self.observation)
+        self.assertEqual(caught.exception.code, "unsafe_batch")
