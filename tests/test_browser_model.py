@@ -7,6 +7,17 @@ from chexsa_browser.models import BrowserError, Observation, TaskSpec, TaskState
 
 
 class ModelTests(unittest.TestCase):
+    def test_provider_tool_call_is_normalized_without_executing_or_guessing(self):
+        import httpx
+        import json
+        from openai import BadRequestError
+        from unittest.mock import Mock
+        error = BadRequestError("Model called tool", response=httpx.Response(400, request=httpx.Request("POST", "https://provider.example.test")), body={"code": "tool_use_failed", "failed_generation": json.dumps({"name": "browser.inspect_region", "arguments": {"ref": "e7"}})})
+        model = BrowserModel(None)
+        model._ask_once = Mock(side_effect=error)
+        self.assertEqual(model._ask("Choose"), {"action": "inspect_region", "arguments": {"ref": "e7"}, "effect": {}})
+        model._ask_once.assert_called_once()
+
     def test_missing_subject_gets_neutral_default_unless_explicitly_empty(self):
         model = BrowserModel(None)
         observation = Observation("o1", "p", "url", "title", [], [], {}, context="page")
