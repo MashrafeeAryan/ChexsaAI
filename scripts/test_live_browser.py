@@ -100,6 +100,15 @@ def main():
                 for run in range(args.runs):
                     for request, expected in cases:
                         print(f"[LIVE] Run {run + 1}: {request}", flush=True)
+                        if expected == "email":
+                            # A repeated run must start with a fresh fixture document,
+                            # not the prior run's receipt or submission counter.
+                            reset = BrowserSession(cdp_url=endpoint)
+                            try:
+                                reset.connect()
+                                reset.get_page().goto("about:blank")
+                            finally:
+                                reset.close()
                         started = time.monotonic()
                         process = subprocess.run([sys.executable, "-u", "-c", entry], input=request + "\nexit\n", text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=ROOT, env=env, timeout=args.timeout + 120)
                         print(process.stdout, flush=True)
