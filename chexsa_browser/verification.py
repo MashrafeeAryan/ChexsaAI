@@ -18,10 +18,23 @@ def evidence_text(observation):
 
 
 def is_submission(request, observation):
+    element = next((e for e in observation.elements if e.ref == request.arguments.get("ref")), None)
+    # The model's effect is a hint. Opening UI and entering a search do not send
+    # a message, even when the model incorrectly calls that a submission.
+    if request.action in ("navigate", "go_back", "scroll", "switch_tab", "new_tab", "wait"):
+        return False
+    if request.action == "click" and element:
+        name = re.sub(r"\s*\([^)]*\)\s*$", "", element.name).strip().casefold()
+        if name in ("compose", "new message", "new email", "new draft", "reply", "reply all", "forward", "search"):
+            return False
+    if request.action == "type":
+        if not request.arguments.get("press_enter"):
+            return False
+        if element and (element.role == "searchbox" or re.search(r"\bsearch\b", element.name, re.I)):
+            return False
     if request.effect.get("kind") == "submission":
         return True
     if request.action == "click":
-        element = next((e for e in observation.elements if e.ref == request.arguments.get("ref")), None)
         return bool(element and re.match(r"^(send|submit|publish|purchase|place order|confirm payment)\b", element.name, re.I))
     if request.action == "press_key":
         return request.arguments.get("key", "").lower() in ("control+enter", "controlormeta+enter", "meta+enter", "ctrl+enter")
@@ -34,6 +47,9 @@ def preflight_email(state, observation, backend, model, request=None):
     report = model.preflight(state, observation)
     if not report["ready"]:
         raise BrowserError("verification_failed", report.get("reason") or "The draft is not ready to send.")
+    fields = [report.get("subject_ref"), report.get("body_ref")]
+    if not all(fields) or len(set(fields)) != 2 or report.get("recipient_ref") in fields:
+        raise BrowserError("verification_failed", "Recipient, subject, and body must use different controls.")
     region = next((r for r in observation.regions if r.ref == report.get("region_ref")), None)
     if region is None:
         raise BrowserError("verification_failed", "The verifier did not identify a current compose region.")

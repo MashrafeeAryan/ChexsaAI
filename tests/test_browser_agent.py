@@ -34,6 +34,30 @@ class FakeModel:
 
 
 class BrowserAgentTests(unittest.TestCase):
+    def test_equal_subject_and_body_cannot_verify_the_same_control_twice(self):
+        from unittest.mock import Mock
+        from chexsa_browser.verification import preflight_email
+        from chexsa_browser.models import BrowserError
+        state = TaskState("t", TaskSpec("Send email", inputs={"recipient": "fixture@example.test", "subject": "Hello", "body": "Hello"}))
+        backend, model = Mock(), Mock()
+        model.preflight.return_value = {"ready": True, "subject_ref": "e1", "body_ref": "e1", "recipient_ref": "e2"}
+        with self.assertRaises(BrowserError):
+            preflight_email(state, FakeBackend().observation, backend, model)
+        backend.registry.resolve.assert_not_called()
+        self.assertFalse(state.email_checked)
+    def test_model_submission_hint_cannot_turn_compose_or_search_into_send(self):
+        from chexsa_browser.verification import is_submission
+        from chexsa_browser.models import Element
+        observation = FakeBackend().observation
+        element = Element("t", "f", "d", 1, "button", "Compose", ref="e1")
+        observation.elements = [element]
+        self.assertFalse(is_submission(ActionRequest("click", {"ref": "e1"}, {"kind": "submission"}), observation))
+        element.name = "Send"
+        self.assertTrue(is_submission(ActionRequest("click", {"ref": "e1"}, {"kind": "change"}), observation))
+        element.name, element.role = "Search", "searchbox"
+        self.assertFalse(is_submission(ActionRequest("type", {"ref": "e1", "text": "query", "press_enter": True}, {"kind": "submission"}), observation))
+        element.name = "Message body"
+        self.assertFalse(is_submission(ActionRequest("type", {"ref": "e1", "text": "message"}, {"kind": "submission"}), observation))
     def test_clarification_survives_provider_failure(self):
         backend, model = FakeBackend(), FakeModel()
         agent = BrowserAgent(backend, model, emit=lambda text: None)
