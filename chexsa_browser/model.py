@@ -16,8 +16,12 @@ Use only targets from the current observation or discovery results. Never invent
 For a user-named website you may navigate directly to its well-known public homepage. Do not guess internal page URLs.
 An empty or unrelated tab is normal: navigate to the requested site first. The browser is already connected.
 Use find_elements to search locally, inspect_region to expand a region or a long field, and list_tabs to see omitted tabs.
+Only continue with next_cursor returned by that SAME query/region. A null next_cursor means results are complete. Never reuse the controls cursor for find_elements.
 The field_index also contains current editable refs outside the focused region. Use type only on a ref whose actions include type. If no matching control is listed, find_elements first; never substitute an unrelated ref.
 Choose one action at a time; batch only independent form edits. Do not batch Enter or submissions.
+batch.actions may contain ONLY type, select_option, check, uncheck, or press_key. NEVER put click in a batch, including Send. Fill fields first; sending must be a later, separate click after observing the filled draft.
+Before searching for or clicking Send, complete EVERY planned recipient/subject/body field and check its current value. Never attempt Send while a required draft value is empty or mismatched.
+Missing value means empty; omitted state flags are false.
 Prefer refs. For visual-only controls use capture_screenshot, then click_coordinates with that screenshot_id.
 After a visual click you may type_focused with its screenshot_id, provided focus did not change.
 Every action should have an effect: {kind: value|checked|selection|change|submission, value?:string, text?:string}.
@@ -49,7 +53,9 @@ class BrowserModel:
         return getattr(self.llm, "supports_vision", False) is True
 
     def _ask(self, prompt, screenshot=b""):
-        for attempt in range(2):
+        json_retries = rate_retries = 0
+        waited = 0
+        while True:
             try:
                 return self._ask_once(prompt, screenshot)
             except RateLimitError as error:
@@ -59,9 +65,11 @@ class BrowserModel:
                     seconds = max(float(delay), float(match.group(1)) if match else 0)
                 except ValueError:
                     seconds = 0
-                if attempt or not 0 < seconds <= 60:
+                if rate_retries >= 2 or not 0 < seconds or waited + math.ceil(seconds) + 1 > 60:
                     raise BrowserError("rate_limited", "The model API rate limit was reached. Wait briefly and retry the request.") from error
-                seconds = math.ceil(seconds)
+                seconds = math.ceil(seconds) + 1
+                rate_retries += 1
+                waited += seconds
                 print(f"[MODEL] API rate limit; retrying in {seconds:.0f} seconds.", flush=True)
                 # Round up the provider's fractional delay; early retries hit 429 again.
                 remaining = seconds + .1
@@ -73,11 +81,12 @@ class BrowserModel:
             except BadRequestError as error:
                 if getattr(error, "code", None) != "json_validate_failed":
                     raise
-                if attempt:
+                if json_retries:
                     raise BrowserError("invalid_model_output", "The provider could not generate valid JSON. Retry the task.") from error
             except BrowserError as error:
-                if error.code != "invalid_model_output" or attempt:
+                if error.code != "invalid_model_output" or json_retries:
                     raise
+            json_retries += 1
             prompt += "\nReturn exactly ONE complete JSON object in the requested format. No markdown or commentary."
 
     def _ask_once(self, prompt, screenshot=b""):
@@ -140,12 +149,18 @@ class BrowserModel:
     def choose(self, state, observation):
         visual_actions = {"capture_screenshot", "click_coordinates", "type_focused"}
         formats = {action: list(required) + [field + "?" for field in optional] for action, (required, optional) in FIELDS.items() if self.supports_vision or action not in visual_actions}
+        if any(item.get("code") == "unsafe_batch" for item in state.history):
+            formats.pop("batch", None)
         history = [{"action": item.get("action"), "status": item.get("status"), "message": str(item.get("message", ""))[:600]} for item in state.history[-8:]]
         prompt = RULES + '\nFormat: {"action":"...","arguments":{},"effect":{}}. finish arguments: {"response":"..."}; ask_user arguments: {"question":"..."}. Action fields with ? are optional.\nACTIONS:\n' + json.dumps(formats, separators=(",", ":")) + "\nTASK:\n" + json.dumps({"goal": state.spec.goal, "inputs": state.spec.inputs, "subgoals": state.spec.subgoals, "completion": state.spec.completion, "progress": state.progress[-10:], "submission": state.submission, "recent_actions": history}, separators=(",", ":")) + "\nCURRENT PAGE DATA:\n" + observation.context
         if not self.supports_vision:
             prompt += "\nMODEL CAPABILITY: text only. Screenshots and coordinate actions are unavailable. Use navigate, refs, find_elements, or inspect_region."
+        if "batch" not in formats:
+            prompt += "\nRECOVERY: A batch was rejected. Choose ONE individual action; batch is unavailable for this task."
         data = self._ask(prompt, observation.screenshot if self.supports_vision else b"")
         action, arguments, effect = data.get("action"), data.get("arguments"), data.get("effect", {})
+        if action == "batch" and "batch" not in formats:
+            raise BrowserError("unsafe_batch", "Batch was rejected; choose one individual field edit or click.")
         if action in visual_actions and not self.supports_vision:
             raise BrowserError("unsupported_action", "This model accepts text only; choose semantic controls, not screenshot actions.")
         if not isinstance(arguments, dict) or not isinstance(effect, dict):

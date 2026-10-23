@@ -103,14 +103,24 @@ class ModelTests(unittest.TestCase):
         self.model._ask_once = Mock(side_effect=[error, {"ok": True}])
         with patch("chexsa_browser.model.time.sleep") as sleep, patch("builtins.print") as announce:
             self.assertEqual(self.model._ask("Return JSON"), {"ok": True})
-            sleep.assert_called_once_with(2.1)
+            sleep.assert_called_once_with(3.1)
             announce.assert_called_once()
         self.model._ask_once = Mock(side_effect=error)
         with patch("chexsa_browser.model.time.sleep") as sleep, patch("builtins.print"):
             with self.assertRaises(BrowserError) as caught:
                 self.model._ask("Return JSON")
             self.assertEqual(caught.exception.code, "rate_limited")
-            sleep.assert_called_once()
+            self.assertEqual(sleep.call_count, 2)
+
+    def test_json_and_quota_recovery_have_independent_budgets(self):
+        import httpx
+        from openai import RateLimitError
+        from unittest.mock import Mock, patch
+        limited = RateLimitError("Limited", response=httpx.Response(429, headers={"retry-after": "1"}, request=httpx.Request("POST", "https://provider.example.test")), body=None)
+        self.model._ask_once = Mock(side_effect=[BrowserError("invalid_model_output", "Bad JSON"), limited, {"ok": True}])
+        with patch("chexsa_browser.model.time.sleep"), patch("builtins.print"):
+            self.assertEqual(self.model._ask("Return JSON"), {"ok": True})
+        self.assertEqual(self.model._ask_once.call_count, 3)
 
     def test_planning_uses_overview_instead_of_all_controls(self):
         import json
@@ -119,3 +129,17 @@ class ModelTests(unittest.TestCase):
         self.model._ask = Mock(return_value={"inputs": {}, "subgoals": ["Open website"], "completion": ["Website visible"]})
         self.model.plan("Open website", self.observation)
         self.assertNotIn("large control list", self.model._ask.call_args.args[0])
+
+    def test_rejected_batch_requires_individual_action_on_recovery(self):
+        from unittest.mock import Mock
+        import json
+        state = TaskState("t", TaskSpec("Fill a form"))
+        state.history.append({"action": "recovery", "code": "unsafe_batch", "message": "Action cannot be batched: click"})
+        self.model._ask = Mock(return_value={"action": "type", "arguments": {"ref": "e1", "text": "Hello"}})
+        self.assertEqual(self.model.choose(state, self.observation).action, "type")
+        prompt = self.model._ask.call_args.args[0]
+        actions = json.loads(prompt.split("ACTIONS:\n", 1)[1].split("\nTASK:", 1)[0])
+        self.assertNotIn("batch", actions)
+        self.model._ask.return_value = {"action": "batch", "arguments": {"actions": [{"action": "type", "arguments": {"ref": "e1", "text": "Hello"}}]}}
+        with self.assertRaises(BrowserError):
+            self.model.choose(state, self.observation)
