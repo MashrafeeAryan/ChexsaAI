@@ -58,6 +58,7 @@ def main():
     parser.add_argument("--email", action="store_true", help="Also send one email on the local fake mail page only")
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--headed", action="store_true")
+    parser.add_argument("--timeout", type=int, default=600, help="Match the normal Chexsa task deadline by default")
     parser.add_argument("--only", choices=("chat", "home", "search", "details", "email"))
     parser.add_argument("--model", help="Temporarily test another model; does not edit .env")
     parser.add_argument("--diagnostics", action="store_true", help="Print model JSON decisions from these isolated test pages")
@@ -79,8 +80,6 @@ def main():
                 port = sock.getsockname()[1]
             endpoint = f"http://127.0.0.1:{port}"
             env = {**os.environ, "CHEXSA_CDP_URL": endpoint, "CHEXSA_AUTO_LAUNCH": "0", "CHEXSA_STATE_DIR": temporary, "CHEXSA_TRACE_SCREENSHOTS": "0", "PYTHONIOENCODING": "utf-8"}
-            if args.model:
-                env["LLM_MODEL"] = args.model
             launcher = BrowserSession(cdp_url=endpoint, profile_dir=Path(temporary) / "chrome", headless=not args.headed)
             launcher._launch()
             try:
@@ -91,7 +90,10 @@ def main():
                     cases = [(request, expected) for request, expected in cases if (expected or "chat") == args.only]
                 # A routing mistake must fail this test before any personal desktop
                 # information can be observed or sent to the configured model.
-                entry = "import app_runtime\ndef forbid_desktop(*args, **kwargs):\n raise RuntimeError('Live browser test forbids desktop access')\napp_runtime.create_desktop_agent = forbid_desktop\nimport cli\ncli.main(['--max-steps', '20', '--timeout', '150'])"
+                cli_args = ["--max-steps", "20", "--timeout", str(args.timeout)]
+                if args.model:
+                    cli_args.extend(["--model", args.model])
+                entry = "import app_runtime\ndef forbid_desktop(*args, **kwargs):\n raise RuntimeError('Live browser test forbids desktop access')\napp_runtime.create_desktop_agent = forbid_desktop\nimport cli\ncli.main(" + repr(cli_args) + ")"
                 if args.diagnostics:
                     diagnostic = "import json\nfrom chexsa_browser.model import BrowserModel\noriginal = BrowserModel._ask\ndef trace(self, *args, **kwargs):\n result = original(self, *args, **kwargs)\n print('[MODEL JSON]', json.dumps(result, ensure_ascii=True), flush=True)\n return result\nBrowserModel._ask = trace\n"
                     entry = diagnostic + entry
@@ -99,9 +101,9 @@ def main():
                     for request, expected in cases:
                         print(f"[LIVE] Run {run + 1}: {request}", flush=True)
                         started = time.monotonic()
-                        process = subprocess.run([sys.executable, "-u", "-c", entry], input=request + "\nexit\n", text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=ROOT, env=env, timeout=210)
+                        process = subprocess.run([sys.executable, "-u", "-c", entry], input=request + "\nexit\n", text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=ROOT, env=env, timeout=args.timeout + 120)
                         print(process.stdout, flush=True)
-                        outcome = {"request": request, "seconds": round(time.monotonic() - started, 2), "run": run + 1, "model": env.get("LLM_MODEL"), "provider": env.get("LLM_PROVIDER")}
+                        outcome = {"request": request, "seconds": round(time.monotonic() - started, 2), "run": run + 1, "model": args.model or env.get("LLM_MODEL"), "provider": env.get("LLM_PROVIDER")}
                         if expected == "details":
                             passed = "Chexsa [blocked]" in process.stdout and "What message should I send?" in process.stdout and "[BROWSER]" not in process.stdout
                         elif expected:
