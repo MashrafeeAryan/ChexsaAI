@@ -7,6 +7,16 @@ from chexsa_browser.runtime import create_browser_agent
 class RuntimeTests(unittest.TestCase):
     @patch("chexsa_browser.runtime.TaskJournal")
     @patch("chexsa_browser.runtime.BrowserBackend")
+    def test_saved_chrome_profile_settings_reach_session(self, backend_type, journal_type):
+        with patch.dict("os.environ", {"CHEXSA_CHROME_USER_DATA_DIR": "saved-profile-root", "CHEXSA_CHROME_PROFILE": "Profile 2", "CHEXSA_CDP_URL": "http://127.0.0.1:45678"}):
+            create_browser_agent(MagicMock())
+        options = backend_type.call_args.kwargs
+        self.assertEqual(options["profile_dir"], "saved-profile-root")
+        self.assertEqual(options["profile_name"], "Profile 2")
+        self.assertEqual(options["cdp_url"], "http://127.0.0.1:45678")
+
+    @patch("chexsa_browser.runtime.TaskJournal")
+    @patch("chexsa_browser.runtime.BrowserBackend")
     def test_shared_factory_connects_controller_and_journal(self, backend_type, journal_type):
         backend, agent = create_browser_agent(MagicMock())
         self.assertIs(agent.backend, backend)

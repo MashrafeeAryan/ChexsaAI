@@ -181,8 +181,8 @@ class BrowserIntegration(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             sessions = []
             try:
-                for run in range(2):
-                    session = BrowserSession(cdp_url=f"http://127.0.0.1:{port}", auto_launch=True, profile_dir=Path(directory) / "profile", headless=True)
+                for run in range(3):
+                    session = BrowserSession(cdp_url=f"http://127.0.0.1:{port}", auto_launch=True, profile_dir=Path(directory) / "profile", profile_name="Profile 2" if run < 2 else "Default", headless=True)
                     sessions.append(session)
                     # Reuse this test class's Playwright driver for an isolated Chrome.
                     session._launch()
@@ -193,10 +193,13 @@ class BrowserIntegration(unittest.TestCase):
                     if run == 0:
                         current.context.add_cookies([{"name": "fixture_login", "value": "saved-login", "url": self.base, "expires": time.time() + 3600}])
                         current.evaluate("localStorage.setItem('fixture-account','saved-account')")
-                    else:
+                    elif run == 1:
                         cookies = {cookie["name"]: cookie["value"] for cookie in current.context.cookies(self.base)}
                         self.assertEqual(cookies["fixture_login"], "saved-login")
                         self.assertEqual(current.evaluate("localStorage.getItem('fixture-account')"), "saved-account")
+                    else:
+                        self.assertNotIn("fixture_login", {cookie["name"] for cookie in current.context.cookies(self.base)})
+                        self.assertIsNone(current.evaluate("localStorage.getItem('fixture-account')"))
                     session.clients[session.page_id].send("Browser.close")
                     session.launched_process.wait(timeout=15)
                     session.close()

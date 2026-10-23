@@ -16,7 +16,7 @@ def positive_setting(name, default, minimum=1):
 
 
 def create_browser_agent(llm, max_steps=None, timeout=None):
-    backend = BrowserBackend(cdp_url=os.getenv("CHEXSA_CDP_URL", "http://127.0.0.1:9222"), auto_launch=os.getenv("CHEXSA_AUTO_LAUNCH", "1").lower() in ("1", "true", "yes"), context_budget=positive_setting("CHEXSA_CONTEXT_CHARS", 6000, 2000), trace_screenshots=os.getenv("CHEXSA_TRACE_SCREENSHOTS", "0").lower() in ("1", "true", "yes"))
+    backend = BrowserBackend(cdp_url=os.getenv("CHEXSA_CDP_URL"), profile_dir=os.getenv("CHEXSA_CHROME_USER_DATA_DIR"), profile_name=os.getenv("CHEXSA_CHROME_PROFILE", "Default"), auto_launch=os.getenv("CHEXSA_AUTO_LAUNCH", "1").lower() in ("1", "true", "yes"), context_budget=positive_setting("CHEXSA_CONTEXT_CHARS", 6000, 2000), trace_screenshots=os.getenv("CHEXSA_TRACE_SCREENSHOTS", "0").lower() in ("1", "true", "yes"))
     journal = TaskJournal()
     backend.task_journal = journal
     try:

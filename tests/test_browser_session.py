@@ -1,6 +1,8 @@
 """Tab recovery must happen before observation, never by retargeting an action."""
 
 import unittest
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -17,6 +19,27 @@ def page(name, closed=False, focused=False):
 
 
 class BrowserSessionTests(unittest.TestCase):
+    def test_named_profile_discovers_its_own_enabled_debugging_endpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "DevToolsActivePort").write_text("45678\n/devtools/browser/fixture-id\n", encoding="utf-8")
+            session = BrowserSession(profile_dir=directory, profile_name="Profile 2")
+            self.assertEqual(session.cdp_url, "ws://127.0.0.1:45678/devtools/browser/fixture-id")
+            self.assertEqual(session.profile_name, "Profile 2")
+            explicit = BrowserSession(cdp_url="http://127.0.0.1:45679", profile_dir=directory)
+            self.assertEqual(explicit.cdp_url, "http://127.0.0.1:45679")
+
+    def test_custom_profile_does_not_attach_to_unrelated_default_port(self):
+        with tempfile.TemporaryDirectory() as directory:
+            session = BrowserSession(profile_dir=directory)
+            self.assertNotEqual(session.cdp_url, "http://127.0.0.1:9222")
+            (Path(directory) / "DevToolsActivePort").write_text("1234\n/devtools/browser/id?external=1", encoding="utf-8")
+            self.assertTrue(BrowserSession(profile_dir=directory).cdp_url.startswith("http://127.0.0.1:"))
+
+    def test_profile_name_is_one_folder(self):
+        for name in ("", ".", "..", "../Default", "C:\\profile"):
+            with self.assertRaises(ValueError):
+                BrowserSession(profile_name=name)
+
     def test_unrelated_subframe_navigation_keeps_main_page_refs_valid(self):
         session = BrowserSession()
         session.epochs["target"] = 4

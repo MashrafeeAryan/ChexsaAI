@@ -3,6 +3,8 @@
 import os
 import shutil
 import subprocess
+import socket
+import re
 import time
 from pathlib import Path
 from urllib.parse import urlparse
@@ -14,10 +16,13 @@ from .models import BrowserError
 
 
 class BrowserSession:
-    def __init__(self, cdp_url="http://127.0.0.1:9222", auto_launch=False, profile_dir=None, headless=False):
-        self.cdp_url = cdp_url
+    def __init__(self, cdp_url=None, auto_launch=False, profile_dir=None, headless=False, profile_name="Default"):
+        if not profile_name or profile_name in (".", "..") or any(char in profile_name for char in "/\\:"):
+            raise ValueError("Chrome profile must be a folder name such as Default or Profile 1.")
         self.auto_launch = auto_launch
-        self.profile_dir = Path(profile_dir).expanduser() if profile_dir else None
+        self.profile_dir = Path(os.path.expandvars(str(profile_dir))).expanduser() if profile_dir else None
+        self.profile_name = profile_name
+        self.cdp_url = cdp_url or self._profile_endpoint() or "http://127.0.0.1:9222"
         self.headless = headless
         self.launched_process = None
         self.playwright = None
@@ -30,6 +35,21 @@ class BrowserSession:
         self._page_ids = {}
         self._root_frames = {}
 
+    def _profile_endpoint(self):
+        if self.profile_dir is None:
+            return None
+        try:
+            lines = (self.profile_dir / "DevToolsActivePort").read_text(encoding="utf-8").splitlines()
+            port = int(lines[0])
+            if 1 <= port <= 65535 and re.fullmatch(r"/devtools/browser/[A-Za-z0-9_-]+", lines[1]):
+                return f"ws://127.0.0.1:{port}{lines[1]}"
+        except (OSError, ValueError, IndexError):
+            pass
+        # A configured profile must never attach to an unrelated Chrome on 9222.
+        with socket.socket() as available:
+            available.bind(("127.0.0.1", 0))
+            return f"http://127.0.0.1:{available.getsockname()[1]}"
+
     def connect(self):
         if self.browser and self.browser.is_connected():
             return
@@ -41,7 +61,10 @@ class BrowserSession:
         except Exception:
             if not self.auto_launch:
                 self.close()
-                raise BrowserError("not_connected", "Start Chrome with CDP on port 9222, or enable auto launch.")
+                raise BrowserError("not_connected", "Could not attach to Chrome. Enable remote debugging in that Chrome profile or configure CHEXSA_CDP_URL; alternatively enable auto launch.")
+            if self.cdp_url.startswith(("ws:", "wss:")):
+                self.close()
+                raise BrowserError("not_connected", "The saved Chrome debugging session is unavailable. Open that profile and enable remote debugging again.")
             self._launch()
             self.browser = self.playwright.chromium.connect_over_cdp(self.cdp_url)
         self.ensure_page()
@@ -55,8 +78,11 @@ class BrowserSession:
         if not executable:
             raise BrowserError("not_connected", "Chrome was not found.")
         profile = self.profile_dir or Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "Chexsa" / "chrome"
+        standard = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "Google" / "Chrome" / "User Data"
+        if profile.resolve() == standard.resolve():
+            raise BrowserError("not_connected", "For your normal Chrome profile, enable remote debugging at chrome://inspect/#remote-debugging and allow the connection. Chrome does not support launching its standard data directory with a debugging flag.")
         profile.mkdir(parents=True, exist_ok=True)
-        command = [executable, f"--remote-debugging-port={parsed.port or 9222}", f"--user-data-dir={profile}", "--profile-directory=Default", "--no-first-run", "--no-default-browser-check"]
+        command = [executable, f"--remote-debugging-port={parsed.port or 9222}", f"--user-data-dir={profile}", f"--profile-directory={self.profile_name}", "--no-first-run", "--no-default-browser-check"]
         if self.headless:
             command.append("--headless=new")
         command.append("about:blank")
@@ -68,7 +94,7 @@ class BrowserSession:
                     return
             except OSError:
                 time.sleep(.2)
-        raise BrowserError("not_connected", "Chrome did not become available within 15 seconds.")
+        raise BrowserError("not_connected", "Chrome did not become available within 15 seconds. If this profile is already open without debugging, close that profile's Chrome and retry, or configure its existing CDP endpoint.")
 
     def get_page(self):
         if self.page is None or self.page.is_closed():
