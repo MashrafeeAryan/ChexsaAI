@@ -145,7 +145,8 @@ the current browser; a completed task returns its recorded result without execut
 ## Configuration and validation
 
 Existing `LLM_PROVIDER`, `LLM_MODEL`, `GEMINI_API_KEY`, `LLM_API_KEY`, and
-`LLM_BASE_URL` settings remain supported. Browser settings are:
+`LLM_BASE_URL` settings remain supported. `chexsa --model MODEL` overrides the model
+for one terminal session and leaves `.env` unchanged. Browser settings are:
 
 | Setting | Default |
 |---|---|

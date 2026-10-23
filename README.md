@@ -192,6 +192,16 @@ Gemini enables images by default. `LLM_TIMEOUT_SECONDS` defaults to 30 seconds.
 chexsa
 ```
 
+Use `--model` to choose a model for this terminal session without editing your
+saved settings. For example, with a Groq API key:
+
+```powershell
+chexsa --model openai/gpt-oss-20b
+```
+
+If you ask to send an email without giving the message, Chexsa asks for it. If
+you provide the message but omit a subject, it uses a short neutral subject.
+
 Chexsa first waits for your request. Greetings and normal questions stay in chat.
 Browser tasks connect to Chrome; Windows app tasks use the desktop agent.
 Voice mode makes the same choice after hearing your command.
