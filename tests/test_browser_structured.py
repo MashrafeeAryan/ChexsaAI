@@ -31,6 +31,21 @@ class StructuredTests(unittest.TestCase):
         with self.assertRaises(BrowserError):
             model.choose(TaskState("t", TaskSpec("Click")), Observation("o", "p", "url", "title", [], [], {}, context="{}"))
 
+    def test_valid_error_payload_can_omit_only_nullable_fields(self):
+        import httpx
+        from openai import BadRequestError
+        from unittest.mock import Mock
+        payload = {"action": "type", "arguments": {"ref": "e1", "text": "hello", "press_enter": False}, "effect": {"kind": "value"}}
+        error = BadRequestError("Rejected nullable fields", response=httpx.Response(400, request=httpx.Request("POST", "https://api.groq.com")), body={"code": "json_validate_failed", "failed_generation": json.dumps(payload)})
+        model = self.model({})
+        model._ask_once = Mock(side_effect=error)
+        schema = structured.decision(["type"])
+        self.assertEqual(model._ask("Choose", b"", schema), payload)
+        model._ask_once.assert_called_once()
+        for invalid in ({**payload, "action": "delete_everything"}, {**payload, "arguments": None}, {**payload, "arguments": {"selector": "button"}}, {"action": "type", "arguments": {}}):
+            self.assertFalse(structured.conforms(invalid, schema))
+        self.assertFalse(structured.conforms({"ready": True}, structured.PREFLIGHT))
+
     def test_nulls_are_omitted_but_false_zero_and_empty_are_preserved(self):
         self.assertEqual(structured.without_nulls({"a": None, "b": False, "c": 0, "d": "", "e": [{"ref": "e1", "text": None}]}), {"b": False, "c": 0, "d": "", "e": [{"ref": "e1"}]})
 

@@ -41,3 +41,26 @@ def without_nulls(value):
     if isinstance(value, list):
         return [without_nulls(item) for item in value]
     return value
+
+
+def conforms(value, schema):
+    """Check provider-error JSON; only missing nullable fields may be omitted."""
+    if "anyOf" in schema:
+        return any(conforms(value, alternative) for alternative in schema["anyOf"])
+    types = schema.get("type", [])
+    types = [types] if isinstance(types, str) else types
+    actual = {str: "string", bool: "boolean", int: "integer", float: "number", dict: "object", list: "array", type(None): "null"}.get(type(value))
+    if actual not in types and not (actual == "integer" and "number" in types):
+        return False
+    if "enum" in schema and value not in schema["enum"]:
+        return False
+    if isinstance(value, dict):
+        properties = schema.get("properties", {})
+        if set(value) - set(properties):
+            return False
+        if any(key not in value and not conforms(None, properties[key]) for key in schema.get("required", [])):
+            return False
+        return all(conforms(item, properties[key]) for key, item in value.items())
+    if isinstance(value, list):
+        return all(conforms(item, schema["items"]) for item in value)
+    return True

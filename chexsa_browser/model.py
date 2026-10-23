@@ -94,9 +94,16 @@ class BrowserModel:
                 continue
             except BadRequestError as error:
                 code = getattr(error, "code", None)
+                body = error.body if isinstance(error.body, dict) else {}
+                body = body.get("error", body)
+                if code == "json_validate_failed" and schema:
+                    try:
+                        generated = parse_object(body.get("failed_generation", ""))
+                    except BrowserError:
+                        generated = None
+                    if generated is not None and structured.conforms(generated, schema):
+                        return structured.without_nulls(generated)
                 if code == "tool_use_failed":
-                    body = error.body if isinstance(error.body, dict) else {}
-                    body = body.get("error", body)
                     try:
                         call = json.loads(body.get("failed_generation", ""))
                     except (TypeError, json.JSONDecodeError):
