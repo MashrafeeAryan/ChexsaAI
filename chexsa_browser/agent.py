@@ -70,6 +70,11 @@ class BrowserAgent:
                     self.state.submission = "uncertain"
                 self.state.history.append({"action": "resume", "status": "ok", "message": "Observed current state; do not replay previous actions."})
             self._save()
+            if "recipient" in self.state.spec.inputs:
+                missing = [key for key in ("recipient", "body") if not self.state.spec.inputs.get(key, "").strip()]
+                if missing:
+                    self.state.question = "Who is the recipient, and what message should I send?" if len(missing) == 2 else ("Who should I send it to?" if missing[0] == "recipient" else "What message should I send?")
+                    return self._finish("blocked", self.state.question)
             previous = None
             last_signature, repeats, replans = None, 0, 0
             for _ in range(self.max_steps):
@@ -82,6 +87,8 @@ class BrowserAgent:
                     action = self.model.choose(self.state, observation)
                     if self.cancelled:
                         return self._finish("cancelled", "Task cancelled before the next action.")
+                    if time.monotonic() - started >= self.timeout:
+                        break
                     self.emit(f"[BROWSER] Step {self.state.steps}: {action.action}")
                     if action.action == "ask_user":
                         self.state.question = action.arguments["question"]
@@ -123,6 +130,8 @@ class BrowserAgent:
                             raise BrowserError("outcome_uncertain", "Submission was already attempted. Inspect the outcome; do not submit again.")
                         if "recipient" in self.state.spec.inputs:
                             preflight_email(self.state, observation, self.backend, self.model, action)
+                        if time.monotonic() - started >= self.timeout:
+                            break
                         self.state.commit_baseline = evidence_text(observation)
                         self.state.commit_image_hash = hashlib.sha256(observation.screenshot).hexdigest() if observation.screenshot else ""
                         self.state.submission = "attempting"

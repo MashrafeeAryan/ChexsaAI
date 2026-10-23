@@ -34,6 +34,28 @@ class FakeModel:
 
 
 class BrowserAgentTests(unittest.TestCase):
+    def test_email_without_body_asks_before_any_action(self):
+        backend, model = FakeBackend(), FakeModel()
+        model.plan = lambda *args: TaskSpec("Send email", inputs={"recipient": "fixture@example.test", "subject": "Hello", "body": ""})
+        agent = BrowserAgent(backend, model, emit=lambda text: None)
+        result = agent.run_task("Send email to fixture@example.test")
+        self.assertEqual(result.status, "blocked")
+        self.assertEqual(agent.state.question, "What message should I send?")
+        self.assertFalse(backend.calls)
+
+    def test_model_wait_cannot_execute_an_action_after_deadline(self):
+        from unittest.mock import patch
+        backend, model = FakeBackend(), FakeModel()
+        clock = [0]
+        def choose(*args):
+            clock[0] = 2
+            return ActionRequest("click", {"ref": "e1"}, {"kind": "submission"})
+        model.choose = choose
+        with patch("chexsa_browser.agent.time.monotonic", side_effect=lambda: clock[0]):
+            result = BrowserAgent(backend, model, timeout=1, emit=lambda text: None).run_task("Work")
+        self.assertEqual(result.status, "blocked")
+        self.assertFalse(backend.calls)
+
     def test_navigation_can_be_verified_by_actual_url_and_title(self):
         state = TaskState("t", TaskSpec("Open example.test"))
         observation = Observation("o1", "p", "https://example.test/", "Example website", [], [], {})
