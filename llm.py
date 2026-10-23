@@ -49,10 +49,10 @@ DESKTOP_DECISION_SCHEMA = {
 class LLM:
     """Use the selected model provider to make Chexsa decisions."""
 
-    def __init__(self) -> None:
+    def __init__(self, model=None) -> None:
         # These settings choose which provider and model Chexsa uses.
         self.provider = os.getenv("LLM_PROVIDER", "gemini")
-        self.model = os.getenv("LLM_MODEL", "gemini-3.8-flash")
+        self.model = model or os.getenv("LLM_MODEL", "gemini-3.8-flash")
         # Compatible endpoints often serve text-only models. Images are opt-in.
         self.supports_vision = os.getenv("LLM_SUPPORTS_VISION", "1" if self.provider == "gemini" else "0").lower() in ("1", "true", "yes")
         self.request_timeout = float(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
@@ -107,12 +107,16 @@ class LLM:
             "Classify the user's request as chat, browser, or desktop. "
             "Use chat for greetings, explanations, or answers that need no app interaction. "
             "Use browser for interacting with websites or searching the web. "
+            "Email requests use browser-based webmail unless the user explicitly names a native mail application. "
+            "Do not assume a Windows email app that the user did not request. "
             "Opening a website includes launching or attaching to Chrome; the browser agent handles that itself. "
             "Use desktop for controlling Windows apps or local computer actions. "
             "Choose by the user's destination and goal, not by the fact that a browser is a Windows app. "
             "Examples: 'open YouTube' -> browser; 'open a website in Chrome' -> browser; "
             "'open YouTube and search for jazz' -> browser; 'open Notepad' -> desktop; "
             "'change Chrome settings' -> desktop; 'hello' -> chat. "
+            "'send an email to someone@example.test' -> browser; 'draft an email' -> browser; "
+            "'send an email using Outlook desktop' -> desktop. "
             "Return exactly chat, browser, or desktop with no other text.\n\n"
             f"REQUEST:\n{request}"
         )

@@ -9,6 +9,13 @@ from app_runtime import AppSession
 
 class AppRuntimeTests(unittest.TestCase):
     @patch("app_runtime.LLM")
+    def test_per_run_model_override_stays_lazy(self, factory):
+        session = AppSession(model="test-model")
+        factory.assert_not_called()
+        factory.return_value.choose_mode.return_value = "chat"
+        session.run("Hello")
+        factory.assert_called_once_with(model="test-model")
+    @patch("app_runtime.LLM")
     @patch("app_runtime.create_browser_agent")
     @patch("app_runtime.create_desktop_agent")
     def test_start_and_close_create_no_model_or_app(self, desktop, browser, model):

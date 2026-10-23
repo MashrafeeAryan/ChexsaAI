@@ -10,6 +10,11 @@ from llm import LLM
 
 
 class LLMTests(unittest.TestCase):
+    def test_per_run_model_does_not_change_saved_setting(self):
+        settings = {"LLM_PROVIDER": "openai_compatible", "LLM_MODEL": "saved-model", "LLM_API_KEY": "fixture-key", "LLM_BASE_URL": "https://provider.example.test/v1"}
+        with patch.dict("os.environ", settings, clear=True), patch("llm.OpenAI"):
+            self.assertEqual(LLM(model="temporary-model").model, "temporary-model")
+            self.assertEqual(LLM().model, "saved-model")
     def test_compatible_models_default_to_text_only_and_can_opt_into_vision(self):
         settings = {"LLM_PROVIDER": "openai_compatible", "LLM_API_KEY": "fixture-key", "LLM_BASE_URL": "https://provider.example.test/v1"}
         with patch.dict("os.environ", settings, clear=True), patch("llm.OpenAI"):

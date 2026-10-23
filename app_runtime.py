@@ -13,8 +13,9 @@ def create_desktop_agent(llm):
 
 
 class AppSession:
-    def __init__(self, llm=None, max_steps=None, timeout=None):
+    def __init__(self, llm=None, max_steps=None, timeout=None, model=None):
         self._llm = llm
+        self.model_override = model
         self.max_steps, self.timeout = max_steps, timeout
         self.browser_backend = self.browser_agent = self.desktop_agent = None
         self.last_mode = None
@@ -22,7 +23,7 @@ class AppSession:
     @property
     def llm(self):
         if self._llm is None:
-            self._llm = LLM()
+            self._llm = LLM(model=self.model_override) if self.model_override else LLM()
         return self._llm
 
     def _browser(self):

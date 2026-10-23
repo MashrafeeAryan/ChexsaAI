@@ -11,6 +11,7 @@ def main(argv=None):
     parser.add_argument("--resume", metavar="TASK_ID", help="Observe and reconcile a saved task; never replay its action log")
     parser.add_argument("--tasks", action="store_true", help="List recent local task IDs")
     parser.add_argument("--max-steps", type=int, default=None)
+    parser.add_argument("--model", help="Use another model for this run without editing .env")
     parser.add_argument("--timeout", type=int, default=None, help="Task deadline in seconds")
     args = parser.parse_args(argv)
     if args.tasks:
@@ -23,7 +24,7 @@ def main(argv=None):
         return
     if args.max_steps is not None and args.max_steps < 1 or args.timeout is not None and args.timeout < 1:
         parser.error("Step and time limits must be positive.")
-    app = AppSession(max_steps=args.max_steps, timeout=args.timeout)
+    app = AppSession(max_steps=args.max_steps, timeout=args.timeout, model=args.model)
     try:
         if args.resume:
             result = app.resume(args.resume)
