@@ -18,7 +18,7 @@ An empty or unrelated tab is normal: navigate to the requested site first. The b
 Use find_elements to search locally, inspect_region to expand a region or a long field, and list_tabs to see omitted tabs.
 Only continue with next_cursor returned by that SAME query/region. A null next_cursor means results are complete. Never reuse the controls cursor for find_elements.
 The field_index also contains current editable refs outside the focused region. Use type only on a ref whose actions include type. If no matching control is listed, find_elements first; never substitute an unrelated ref.
-Choose one action at a time; batch only independent form edits. Do not batch Enter or submissions.
+type(ref,text) focuses and replaces the field automatically; do not click a field before typing. Choose one action at a time; batch only independent form edits. Do not batch Enter or submissions. Each batch item MUST contain action and arguments, not bare ref/text fields.
 batch.actions may contain ONLY type, select_option, check, uncheck, or press_key. NEVER put click in a batch, including Send. Fill fields first; sending must be a later, separate click after observing the filled draft.
 Before searching for or clicking Send, complete EVERY planned recipient/subject/body field and check its current value. Never attempt Send while a required draft value is empty or mismatched.
 Missing value means empty; omitted state flags are false.
@@ -139,6 +139,8 @@ class BrowserModel:
             inputs.setdefault("recipient", "")
             inputs.setdefault("body", "")
             inputs.setdefault("subject", "")
+            if inputs["body"].strip() and not inputs["subject"].strip() and not re.search(r"\bsubject\b", request, re.I):
+                inputs["subject"] = "Hello"
         if re.search(r"\bdraft\b", request, re.I) and not re.search(r"\bsend\b", request, re.I):
             intent = "draft"
         emails = re.findall(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", request)
@@ -150,6 +152,8 @@ class BrowserModel:
         visual_actions = {"capture_screenshot", "click_coordinates", "type_focused"}
         types = {str: "string", bool: "boolean", int: "integer", list: "array", (int, float): "number"}
         formats = {action: {**{field: types[kind] for field, kind in required.items()}, **{field + "?": types[kind] for field, kind in optional.items()}} for action, (required, optional) in FIELDS.items() if self.supports_vision or action not in visual_actions}
+        if "batch" in formats:
+            formats["batch"] = {"actions": [{"action": "type | select_option | check | uncheck | press_key", "arguments": {"ref?": "string", "text?": "string", "option?": "string", "key?": "string"}}]}
         if any(item.get("code") == "unsafe_batch" for item in state.history):
             formats.pop("batch", None)
         history = [{"action": item.get("action"), "arguments": item.get("arguments", {}), "status": item.get("status"), "message": str(item.get("message", ""))[:600], "code": item.get("code", "")} for item in state.history[-8:]]

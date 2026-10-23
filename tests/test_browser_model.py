@@ -7,6 +7,13 @@ from chexsa_browser.models import BrowserError, Observation, TaskSpec, TaskState
 
 
 class ModelTests(unittest.TestCase):
+    def test_missing_subject_gets_neutral_default_unless_explicitly_empty(self):
+        model = BrowserModel(None)
+        observation = Observation("o1", "p", "url", "title", [], [], {}, context="page")
+        model._ask = lambda *args: {"inputs": {"recipient": "fixture@example.test", "body": "Hello", "subject": ""}, "subgoals": ["Send"], "completion": ["Sent"]}
+        self.assertEqual(model.plan("Send hello to fixture@example.test", observation).inputs["subject"], "Hello")
+        self.assertEqual(model.plan("Send hello to fixture@example.test without a subject", observation).inputs["subject"], "")
+
     def setUp(self):
         self.model = BrowserModel(None)
         self.observation = Observation("o1", "p", "url", "title", [], [], {}, context="page")
