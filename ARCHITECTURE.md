@@ -129,6 +129,11 @@ Submission intent is committed to SQLite before execution. After sending, the
 controller requires new evidence; an old confirmation is insufficient. An explicit
 application refusal is a failed result. Missing evidence is uncertainty. Neither
 uncertain submissions nor interrupted submission intents are automatically replayed.
+Live status/alert text has a separate bounded notices section so a large inbox
+cannot hide a sending receipt. After checked dispatch, a fresh same-page and
+same-frame affirmative email receipt is recorded as verified progress. Old notices
+and quoted draft text do not qualify. The independent verifier must still assess
+the whole requested goal; a receipt alone cannot finish unrelated remaining work.
 Application acceptance does not prove delivery or that a recipient read the message.
 
 Task state, action results, recovery history, model token/call counts, and latency
@@ -164,6 +169,15 @@ for one terminal session and leaves `.env` unchanged. Browser settings are:
 | `LLM_REASONING_EFFORT` | `medium` for GPT-OSS 20B/120B; otherwise provider default |
 
 Text-only models receive string content and are not offered screenshot actions.
+Groq GPT-OSS 20B/120B use the provider's strict JSON schemas for plans, actions,
+preflight, and verification. Optional schema fields use null and are removed before
+normal validation; false, zero, and empty strings remain meaningful. Plan inputs
+use unique name/value entries at the API boundary and are stored as a flat map.
+If a provider validation error contains usable JSON, Chexsa checks it locally
+against that schema; only missing nullable fields may be omitted. Malformed
+objects and unknown fields remain rejected.
+Other endpoints retain JSON object mode. Schema compliance does not prove that
+an action is correct: action, target, and outcome checks still run.
 Compatible-provider SDK retries are disabled. Invalid JSON gets one corrective
 retry. Rate limits get up to two announced retries within a 60-second total wait
 budget, rounding up fractional delays with a margin. JSON and quota retries have
@@ -188,6 +202,8 @@ WebSocket endpoint from `DevToolsActivePort`. An explicit CDP URL overrides that
 discovery. A custom root without a discovery file launches on a separate free
 port, avoiding accidental attachment to an unrelated profile on 9222. Named
 profiles preserve their own cookies/storage and remain isolated from one another.
+The profile-folder setting selects a profile when launching. Attaching uses the
+profile exposed by that debugging endpoint; it does not switch the signed-in account.
 
 Chrome 136+ ignores debugging flags on its standard data directory. Chrome 144+
 offers a separate user-approved connection flow: enable remote debugging at

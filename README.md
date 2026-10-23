@@ -230,7 +230,9 @@ CHEXSA_CHROME_PROFILE=Profile 1
 ```
 
 Chexsa reads that root's `DevToolsActivePort` to attach to an enabled session.
-An explicit `CHEXSA_CDP_URL` takes priority. Otherwise a custom profile launches
+An explicit `CHEXSA_CDP_URL` takes priority. The profile-folder setting selects a
+profile when launching; attaching uses the account exposed by the existing
+debugging connection. Otherwise a custom profile launches
 on its own port, so it cannot accidentally attach to a different profile on 9222.
 
 For your normal Chrome data directory, Chrome 144+ provides an opt-in route:
