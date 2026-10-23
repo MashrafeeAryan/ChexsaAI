@@ -22,6 +22,7 @@ class BrowserSession:
         self.auto_launch = auto_launch
         self.profile_dir = Path(os.path.expandvars(str(profile_dir))).expanduser() if profile_dir else None
         self.profile_name = profile_name
+        self._explicit_cdp = bool(cdp_url)
         self.cdp_url = cdp_url or self._profile_endpoint() or "http://127.0.0.1:9222"
         self.headless = headless
         self.launched_process = None
@@ -46,6 +47,10 @@ class BrowserSession:
         except (OSError, ValueError, IndexError):
             pass
         # A configured profile must never attach to an unrelated Chrome on 9222.
+        return self._fresh_endpoint()
+
+    @staticmethod
+    def _fresh_endpoint():
         with socket.socket() as available:
             available.bind(("127.0.0.1", 0))
             return f"http://127.0.0.1:{available.getsockname()[1]}"
@@ -63,8 +68,10 @@ class BrowserSession:
                 self.close()
                 raise BrowserError("not_connected", "Could not attach to Chrome. Enable remote debugging in that Chrome profile or configure CHEXSA_CDP_URL; alternatively enable auto launch.")
             if self.cdp_url.startswith(("ws:", "wss:")):
-                self.close()
-                raise BrowserError("not_connected", "The saved Chrome debugging session is unavailable. Open that profile and enable remote debugging again.")
+                if self._explicit_cdp:
+                    self.close()
+                    raise BrowserError("not_connected", "The configured Chrome debugging session is unavailable. Open that profile and enable remote debugging again.")
+                self.cdp_url = self._fresh_endpoint()
             self._launch()
             self.browser = self.playwright.chromium.connect_over_cdp(self.cdp_url)
         self.ensure_page()

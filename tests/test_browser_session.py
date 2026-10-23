@@ -19,6 +19,22 @@ def page(name, closed=False, focused=False):
 
 
 class BrowserSessionTests(unittest.TestCase):
+    @patch("chexsa_browser.session.sync_playwright")
+    def test_stale_discovered_endpoint_relaunches_same_custom_profile(self, playwright):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "DevToolsActivePort").write_text("45678\n/devtools/browser/old-id", encoding="utf-8")
+            session = BrowserSession(profile_dir=directory, profile_name="Profile 2", auto_launch=True)
+            browser = Mock()
+            connect = playwright.return_value.start.return_value.chromium.connect_over_cdp
+            connect.side_effect = [RuntimeError("Closed"), browser]
+            session._launch, session.ensure_page = Mock(), Mock()
+            session.connect()
+            self.assertTrue(session.cdp_url.startswith("http://127.0.0.1:"))
+            self.assertEqual(session.profile_dir, Path(directory))
+            self.assertEqual(session.profile_name, "Profile 2")
+            session._launch.assert_called_once()
+            self.assertIs(session.browser, browser)
+
     def test_named_profile_discovers_its_own_enabled_debugging_endpoint(self):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "DevToolsActivePort").write_text("45678\n/devtools/browser/fixture-id\n", encoding="utf-8")
