@@ -181,6 +181,11 @@ GEMINI_API_KEY=your-api-key
 
 Never upload your API keys to GitHub.
 
+OpenAI-compatible models use page text and element refs by default. This works
+with Groq's text-only GPT-OSS models. Only set `LLM_SUPPORTS_VISION=1` if your
+chosen model accepts images; this enables screenshot and coordinate actions.
+Gemini enables images by default. `LLM_TIMEOUT_SECONDS` defaults to 30 seconds.
+
 ### 4. Start Chexsa
 
 ```powershell
@@ -206,6 +211,24 @@ Chrome stays open when Chexsa disconnects. If the selected tab closes, the next
 observation selects an open tab or creates a blank one. Old element refs are
 rejected, so a pending action cannot silently hit a different tab.
 
+To reuse another saved Chrome profile, add its user-data root and profile folder
+to `.env`:
+
+```env
+CHEXSA_CHROME_USER_DATA_DIR=C:\path\to\your\saved-chrome-data
+CHEXSA_CHROME_PROFILE=Profile 1
+```
+
+Chexsa reads that root's `DevToolsActivePort` to attach to an enabled session.
+An explicit `CHEXSA_CDP_URL` takes priority. Otherwise a custom profile launches
+on its own port, so it cannot accidentally attach to a different profile on 9222.
+
+For your normal Chrome data directory, Chrome 144+ provides an opt-in route:
+enable debugging at `chrome://inspect/#remote-debugging`, then allow Chrome's
+connection prompt. Point the setting above at the normal user-data root.
+Chexsa does not change that setting or copy your login data. See
+[Chrome's connection guide](https://developer.chrome.com/docs/devtools/agents/use-cases/auto-connect).
+
 List saved tasks or resume after observing the current browser:
 
 ```powershell
@@ -217,6 +240,22 @@ The browser engine keeps large pages locally and sends focused regions to the
 model. It supports node-bound refs, search/expansion, visual fallback, verified
 results, and recovery without automatically repeating uncertain submissions.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for settings and behavior.
+
+### Test your actual model
+
+```powershell
+python scripts/test_live_browser.py
+```
+
+This runs the terminal with your saved API settings, tests chat and YouTube
+navigation/search, and checks the real resulting page. It uses a separate empty
+Chrome profile and does not read your personal tabs. It uses API quota. Add
+`--email` to test sending on a local fake inbox with a fixture recipient;
+no real email is sent. Results and timings go to `.chexsa/live-smoke.json`.
+
+Free API token limits can delay repeated tasks. Chexsa announces a short quota
+wait and makes bounded retries, instead of silently waiting through SDK retries. Longer
+or repeated quota failures stop with a clear result and preserve browser progress.
 
 
 ---

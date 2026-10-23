@@ -66,6 +66,7 @@ fake pages: they do not send real email or need an email account.
 | [tests/test_llm.py](tests/test_llm.py) | Provider settings, chat replies, request routing, and desktop decisions work. Uses fake API clients. |
 | [tests/test_voice.py](tests/test_voice.py) | Wake-phrase handling and sending requests to the correct browser or desktop agent. |
 | [tests/test_browser_agent.py](tests/test_browser_agent.py) | Task completion needs evidence, draft requests do not send, and repeated actions trigger recovery. |
+| [tests/test_browser_backend.py](tests/test_browser_backend.py) | Reading a page retries if navigation changes a frame, while unrelated errors still surface. |
 | [tests/test_browser_collector.py](tests/test_browser_collector.py) | Page details are read correctly, duplicate controls stay separate, and password values are hidden. |
 | [tests/test_browser_context.py](tests/test_browser_context.py) | Large pages stay within the AI's page-text limit, searches find omitted controls, and changes are tracked correctly. |
 | [tests/test_browser_entrypoints.py](tests/test_browser_entrypoints.py) | Terminal and voice mode use the current browser engine, including task listing, resume, and cleanup. |
@@ -80,6 +81,7 @@ fake pages: they do not send real email or need an email account.
 | [tests/test_browser_visual.py](tests/test_browser_visual.py) | Screenshot checks handle rendering delays and reject changed pages, images, and viewports. |
 | [tests/browser_engine_integration.py](tests/browser_engine_integration.py) | Uses real Chrome to check 20 email runs, exact targets, uploads, embedded pages, screenshots, recovery after closing a tab, and saved site state after restarting Chrome. |
 | [tests/desktop_integration.py](tests/desktop_integration.py) | A manual Windows test that opens Word, writes text, and checks it. Leaves Word open so you can inspect it. |
+| [scripts/test_live_browser.py](scripts/test_live_browser.py) | Tests the real terminal with your API key using an empty Chrome profile. Checks YouTube and optionally a fake email, then saves timings. Uses API quota. |
 | [tests/fixtures/controls.html](tests/fixtures/controls.html) | A fake page with duplicate buttons, fields, uploads, embedded controls, and a visual-only target. |
 | [tests/fixtures/frame.html](tests/fixtures/frame.html) | A small page embedded inside another test page to check controls inside frames. |
 | [tests/fixtures/mail.html](tests/fixtures/mail.html) | A fake inbox and compose window with successful, refused, delayed, and uncertain sending outcomes. |

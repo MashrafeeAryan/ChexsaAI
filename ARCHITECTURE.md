@@ -60,7 +60,7 @@ automatically acquire click capabilities.
 
 ## Large pages
 
-Collected elements stay local. The default model page view has a 12,000-character
+Collected elements stay local. The default model page view has a 6,000-character
 budget; this is a serialization budget, not an exact provider token count.
 It contains an overview, a selected region, complete control records, relevant
 text, and changes. Large individual fields are marked for expansion.
@@ -117,6 +117,9 @@ page and asks the verifier. Text evidence must quote actual current page content
 visual evidence must reference the fresh attached screenshot. Execution success
 alone is not task completion.
 
+Observed URL and title are also valid exact evidence for navigation and searches.
+The verifier must quote the actual value, without invented labels or paraphrases.
+
 Email plans retain literal recipient addresses from the user request. Before a
 submission, a separate preflight identifies the compose region and reads the
 subject/body controls and recipient value or committed chip. Values must match
@@ -147,12 +150,29 @@ Existing `LLM_PROVIDER`, `LLM_MODEL`, `GEMINI_API_KEY`, `LLM_API_KEY`, and
 | Setting | Default |
 |---|---|
 | `CHEXSA_CDP_URL` | `http://127.0.0.1:9222` |
+| `CHEXSA_CHROME_USER_DATA_DIR` | Chexsa's persistent profile root; optional saved Chrome root |
+| `CHEXSA_CHROME_PROFILE` | `Default`; can select `Profile 1`, etc. |
 | `CHEXSA_AUTO_LAUNCH` | `1` |
-| `CHEXSA_CONTEXT_CHARS` | `12000` (minimum `2000`) |
+| `CHEXSA_CONTEXT_CHARS` | `6000` (minimum `2000`) |
 | `CHEXSA_MAX_STEPS` | `50` |
 | `CHEXSA_TIMEOUT` | `600` seconds |
 | `CHEXSA_MAX_FAILURES` | `3` |
 | `CHEXSA_TRACE_SCREENSHOTS` | `0` |
+| `LLM_SUPPORTS_VISION` | `0` for compatible providers, `1` for Gemini |
+| `LLM_TIMEOUT_SECONDS` | `30` seconds per API request |
+| `LLM_REASONING_EFFORT` | `medium` for GPT-OSS 20B/120B; otherwise provider default |
+
+Text-only models receive string content and are not offered screenshot actions.
+Compatible-provider SDK retries are disabled. Invalid JSON gets one corrective
+retry. Rate limits get up to two announced retries within a 60-second total wait
+budget, rounding up fractional delays with a margin. JSON and quota retries have
+separate budgets. Repeated or longer limits stop the task; no browser action is
+replayed by API retries.
+
+Planning sends only a page overview. Ordinary verification sends current data;
+external-submission verification also retains the before-state. The focused view
+includes a small index of editable fields in other regions, and limits the share
+used for changes, reducing repeated context and unnecessary discovery calls.
 
 Auto launch uses a dedicated persistent Chrome profile under
 `%LOCALAPPDATA%/Chexsa/chrome`, with first-run and default-browser prompts disabled.
@@ -161,6 +181,19 @@ account sync is not required; website cookies and local storage persist across
 restarts. Sites can still expire or revoke their own sessions. This does not
 copy another Chrome profile's logins. Existing Chrome can be reused when its
 configured CDP endpoint is available. Disconnecting Chexsa leaves Chrome open.
+
+For an explicitly configured user-data root, the session discovers a local
+WebSocket endpoint from `DevToolsActivePort`. An explicit CDP URL overrides that
+discovery. A custom root without a discovery file launches on a separate free
+port, avoiding accidental attachment to an unrelated profile on 9222. Named
+profiles preserve their own cookies/storage and remain isolated from one another.
+
+Chrome 136+ ignores debugging flags on its standard data directory. Chrome 144+
+offers a separate user-approved connection flow: enable remote debugging at
+`chrome://inspect/#remote-debugging`, then allow the connection prompt. Chexsa
+can discover the endpoint from that configured root; it never changes Chrome's
+approval setting or copies encrypted login data. This route needs an open Chrome
+and user approval. See [Chrome's official guide](https://developer.chrome.com/docs/devtools/agents/use-cases/auto-connect).
 
 Observation boundaries recover a closed selected tab, preferring an open page
 and creating a blank tab when necessary. A disconnected browser reconnects at
@@ -175,3 +208,10 @@ and localhost pages, including 20 consecutive email flows and explicit refused,
 delayed, and uncertain outcomes. A scripted model tests the contract without API
 keys. These tests do not establish live-model or production Gmail success rates.
 Live sending requires a separately requested task with a connected account.
+
+`python scripts/test_live_browser.py` is an opt-in live-model check. It invokes
+the actual CLI using the saved API configuration in an isolated temporary Chrome
+profile. It independently checks YouTube navigation/search against the real URL
+and title. `--email` additionally checks a local fake inbox with 2,000 rows, exact
+recipient/subject/body, one submission, and zero wrong duplicate-button clicks.
+It records timings and task token metrics in `.chexsa/live-smoke.json`.
