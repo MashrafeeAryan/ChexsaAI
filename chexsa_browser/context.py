@@ -142,6 +142,14 @@ class ContextView:
         fields = [e for e in observation.elements if e.region != self.selected and "type" in e.capabilities]
         data["field_index"] = [{"ref": e.ref, "role": e.role, "name": short(e.name, 80), "actions": ["type"], "context": short(" > ".join(e.context), 80)} for e in fields[:6]]
         data["fields_omitted"] = max(0, len(fields) - len(data["field_index"]))
+        notices = list(dict.fromkeys([item["text"] for item in observation.text.values() if item.get("live")] + [e.name for e in observation.elements if e.role in ("status", "alert") and e.name]))
+        data["notices"] = []
+        for message in notices:
+            candidate = data["notices"] + [short(message, min(350, self.budget // 10))]
+            if len(json.dumps(candidate, ensure_ascii=False)) > self.budget // 5:
+                break
+            data["notices"] = candidate
+        data["notices_omitted"] = len(notices) - len(data["notices"])
         data["changes"] = []
         data["text"] = []
         if discovery is not None:

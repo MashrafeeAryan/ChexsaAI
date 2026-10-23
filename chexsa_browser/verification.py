@@ -102,3 +102,15 @@ def failure_is_supported(state, observation, verdict):
     quotes = verdict.get("evidence", [])
     actual = evidence_text(observation)
     return verdict.get("failed") is True and verdict.get("complete") is False and bool(quotes) and all(quote.strip() and quote in actual for quote in quotes) and any(quote not in state.commit_baseline for quote in quotes)
+
+
+def submission_confirmation(state, observation):
+    """Accept a fresh same-frame live receipt only after checked email dispatch."""
+    if not state.email_checked or state.submission not in ("attempting", "uncertain") or not state.commit_frame_id or state.commit_page_id != observation.page_id:
+        return ""
+    messages = [item["text"] for key, item in observation.text.items() if item.get("live") and len(key.split("/")) == 4 and key.split("/")[1] == state.commit_frame_id]
+    messages.extend(e.name for e in observation.elements if e.role in ("status", "alert") and e.frame_id == state.commit_frame_id and e.name)
+    for text in messages:
+        if text not in state.commit_baseline and re.fullmatch(r"(?:your\s+)?(?:message|e-?mail)\s+(?:(?:was|has been)\s+)?sent(?:\s+successfully)?[.!]?", normalize(text), re.I):
+            return normalize(text)
+    return ""

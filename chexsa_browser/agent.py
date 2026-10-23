@@ -6,7 +6,7 @@ import hashlib
 
 from .actions import DISCOVERY
 from .models import BrowserError, TaskResult, TaskState
-from .verification import completion_is_supported, evidence_text, failure_is_supported, is_submission, preflight_email
+from .verification import completion_is_supported, evidence_text, failure_is_supported, is_submission, preflight_email, submission_confirmation
 
 
 class BrowserAgent:
@@ -29,6 +29,8 @@ class BrowserAgent:
     def _finish(self, status, message):
         if status == "success" and message.strip().casefold() in ("verified fact", "verified fact or empty string"):
             message = "The requested outcome was verified."
+        if status != "success" and self.state.email_checked and self.state.submission == "confirmed":
+            message = "The application confirmed the email was sent. " + message
         self.state.status = status
         self.state.result_message = message
         self.state.metrics.update({key: value - self._usage_start.get(key, 0) for key, value in getattr(self.model, "usage", {}).items()})
@@ -88,6 +90,11 @@ class BrowserAgent:
                     return self._finish("cancelled", "Task cancelled.")
                 if time.monotonic() - started >= self.timeout:
                     break
+                receipt = submission_confirmation(self.state, observation)
+                if receipt:
+                    self.state.submission = "confirmed"
+                    self.state.progress.append("Verified application receipt: " + receipt)
+                    self._save()
                 self.state.steps += 1
                 try:
                     action = self.model.choose(self.state, observation)
@@ -122,7 +129,7 @@ class BrowserAgent:
                     last_signature = signature
                     if repeats >= 3:
                         if replans >= 1:
-                            return self._finish("uncertain" if self.state.submission != "none" else "blocked", "Stopped because repeated actions made no progress.")
+                            return self._finish("uncertain" if self.state.submission in ("attempting", "uncertain") else "blocked", "Stopped because repeated actions made no progress.")
                         replans += 1
                         self.state.spec = self.model.plan(self.state.spec.goal, observation, self.state)
                         self.state.history.append({"action": "replan", "status": "ok", "message": "Repeated action without progress; choose a different approach."})
@@ -138,6 +145,9 @@ class BrowserAgent:
                             preflight_email(self.state, observation, self.backend, self.model, action)
                         if time.monotonic() - started >= self.timeout:
                             break
+                        self.state.commit_page_id = observation.page_id
+                        sender = next((e for e in observation.elements if e.ref == action.arguments.get("ref")), None)
+                        self.state.commit_frame_id = sender.frame_id if sender else ""
                         self.state.commit_baseline = evidence_text(observation)
                         self.state.commit_image_hash = hashlib.sha256(observation.screenshot).hexdigest() if observation.screenshot else ""
                         self.state.submission = "attempting"
@@ -159,6 +169,11 @@ class BrowserAgent:
                         if result.data.get("verified"):
                             self.state.progress.append(f"Verified {action.action} against the actual control state.")
                         if submission and result.executed:
+                            receipt = submission_confirmation(self.state, observation)
+                            if receipt:
+                                self.state.submission = "confirmed"
+                                self.state.progress.append("Verified application receipt: " + receipt)
+                                self._save()
                             verdict = self.model.verify(self.state, previous, observation, result)
                             if completion_is_supported(self.state, observation, verdict):
                                 self.state.submission = "confirmed"
@@ -170,15 +185,15 @@ class BrowserAgent:
                     self.state.failures = 0
                 except BrowserError as error:
                     if error.code == "rate_limited":
-                        return self._finish("uncertain" if self.state.submission != "none" else "blocked", str(error))
+                        return self._finish("uncertain" if self.state.submission in ("attempting", "uncertain") else "blocked", str(error))
                     self.state.failures += 1
                     self.state.history.append({"action": "recovery", "status": "error", "message": str(error), "code": error.code})
                     self._save()
                     if self.state.failures >= self.max_failures:
-                        return self._finish("uncertain" if self.state.submission != "none" else "blocked", "Could not verify the submission; it will not be sent again automatically." if self.state.submission != "none" else f"Task needs attention: {error}")
+                        return self._finish("uncertain" if self.state.submission in ("attempting", "uncertain") else "blocked", "Could not verify the submission; it will not be sent again automatically." if self.state.submission in ("attempting", "uncertain") else f"Task needs attention: {error}")
                     observation = self.backend.observe()
                     self.emit(f"[BROWSER] Refreshing after {error.code}.")
-            return self._finish("uncertain" if self.state.submission != "none" else "blocked", "Stopped at the configured task limit. Progress was preserved.")
+            return self._finish("uncertain" if self.state.submission in ("attempting", "uncertain") else "blocked", "Stopped at the configured task limit. Progress was preserved.")
         except KeyboardInterrupt:
             if self.state:
                 return self._finish("cancelled", "Task cancelled.")
@@ -186,7 +201,7 @@ class BrowserAgent:
             return self.last_result
         except Exception as error:
             if self.state:
-                return self._finish("uncertain" if self.state.submission != "none" else "failed", f"Chexsa stopped: {error}")
+                return self._finish("uncertain" if self.state.submission in ("attempting", "uncertain") else "failed", f"Chexsa stopped: {error}")
             self.last_result = TaskResult("failed", f"Chexsa could not start the task: {error}", "")
             return self.last_result
         finally:

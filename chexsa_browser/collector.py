@@ -50,19 +50,20 @@ def parse_document(target_id, frame_id, document_id, document, strings, ax_nodes
     def identity(backend):
         return f"{target_id}/{frame_id}/{document_id}/{backend}"
     def ancestry(ax):
-        labels, regions, seen = [], [], set()
+        labels, regions, seen, live = [], [], set(), False
         parent = ax.get("parentId")
         while parent and parent not in seen:
             seen.add(parent)
             node = ax_by_id.get(parent, {})
             role, name = node.get("role", {}).get("value", ""), node.get("name", {}).get("value", "")
+            live = live or role in ("status", "alert")
             if role in LANDMARKS:
                 if name:
                     labels.append(f'{role} {name}')
                 if node.get("backendDOMNodeId"):
                     regions.append(identity(node["backendDOMNodeId"]))
             parent = node.get("parentId")
-        return tuple(reversed(labels)), tuple(reversed(regions))
+        return tuple(reversed(labels)), tuple(reversed(regions)), live
     elements, text = [], {}
     for backend, index in indexes.items():
         ax = ax_by_backend.get(backend, {})
@@ -74,7 +75,7 @@ def parse_document(target_id, frame_id, document_id, document, strings, ax_nodes
         name = str(ax.get("name", {}).get("value", ""))
         if ax and not ax.get("ignored"):
             props.update(_ax_role=role, _ax_name=name)
-        context, region_path = ancestry(ax)
+        context, region_path, live = ancestry(ax)
         caps = capabilities(role, tag, attrs, props, index in clickable)
         file_input = "upload_file" in caps
         if ax.get("ignored", not bool(ax)) and not file_input and not (index in clickable and index in boxes):
@@ -82,7 +83,7 @@ def parse_document(target_id, frame_id, document_id, document, strings, ax_nodes
         if role in ("statictext", "inlinetextbox") and name.strip():
             # InlineTextBox repeats its StaticText parent's content.
             if role == "statictext":
-                text[identity(backend)] = {"text": name, "region_path": region_path}
+                text[identity(backend)] = {"text": name, "region_path": region_path, "live": live}
             continue
         if not caps and role not in LANDMARKS | {"heading", "status", "alert"}:
             continue

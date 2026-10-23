@@ -34,6 +34,41 @@ class FakeModel:
 
 
 class BrowserAgentTests(unittest.TestCase):
+    def test_live_receipt_is_bound_to_checked_dispatch_and_its_page_frame(self):
+        from chexsa_browser.verification import submission_confirmation
+        def fresh():
+            state = TaskState("t", TaskSpec("Send email", inputs={"recipient": "fixture@example.test"}))
+            state.email_checked, state.submission = True, "uncertain"
+            state.commit_page_id, state.commit_frame_id = "p", "f"
+            state.commit_baseline = "Ready"
+            observation = Observation("o2", "p", "url", "title", [], [], {"t/f/d/1": {"text": "Message sent", "region_path": (), "live": True}})
+            return state, observation
+        self.assertEqual(submission_confirmation(*fresh()), "Message sent")
+        for change in ("old", "body", "page", "frame", "unchecked", "not_dispatched", "failure"):
+            with self.subTest(change=change):
+                state, observation = fresh()
+                if change == "old": state.commit_baseline = "Message sent"
+                elif change == "body": observation.text["t/f/d/1"]["live"] = False
+                elif change == "page": observation.page_id = "another"
+                elif change == "frame": state.commit_frame_id = "another"
+                elif change == "unchecked": state.email_checked = False
+                elif change == "not_dispatched": state.submission = "none"
+                else: observation.text["t/f/d/1"]["text"] = "Message could not be sent"
+                self.assertEqual(submission_confirmation(state, observation), "")
+
+    def test_receipt_does_not_finish_other_unverified_task_outcomes(self):
+        backend, model = FakeBackend(), FakeModel()
+        state = TaskState("t", TaskSpec("Send email and download a file", completion=["Sent", "Downloaded"]))
+        state.email_checked, state.submission = True, "uncertain"
+        state.commit_page_id, state.commit_frame_id = "p", "f"
+        backend.observation.text = {"t/f/d/1": {"text": "Message sent", "region_path": (), "live": True}}
+        model.verify = lambda *args: {"complete": False, "evidence": [], "reason": "Download not done"}
+        result = BrowserAgent(backend, model, emit=lambda text: None).run_task(state=state)
+        self.assertEqual(result.status, "blocked")
+        self.assertIn("confirmed the email was sent", result.message)
+        self.assertEqual(state.submission, "confirmed")
+        self.assertIn("Verified application receipt: Message sent", state.progress)
+
     def test_equal_subject_and_body_cannot_verify_the_same_control_twice(self):
         from unittest.mock import Mock
         from chexsa_browser.verification import preflight_email

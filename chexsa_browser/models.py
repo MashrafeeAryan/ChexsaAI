@@ -99,6 +99,8 @@ class TaskState:
     email_checked: bool = False
     result_message: str = ""
     commit_image_hash: str = ""
+    commit_page_id: str = ""
+    commit_frame_id: str = ""
 
 
 @dataclass

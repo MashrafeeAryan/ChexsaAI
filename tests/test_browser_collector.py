@@ -4,6 +4,14 @@ from chexsa_browser.collector import capabilities, parse_document
 
 
 class CollectorTests(unittest.TestCase):
+    def test_live_status_text_is_distinct_from_ordinary_message_text(self):
+        strings = ["P", "#text"]
+        doc = {"nodes": {"backendNodeId": [1, 2, 3], "nodeName": [0, 1, 1], "attributes": [[], [], []]}}
+        ax = [{"nodeId": "status", "backendDOMNodeId": 1, "role": {"value": "status"}}, {"nodeId": "receipt", "parentId": "status", "backendDOMNodeId": 2, "role": {"value": "StaticText"}, "name": {"value": "Message sent"}}, {"nodeId": "body", "backendDOMNodeId": 3, "role": {"value": "StaticText"}, "name": {"value": "Message sent"}}]
+        _, text = parse_document("t", "f", "d", doc, strings, ax)
+        self.assertTrue(text["t/f/d/2"]["live"])
+        self.assertFalse(text["t/f/d/3"]["live"])
+
     def test_capabilities_do_not_make_headings_clickable(self):
         self.assertEqual(capabilities("heading", "H1", {}, {}), ())
         self.assertIn("type", capabilities("textbox", "DIV", {"contenteditable": "true"}, {}))

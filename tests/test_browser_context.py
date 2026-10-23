@@ -14,6 +14,15 @@ def snapshot(count=500, generation="o1"):
 
 
 class ContextTests(unittest.TestCase):
+    def test_global_status_remains_visible_outside_focused_region(self):
+        from chexsa_browser.models import Region
+        observation = snapshot()
+        observation.regions = [Region("inbox", "main Inbox", observation.elements)]
+        observation.text = {"status": {"text": "Message sent", "region_path": (), "live": True}}
+        data = json.loads(ContextView(3000).render(observation))
+        self.assertIn("Message sent", data["notices"])
+        self.assertLessEqual(len(observation.context), 3000)
+
     def test_empty_editable_fields_explicitly_show_empty_value(self):
         from chexsa_browser.context import record
         element = snapshot(1).elements[0]
