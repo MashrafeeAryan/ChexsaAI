@@ -9,12 +9,16 @@ from app_runtime import AppSession
 
 class AppRuntimeTests(unittest.TestCase):
     @patch("app_runtime.LLM")
-    def test_per_run_model_override_stays_lazy(self, factory):
-        session = AppSession(model="test-model")
+    def test_model_connection_is_created_once_for_multiple_messages(self, factory):
+        session = AppSession()
         factory.assert_not_called()
         factory.return_value.choose_mode.return_value = "chat"
         session.run("Hello")
-        factory.assert_called_once_with(model="test-model")
+        session.run("Thanks")
+        factory.assert_called_once_with()
+        factory.return_value.reply.assert_any_call("Hello")
+        factory.return_value.reply.assert_any_call("Thanks")
+
     @patch("app_runtime.LLM")
     @patch("app_runtime.create_browser_agent")
     @patch("app_runtime.create_desktop_agent")
@@ -58,10 +62,10 @@ class AppRuntimeTests(unittest.TestCase):
                 factory.assert_not_called()
             return "browser"
         llm.choose_mode.side_effect = choose
-        session = AppSession(llm, max_steps=12, timeout=30)
+        session = AppSession(llm)
         session.run("First browser task")
         session.run("Second browser task")
-        factory.assert_called_once_with(llm, max_steps=12, timeout=30)
+        factory.assert_called_once_with(llm)
         session.close()
         backend.close.assert_called_once()
 

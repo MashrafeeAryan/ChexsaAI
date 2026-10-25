@@ -18,12 +18,13 @@ from desktop_state import DesktopSnapshot
 load_dotenv()
 
 
-# Define the decision format for Windows desktop tasks.
+# Rules for the fields and action names in a desktop reply from the AI.
 DESKTOP_DECISION_SCHEMA = {
     "type": "object",
     "properties": {
         "action": {
             "type": "string",
+            # Only these action names are allowed.
             "enum": [
                 "launch_app",
                 "focus_window",
@@ -50,7 +51,7 @@ class LLM:
     """Use the selected model provider to make Chexsa decisions."""
 
     def __init__(self, model=None) -> None:
-        # These settings choose which provider and model Chexsa uses.
+        # The second value is the default if the setting is missing.
         self.provider = os.getenv("LLM_PROVIDER", "gemini")
         self.model = model or os.getenv("LLM_MODEL", "gemini-3.8-flash")
         # Compatible endpoints often serve text-only models. Images are opt-in.
@@ -58,9 +59,11 @@ class LLM:
         self.request_timeout = float(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
         if self.request_timeout < 1:
             raise ValueError("LLM_TIMEOUT_SECONDS must be at least 1.")
+        # Some models let us choose how much reasoning they do before answering.
         self.reasoning_effort = os.getenv("LLM_REASONING_EFFORT", "medium" if self.model in ("openai/gpt-oss-120b", "openai/gpt-oss-20b") else "")
         self.client = self._create_client()
 
+    # @property lets us use self.request_options without adding ().
     @property
     def request_options(self):
         options = {"timeout": getattr(self, "request_timeout", 30)}
@@ -83,6 +86,7 @@ class LLM:
         # Groq, OpenRouter, and similar services use the OpenAI API format.
         if self.provider == "openai_compatible":
             api_key = os.getenv("LLM_API_KEY")
+            # The service address tells the client where to send requests.
             base_url = os.getenv("LLM_BASE_URL")
 
             if not api_key or not base_url:
@@ -94,7 +98,7 @@ class LLM:
                 api_key=api_key,
                 base_url=base_url,
                 timeout=self.request_timeout,
-                max_retries=0,
+                max_retries=0,  # Do not let the library retry requests on its own.
             )
 
         raise ValueError(f"Unknown LLM provider: {self.provider}")
@@ -134,8 +138,10 @@ class LLM:
                 messages=[{"role": "user", "content": prompt}],
                 **self.request_options,
             )
+            # Take the text from the first answer in the response.
             text = response.choices[0].message.content
 
+        # Remove extra spaces and make answers such as Browser become browser.
         mode = (text or "").strip().lower()
 
         if mode not in ("chat", "browser", "desktop"):
@@ -163,6 +169,7 @@ class LLM:
     ) -> AgentDecision:
         """Ask the model for the next desktop action."""
 
+        # Turn earlier action results into a list we can show the AI.
         previous_steps = [
             {
                 "action": step.action,
@@ -223,6 +230,7 @@ PREVIOUS STEPS:
 {json.dumps(previous_steps, indent=2)}
 """.strip()
 
+        # Ask for a structured action reply rather than a normal chat answer.
         if self.provider == "gemini":
             interaction = self.client.interactions.create(
                 model=self.model,
@@ -246,12 +254,15 @@ PREVIOUS STEPS:
         if not text:
             raise RuntimeError("The model returned an empty response.")
 
+        # Read the AI's JSON text as a Python dictionary.
         decision = json.loads(text)
         action = decision["action"]
 
+        # Our task runner uses Python None to mean there is no action left.
         if action == "none":
             action = None
 
+        # Pack the answer into the action record our desktop runner expects.
         return AgentDecision(
             action=action,
             arguments=decision["arguments"],
