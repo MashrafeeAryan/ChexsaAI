@@ -1,5 +1,7 @@
 """Command-line input for ChexsaAI."""
 
+from llm_ import get_reply
+
 
 def main():
     print("ChexsaAI")
@@ -23,8 +25,16 @@ def main():
             # Skip empty messages and wait for another one.
             continue
 
-        # Echo for now; the AI reply will replace this in the next step.
-        print(f"Received: {message}")
+        try:
+            reply = get_reply(message)
+            print(f"Chexsa > {reply}")
+        except KeyboardInterrupt:
+            print("\nChexsa > Request cancelled.")
+        except RuntimeError as error:
+            print(f"Chexsa > {error}")
+        except Exception:
+            # Keep the chat open without showing private connection details.
+            print("Chexsa > Could not get a reply. Check your settings and connection.")
 
 
 # Start the chat only when you run this file directly.
