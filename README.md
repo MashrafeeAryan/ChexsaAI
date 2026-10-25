@@ -192,12 +192,7 @@ Gemini enables images by default. `LLM_TIMEOUT_SECONDS` defaults to 30 seconds.
 chexsa
 ```
 
-Use `--model` to choose a model for this terminal session without editing your
-saved settings. For example, with a Groq API key:
-
-```powershell
-chexsa --model openai/gpt-oss-20b
-```
+Chexsa uses your saved `.env` settings and the normal browser task limits.
 
 If you ask to send an email without giving the message, Chexsa asks for it. If
 you provide the message but omit a subject, it uses a short neutral subject.
@@ -240,13 +235,6 @@ enable debugging at `chrome://inspect/#remote-debugging`, then allow Chrome's
 connection prompt. Point the setting above at the normal user-data root.
 Chexsa does not change that setting or copy your login data. See
 [Chrome's connection guide](https://developer.chrome.com/docs/devtools/agents/use-cases/auto-connect).
-
-List saved tasks or resume after observing the current browser:
-
-```powershell
-chexsa --tasks
-chexsa --resume TASK_ID
-```
 
 The browser engine keeps large pages locally and sends focused regions to the
 model. It supports node-bound refs, search/expansion, visual fallback, verified

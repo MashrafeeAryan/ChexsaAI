@@ -12,7 +12,7 @@ The main code for controlling websites is in `chexsa_browser/`.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Explains how the parts work together, including browser safety and task recovery. |
 | [pyproject.toml](pyproject.toml) | Lists the Python libraries Chexsa needs and sets up the `chexsa` and `chexsa-voice` commands. |
 | [.gitignore](.gitignore) | Keeps local secrets, installed libraries, and generated files out of GitHub. |
-| [cli.py](cli.py) | Starts terminal chat and waits for your request. Also lets you list saved tasks and resume one. |
+| [cli.py](cli.py) | Starts terminal chat with the normal settings, waits for your request, and prints the response. |
 | [app_runtime.py](app_runtime.py) | Chooses chat, browser, or desktop for each request. Starts browser or desktop tools only when needed, for both terminal and voice mode. |
 | [voice.py](voice.py) | Listens for "Hey Chexsa" and sends your request to chat, the browser, or Windows desktop. |
 | [llm.py](llm.py) | Loads your chosen AI provider and model settings. Answers chat, chooses the right task route, and asks the AI how to handle desktop tasks. |
@@ -70,7 +70,7 @@ fake pages: they do not send real email or need an email account.
 | [tests/test_browser_backend.py](tests/test_browser_backend.py) | Reading a page retries if navigation changes a frame, while unrelated errors still surface. |
 | [tests/test_browser_collector.py](tests/test_browser_collector.py) | Page details are read correctly, duplicate controls stay separate, and password values are hidden. |
 | [tests/test_browser_context.py](tests/test_browser_context.py) | Large pages stay within the AI's page-text limit, searches find omitted controls, and changes are tracked correctly. |
-| [tests/test_browser_entrypoints.py](tests/test_browser_entrypoints.py) | Terminal and voice mode use the current browser engine, including task listing, resume, and cleanup. |
+| [tests/test_browser_entrypoints.py](tests/test_browser_entrypoints.py) | Terminal and voice mode wait for requests, use the browser engine when needed, and clean up connections. |
 | [tests/test_browser_fixtures.py](tests/test_browser_fixtures.py) | The fake browser pages still contain the controls and sending outcomes needed by the tests. |
 | [tests/test_browser_journal.py](tests/test_browser_journal.py) | Task progress survives a restart, uncertain sends are not replayed, and completed tasks are not run again. |
 | [tests/test_browser_structured.py](tests/test_browser_structured.py) | Checks strict AI output formats, input names, and that normal browser guards still apply. |

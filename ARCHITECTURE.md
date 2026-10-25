@@ -144,14 +144,14 @@ Browser objects and credentials are not serialized.
 Defaults are 50 action steps, 600 seconds per invocation, and three consecutive
 recoverable failures. Repeated identical actions without progress cause a replan,
 then a blocked/uncertain result if repetition continues. Ctrl+C cancels a task.
-Questions preserve task state for clarification. Resume first observes and reconciles
+Questions preserve task state for clarification. Programmatic resume first observes and reconciles
 the current browser; a completed task returns its recorded result without executing.
 
 ## Configuration and validation
 
 Existing `LLM_PROVIDER`, `LLM_MODEL`, `GEMINI_API_KEY`, `LLM_API_KEY`, and
-`LLM_BASE_URL` settings remain supported. `chexsa --model MODEL` overrides the model
-for one terminal session and leaves `.env` unchanged. Browser settings are:
+`LLM_BASE_URL` settings remain supported. The terminal starts with `chexsa` and
+uses the saved settings without startup flags. Browser settings are:
 
 | Setting | Default |
 |---|---|

@@ -22,7 +22,7 @@ class EntrypointTests(unittest.TestCase):
                 factory.assert_not_called()
             return next(inputs)
         with patch("builtins.input", side_effect=read), patch("builtins.print"):
-            cli.main([])
+            cli.main()
         agent.run.assert_called_once_with("open example")
         backend.close.assert_called_once()
 
@@ -31,29 +31,22 @@ class EntrypointTests(unittest.TestCase):
     @patch("builtins.input", return_value="exit")
     def test_cli_exit_needs_no_api_or_browser(self, user_input, factory, model):
         with patch("builtins.print"):
-            cli.main([])
+            cli.main()
         model.assert_not_called()
         factory.assert_not_called()
 
-    @patch("cli.TaskJournal")
-    @patch("app_runtime.LLM")
-    def test_listing_tasks_needs_no_model_or_browser(self, model, journal):
-        journal.return_value.recent.return_value = []
-        cli.main(["--tasks"])
-        model.assert_not_called()
-        journal.return_value.close.assert_called_once()
-
-    @patch("app_runtime.LLM")
-    @patch("app_runtime.create_browser_agent")
-    def test_resume_uses_saved_task_id_without_classifying_it(self, factory, model):
-        backend, agent = MagicMock(), MagicMock()
-        factory.return_value = backend, agent
-        agent.run_task.return_value = TaskResult("uncertain", "Needs inspection", "saved")
-        with patch("builtins.print"):
-            cli.main(["--resume", "saved"])
-        agent.run_task.assert_called_once_with(task_id="saved")
-        model.return_value.choose_mode.assert_not_called()
-        backend.close.assert_called_once()
+    @patch("cli.AppSession")
+    @patch("builtins.input", side_effect=["  hello  ", "quit"])
+    def test_cli_uses_normal_settings_and_passes_messages_to_session(self, user_input, factory):
+        app = factory.return_value
+        app.last_mode = "chat"
+        app.run.return_value = "Hello"
+        with patch("builtins.print") as output:
+            cli.main()
+        factory.assert_called_once_with()
+        app.run.assert_called_once_with("hello")
+        output.assert_any_call("Chexsa > Hello")
+        app.close.assert_called_once()
 
     @patch("app_runtime.LLM")
     @patch("app_runtime.create_browser_agent")

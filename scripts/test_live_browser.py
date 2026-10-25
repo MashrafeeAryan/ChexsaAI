@@ -90,10 +90,10 @@ def main():
                     cases = [(request, expected) for request, expected in cases if (expected or "chat") == args.only]
                 # A routing mistake must fail this test before any personal desktop
                 # information can be observed or sent to the configured model.
-                cli_args = ["--max-steps", "20", "--timeout", str(args.timeout)]
+                env.update(CHEXSA_MAX_STEPS="20", CHEXSA_TIMEOUT=str(args.timeout))
                 if args.model:
-                    cli_args.extend(["--model", args.model])
-                entry = "import app_runtime\ndef forbid_desktop(*args, **kwargs):\n raise RuntimeError('Live browser test forbids desktop access')\napp_runtime.create_desktop_agent = forbid_desktop\nimport cli\ncli.main(" + repr(cli_args) + ")"
+                    env["LLM_MODEL"] = args.model
+                entry = "import app_runtime\ndef forbid_desktop(*args, **kwargs):\n raise RuntimeError('Live browser test forbids desktop access')\napp_runtime.create_desktop_agent = forbid_desktop\nimport cli\ncli.main()"
                 if args.diagnostics:
                     diagnostic = "import json\nfrom chexsa_browser.model import BrowserModel\noriginal = BrowserModel._ask\ndef trace(self, *args, **kwargs):\n result = original(self, *args, **kwargs)\n print('[MODEL JSON]', json.dumps(result, ensure_ascii=True), flush=True)\n return result\nBrowserModel._ask = trace\n"
                     entry = diagnostic + entry
