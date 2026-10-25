@@ -62,7 +62,7 @@ class BrowserModel:
 
     def _structured_ask(self, prompt, screenshot, schema):
         if self.strict_outputs:
-            prompt += "\nSTRICT OUTPUT FORMAT: Include EVERY required property in the provided JSON schema. Set irrelevant arguments to null instead of omitting their keys. An action effect must always contain kind, value, and text; use null for unused effect values. Schema requirements override the abbreviated examples above."
+            prompt += "\nSTRICT OUTPUT FORMAT: Include EVERY required property in the provided JSON schema. Use null for unused nullable fields. Schema requirements override the abbreviated examples above."
             return self._ask(prompt, screenshot, schema)
         return self._ask(prompt, screenshot)
 
@@ -204,7 +204,7 @@ class BrowserModel:
             prompt += "\nMODEL CAPABILITY: text only. Screenshots and coordinate actions are unavailable. Use navigate, refs, find_elements, or inspect_region."
         if "batch" not in formats:
             prompt += "\nRECOVERY: A batch was rejected. Choose ONE individual action; batch is unavailable for this task."
-        data = self._structured_ask(prompt, observation.screenshot if self.supports_vision else b"", structured.decision(formats))
+        data = self._ask(prompt, observation.screenshot if self.supports_vision else b"")
         action, arguments, effect = data.get("action"), data.get("arguments"), data.get("effect", {})
         if action == "batch" and "batch" not in formats:
             raise BrowserError("unsafe_batch", "Batch was rejected; choose one individual field edit or click.")

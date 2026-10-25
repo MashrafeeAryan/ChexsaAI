@@ -39,7 +39,7 @@ class StructuredTests(unittest.TestCase):
         error = BadRequestError("Rejected nullable fields", response=httpx.Response(400, request=httpx.Request("POST", "https://api.groq.com")), body={"code": "json_validate_failed", "failed_generation": json.dumps(payload)})
         model = self.model({})
         model._ask_once = Mock(side_effect=error)
-        schema = structured.decision(["type"])
+        schema = structured.obj({"action": {"type": "string", "enum": ["type"]}, "arguments": structured.obj({"ref": structured.STRING, "text": structured.STRING, "press_enter": {"type": ["boolean", "null"]}}), "effect": structured.obj({"kind": structured.STRING, "text": {"type": ["string", "null"]}})})
         self.assertEqual(model._ask("Choose", b"", schema), payload)
         model._ask_once.assert_called_once()
         for invalid in ({**payload, "action": "delete_everything"}, {**payload, "arguments": None}, {**payload, "arguments": {"selector": "button"}}, {"action": "type", "arguments": {}}):
@@ -55,7 +55,6 @@ class StructuredTests(unittest.TestCase):
         self.assertEqual(model.llm.client.chat.completions.create.call_args.kwargs["response_format"], {"type": "json_object"})
 
     def test_every_strict_object_is_closed_and_every_property_required(self):
-        from chexsa_browser.actions import FIELDS
         def visit(node):
             if isinstance(node, dict):
                 if node.get("type") == "object":
@@ -66,5 +65,5 @@ class StructuredTests(unittest.TestCase):
             elif isinstance(node, list):
                 for value in node:
                     visit(value)
-        for schema in (structured.PLAN, structured.PREFLIGHT, structured.VERIFY, structured.decision(FIELDS)):
+        for schema in (structured.PLAN, structured.PREFLIGHT, structured.VERIFY):
             visit(schema)
