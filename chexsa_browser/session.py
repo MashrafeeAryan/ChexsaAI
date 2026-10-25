@@ -10,18 +10,22 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
+# CDP is Chrome's remote-control connection; Playwright attaches through it.
 from playwright.sync_api import sync_playwright
 
 from .models import BrowserError
 
 
 class BrowserSession:
+    # Remember the Chrome settings and start with no open connection.
     def __init__(self, cdp_url=None, auto_launch=False, profile_dir=None, headless=False, profile_name="Default"):
         if not profile_name or profile_name in (".", "..") or any(char in profile_name for char in "/\\:"):
             raise ValueError("Chrome profile must be a folder name such as Default or Profile 1.")
         self.auto_launch = auto_launch
+        # Expand folder shortcuts such as %LOCALAPPDATA% and ~.
         self.profile_dir = Path(os.path.expandvars(str(profile_dir))).expanduser() if profile_dir else None
         self.profile_name = profile_name
+        # Do not silently replace an address that was explicitly supplied.
         self._explicit_cdp = bool(cdp_url)
         self.cdp_url = cdp_url or self._profile_endpoint() or "http://127.0.0.1:9222"
         self.headless = headless
@@ -36,10 +40,12 @@ class BrowserSession:
         self._page_ids = {}
         self._root_frames = {}
 
+    # Find the debugging address saved by the chosen Chrome profile.
     def _profile_endpoint(self):
         if self.profile_dir is None:
             return None
         try:
+            # Chrome writes its debugging port and browser ID into this file.
             lines = (self.profile_dir / "DevToolsActivePort").read_text(encoding="utf-8").splitlines()
             port = int(lines[0])
             if 1 <= port <= 65535 and re.fullmatch(r"/devtools/browser/[A-Za-z0-9_-]+", lines[1]):
@@ -49,12 +55,15 @@ class BrowserSession:
         # A configured profile must never attach to an unrelated Chrome on 9222.
         return self._fresh_endpoint()
 
+    # Choose an unused local port for a separate Chrome connection.
     @staticmethod
     def _fresh_endpoint():
         with socket.socket() as available:
+            # Port 0 asks the computer to choose an unused local port.
             available.bind(("127.0.0.1", 0))
             return f"http://127.0.0.1:{available.getsockname()[1]}"
 
+    # Attach Playwright to Chrome, or start Chrome if that is allowed.
     def connect(self):
         if self.browser and self.browser.is_connected():
             return
@@ -76,10 +85,12 @@ class BrowserSession:
             self.browser = self.playwright.chromium.connect_over_cdp(self.cdp_url)
         self.ensure_page()
 
+    # Start the installed Chrome with the saved profile and wait until it is ready.
     def _launch(self):
         parsed = urlparse(self.cdp_url)
         if parsed.hostname not in ("localhost", "127.0.0.1"):
             raise BrowserError("not_connected", "Auto launch only supports local Chrome.")
+        # Find the Chrome program in common install locations.
         candidates = [shutil.which("chrome"), str(Path(os.environ.get("PROGRAMFILES", "C:/Program Files")) / "Google/Chrome/Application/chrome.exe"), str(Path(os.environ.get("PROGRAMFILES(X86)", "C:/Program Files (x86)")) / "Google/Chrome/Application/chrome.exe")]
         executable = next((p for p in candidates if p and Path(p).exists()), None)
         if not executable:
@@ -89,11 +100,14 @@ class BrowserSession:
         if profile.resolve() == standard.resolve():
             raise BrowserError("not_connected", "For your normal Chrome profile, enable remote debugging at chrome://inspect/#remote-debugging and allow the connection. Chrome does not support launching its standard data directory with a debugging flag.")
         profile.mkdir(parents=True, exist_ok=True)
+        # Enable remote control and skip Chrome's first-run prompts.
         command = [executable, f"--remote-debugging-port={parsed.port or 9222}", f"--user-data-dir={profile}", f"--profile-directory={self.profile_name}", "--no-first-run", "--no-default-browser-check"]
+        # Tests can run Chrome without displaying its window.
         if self.headless:
             command.append("--headless=new")
         command.append("about:blank")
         self.launched_process = subprocess.Popen(command, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        # Wait up to 15 seconds for Chrome to accept connections.
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
             try:
@@ -103,11 +117,13 @@ class BrowserSession:
                 time.sleep(.2)
         raise BrowserError("not_connected", "Chrome did not become available within 15 seconds. If this profile is already open without debugging, close that profile's Chrome and retry, or configure its existing CDP endpoint.")
 
+    # Return only the selected tab so an action cannot silently switch tabs.
     def get_page(self):
         if self.page is None or self.page.is_closed():
             raise BrowserError("page_closed", "The selected tab closed. Observe again to select an open tab.")
         return self.page
 
+    # Before reading the page, find an open tab or create a blank one.
     def ensure_page(self):
         """Recover a live tab only at observation boundaries, never during an action."""
         if self.browser is None or not self.browser.is_connected():
@@ -120,6 +136,7 @@ class BrowserSession:
             ordered = list(reversed(preferred))
             for page in ordered:
                 try:
+                    # Prefer the tab that currently has keyboard focus.
                     if page.evaluate("document.hasFocus()"):
                         ordered = [page] + [other for other in ordered if other is not page]
                         break
@@ -138,10 +155,12 @@ class BrowserSession:
                 continue
         raise BrowserError("page_closed", "Chrome has no available tab. Open a tab and retry the task.")
 
+    # Remember which tab Chexsa is working in.
     def select(self, page):
         self.page = page
         self.page_id = self.page_identifier(page)
 
+    # Get a stable Chrome ID so we can tell tabs apart.
     def page_identifier(self, page):
         if page not in self._page_ids:
             client = page.context.new_cdp_session(page)
@@ -150,6 +169,7 @@ class BrowserSession:
             self._remember(target, client)
         return self._page_ids[page]
 
+    # Keep a Chrome connection and watch for page changes.
     def _remember(self, target, client):
         if target in self.clients:
             try:
@@ -165,15 +185,18 @@ class BrowserSession:
         client.on("Page.frameNavigated", lambda event: self._frame_changed(target, event["frame"]["id"]))
         client.on("Page.frameDetached", lambda event: self._frame_changed(target, event["frameId"]))
 
+    # Mark old controls as out of date when the main document changes.
     def _frame_changed(self, target, frame_id):
-        # Unrelated subframe navigation must not invalidate a live main-page field.
-        # Detached child nodes still fail the recorded-node connectivity check.
+        # An embedded page changing should not invalidate the main page's controls.
+        # Removed controls are checked again before an action uses them.
         if frame_id == self._root_frames.get(target):
             self._changed(target)
 
+    # Increase the page version so old element refs can be rejected.
     def _changed(self, target):
         self.epochs[target] = self.epochs.get(target, 0) + 1
 
+    # Find the main page and embedded pages that need their own connection.
     def targets(self):
         page = self.get_page()
         found = {self.page_id}
@@ -183,16 +206,17 @@ class BrowserSession:
             if frame == page.main_frame:
                 continue
             try:
-                # A Frame can move to a different renderer/CDP target on navigation.
+                # An embedded page may need a new Chrome connection after navigation.
                 client = page.context.new_cdp_session(frame)
                 target = client.send("Target.getTargetInfo")["targetInfo"]["targetId"]
                 current[frame] = target
                 self._remember(target, client)
                 found.add(target)
             except Exception:
-                # Same-process frames are already in the parent target's snapshot.
+                # Some embedded pages are already included when we read the main page.
                 pass
         self._frame_clients = current
+        # Drop old embedded-page connections, but keep ones still used by tabs.
         for obsolete in previous - found - set(self._page_ids.values()):
             old = self.clients.pop(obsolete, None)
             self.epochs.pop(obsolete, None)
@@ -204,6 +228,7 @@ class BrowserSession:
                     pass
         return [(target, self.clients[target]) for target in sorted(found)]
 
+    # List open tabs with their IDs, titles, and addresses.
     def tabs(self):
         tabs = []
         for index, page in enumerate(self.pages()):
@@ -214,6 +239,7 @@ class BrowserSession:
                     raise
         return tabs
 
+    # Remove closed tabs from our records and return the open tabs.
     def pages(self):
         for page, target in list(self._page_ids.items()):
             if page.is_closed():
@@ -223,6 +249,7 @@ class BrowserSession:
                 self._root_frames.pop(target, None)
         return [page for context in self.browser.contexts for page in context.pages if not page.is_closed()]
 
+    # Disconnect Chexsa while leaving the user's Chrome window open.
     def close(self):
         if self.playwright:
             self.playwright.stop()
