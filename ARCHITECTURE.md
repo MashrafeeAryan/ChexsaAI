@@ -151,7 +151,9 @@ the current browser; a completed task returns its recorded result without execut
 
 Existing `LLM_PROVIDER`, `LLM_MODEL`, `GEMINI_API_KEY`, `LLM_API_KEY`, and
 `LLM_BASE_URL` settings remain supported. The terminal starts with `chexsa` and
-uses the saved settings without startup flags. Browser settings are:
+uses the saved settings without startup flags. Task limits are fixed at 50 actions,
+600 seconds, and three consecutive recoverable failures. The page context budget
+is fixed at 6,000 characters. Browser connection settings are:
 
 | Setting | Default |
 |---|---|
@@ -159,18 +161,15 @@ uses the saved settings without startup flags. Browser settings are:
 | `CHEXSA_CHROME_USER_DATA_DIR` | Chexsa's persistent profile root; optional saved Chrome root |
 | `CHEXSA_CHROME_PROFILE` | `Default`; can select `Profile 1`, etc. |
 | `CHEXSA_AUTO_LAUNCH` | `1` |
-| `CHEXSA_CONTEXT_CHARS` | `6000` (minimum `2000`) |
-| `CHEXSA_MAX_STEPS` | `50` |
-| `CHEXSA_TIMEOUT` | `600` seconds |
-| `CHEXSA_MAX_FAILURES` | `3` |
 | `CHEXSA_TRACE_SCREENSHOTS` | `0` |
 | `LLM_SUPPORTS_VISION` | `0` for compatible providers, `1` for Gemini |
 | `LLM_TIMEOUT_SECONDS` | `30` seconds per API request |
 | `LLM_REASONING_EFFORT` | `medium` for GPT-OSS 20B/120B; otherwise provider default |
 
 Text-only models receive string content and are not offered screenshot actions.
-Groq GPT-OSS 20B/120B use the provider's strict JSON schemas for plans, actions,
-preflight, and verification. Optional schema fields use null and are removed before
+Groq GPT-OSS 20B/120B use the provider's strict JSON schemas for plans,
+preflight, and verification. Action selection uses JSON object mode with a typed
+action catalog and local validation; this avoids unsupported provider union schemas. Optional schema fields use null and are removed before
 normal validation; false, zero, and empty strings remain meaningful. Plan inputs
 use unique name/value entries at the API boundary and are stored as a flat map.
 If a provider validation error contains usable JSON, Chexsa checks it locally
