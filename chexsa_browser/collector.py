@@ -1,4 +1,4 @@
-"""Join public CDP accessibility and DOM snapshots by backend node identity."""
+"""Read page controls, text, and positions into local data for the browser agent."""
 
 from .models import Element
 
@@ -9,16 +9,15 @@ EDIT_ROLES = {"textbox", "searchbox", "spinbutton"}
 
 
 def capabilities(role, tag, attributes, states, clickable=False):
-    """Capabilities are independent of whether a node has a name or a ref."""
+    """List what a control supports, such as clicking, typing, or uploading."""
     result = []
     if role in CLICK_ROLES or clickable:
         result.append("click")
-    if role in EDIT_ROLES or attributes.get("contenteditable") in ("", "true") and "contenteditable" in attributes:
-        if not states.get("readonly"):
-            result.append("type")
+    editable = role in EDIT_ROLES or (attributes.get("contenteditable") in ("", "true") and "contenteditable" in attributes)
     if tag == "INPUT" and attributes.get("type", "text") not in ("checkbox", "radio", "file", "submit", "button", "hidden", "range", "color"):
-        if not states.get("readonly"):
-            result.append("type")
+        editable = True
+    if editable and not states.get("readonly"):
+        result.append("type")
     if tag == "SELECT":
         result.append("select_option")
     if role in ("checkbox", "switch", "menuitemcheckbox"):
@@ -34,7 +33,6 @@ def parse_document(target_id, frame_id, document_id, document, strings, ax_nodes
     """Return complete local structures; formatting and budgets belong elsewhere."""
     nodes = document.get("nodes", {})
     backends = nodes.get("backendNodeId", [])
-    indexes = {backend: i for i, backend in enumerate(backends)}
     ax_by_id = {node["nodeId"]: node for node in ax_nodes}
     ax_by_backend = {node["backendDOMNodeId"]: node for node in ax_nodes if node.get("backendDOMNodeId")}
     layout = document.get("layout", {})
@@ -65,7 +63,7 @@ def parse_document(target_id, frame_id, document_id, document, strings, ax_nodes
             parent = node.get("parentId")
         return tuple(reversed(labels)), tuple(reversed(regions)), live
     elements, text = [], {}
-    for backend, index in indexes.items():
+    for index, backend in enumerate(backends):
         ax = ax_by_backend.get(backend, {})
         attrs = attributes(index)
         tag = string(nodes.get("nodeName", [])[index]).upper()
@@ -105,8 +103,8 @@ class Collector:
             try:
                 snapshot = client.send("DOMSnapshot.captureSnapshot", {"computedStyles": [], "includeDOMRects": True})
                 documents = snapshot.get("documents", [])
+                strings = snapshot["strings"]
                 for document in documents:
-                    strings = snapshot["strings"]
                     frame_id = strings[document["frameId"]]
                     root_id = document["nodes"]["backendNodeId"][0]
                     document_id = str(root_id)
