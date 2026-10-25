@@ -26,7 +26,8 @@ def open_browser():
                 args=["--no-first-run", "--no-default-browser-check"],
             )
 
-        # Skip Chrome's settings pages and use the last available webpage.
+        # context.pages means the open tabs. Keep tabs that are not closed
+        # and show a website, a local file, or a blank page; skip Chrome settings.
         pages = [
             page for page in context.pages
             if not page.is_closed()
