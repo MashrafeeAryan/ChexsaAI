@@ -1,28 +1,38 @@
-"""One construction path for terminal and voice mode."""
+"""Set up the same browser tools for terminal and voice requests."""
 
+# Read the saved Chrome connection and profile settings.
 import os
 
+# Run the task by observing, choosing an action, and checking the result.
 from .agent import BrowserAgent
+# Connect to Chrome, read pages, and carry out actions.
 from .backend import BrowserBackend
+# Save task progress in a local database.
 from .journal import TaskJournal
+# Give the AI browser instructions and read its decisions.
 from .model import BrowserModel
 
 
-def positive_setting(name, default, minimum=1):
-    value = int(os.getenv(name, str(default)))
-    if value < minimum:
-        raise ValueError(f"{name} must be at least {minimum}.")
-    return value
-
-
-def create_browser_agent(llm, max_steps=None, timeout=None):
-    backend = BrowserBackend(cdp_url=os.getenv("CHEXSA_CDP_URL"), profile_dir=os.getenv("CHEXSA_CHROME_USER_DATA_DIR"), profile_name=os.getenv("CHEXSA_CHROME_PROFILE", "Default"), auto_launch=os.getenv("CHEXSA_AUTO_LAUNCH", "1").lower() in ("1", "true", "yes"), context_budget=positive_setting("CHEXSA_CONTEXT_CHARS", 6000, 2000), trace_screenshots=os.getenv("CHEXSA_TRACE_SCREENSHOTS", "0").lower() in ("1", "true", "yes"))
+# Connect the browser tools, AI decisions, and saved progress in one place.
+def create_browser_agent(llm):
+    backend = BrowserBackend(
+        cdp_url=os.getenv("CHEXSA_CDP_URL"),
+        profile_dir=os.getenv("CHEXSA_CHROME_USER_DATA_DIR"),
+        profile_name=os.getenv("CHEXSA_CHROME_PROFILE", "Default"),
+        auto_launch=os.getenv("CHEXSA_AUTO_LAUNCH", "1").lower() in ("1", "true", "yes"),
+        # Keep the page summary small to reduce token use.
+        context_budget=6000,
+        trace_screenshots=os.getenv("CHEXSA_TRACE_SCREENSHOTS", "0").lower() in ("1", "true", "yes"),
+    )
     journal = TaskJournal()
+    # Let browser cleanup also close the task database.
     backend.task_journal = journal
     try:
         backend.connect()
-        agent = BrowserAgent(backend, BrowserModel(llm), journal=journal, max_steps=max_steps or positive_setting("CHEXSA_MAX_STEPS", 50), timeout=timeout or positive_setting("CHEXSA_TIMEOUT", 600), max_failures=positive_setting("CHEXSA_MAX_FAILURES", 3))
+        # Use built-in limits: 50 actions, 10 minutes, and 3 failures in a row.
+        agent = BrowserAgent(backend, BrowserModel(llm), journal=journal)
         return backend, agent
     except Exception:
+        # Release the connections and database if setup fails.
         backend.close()
         raise

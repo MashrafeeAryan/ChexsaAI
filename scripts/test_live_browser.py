@@ -90,7 +90,6 @@ def main():
                     cases = [(request, expected) for request, expected in cases if (expected or "chat") == args.only]
                 # A routing mistake must fail this test before any personal desktop
                 # information can be observed or sent to the configured model.
-                env.update(CHEXSA_MAX_STEPS="20", CHEXSA_TIMEOUT=str(args.timeout))
                 if args.model:
                     env["LLM_MODEL"] = args.model
                 entry = "import app_runtime\ndef forbid_desktop(*args, **kwargs):\n raise RuntimeError('Live browser test forbids desktop access')\napp_runtime.create_desktop_agent = forbid_desktop\nimport cli\ncli.main()"

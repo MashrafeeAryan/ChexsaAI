@@ -17,8 +17,11 @@ class RuntimeTests(unittest.TestCase):
 
     @patch("chexsa_browser.runtime.TaskJournal")
     @patch("chexsa_browser.runtime.BrowserBackend")
-    def test_shared_factory_connects_controller_and_journal(self, backend_type, journal_type):
-        backend, agent = create_browser_agent(MagicMock())
+    def test_setup_uses_fixed_limits_and_connects_journal(self, backend_type, journal_type):
+        with patch.dict("os.environ", {"CHEXSA_MAX_STEPS": "1", "CHEXSA_TIMEOUT": "1", "CHEXSA_MAX_FAILURES": "1", "CHEXSA_CONTEXT_CHARS": "2000"}):
+            backend, agent = create_browser_agent(MagicMock())
+        self.assertEqual((agent.max_steps, agent.timeout, agent.max_failures), (50, 600, 3))
+        self.assertEqual(backend_type.call_args.kwargs["context_budget"], 6000)
         self.assertIs(agent.backend, backend)
         self.assertIs(agent.journal, journal_type.return_value)
         backend.connect.assert_called_once()
