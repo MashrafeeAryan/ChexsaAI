@@ -13,7 +13,7 @@ The new Python files end in `_`. The old code was removed; Git history keeps it.
 | `observations_.py` | Finds page changes and chooses a smaller page view for the model. |
 | `desktop_agent_.py` | Gives the model desktop tools and checks progress on its task. |
 | `desktop_.py` | Finds Windows apps, reads controls, clicks, types, and sends shortcuts. |
-| `voice_.py` | Listens for Hey Chexsa, speaks replies, and prints requests without executing them. |
+| `voice_.py` | Listens for Hey Chexsa, sends requests to the selected agent, and speaks the result. |
 
 ## Setup and docs
 
@@ -36,29 +36,44 @@ The new Python files end in `_`. The old code was removed; Git history keeps it.
 | `tests/test_browser_observation_.py` | Checks page reading, node identity, changes, search, clicks, and typing. |
 | `tests/test_desktop_.py` | Checks Windows control selection, clicking, typing, and stale-target guards. |
 | `tests/test_desktop_agent_.py` | Checks desktop model tools, task progress, word counts, limits, and CLI modes. |
-| `tests/test_voice_.py` | Checks wake phrases and voice conversations with fake audio and no microphone use. |
+| `tests/test_voice_.py` | Checks wake phrases, spoken replies, agent selection, and cleanup with fake audio. |
 | `tests/browser_changes_integration_.py` | Runs the new browser loop on a large local page in isolated Chrome. |
 | `tests/desktop_actions_integration_.py` | Manually tests real disposable Windows controls and a temporary Word document. |
 
 `.venv/`, `.chexsa/`, `__pycache__/`, `build/`, `dist/`, and `*.egg-info/` are local
 runtime or generated folders, not extra implementations. Do not put API keys in docs.
 
-## Try voice on its own
+## Run voice
+
+Install the optional microphone support:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e ".[voice]"
+```
+
+Desktop mode:
+
+```powershell
 .\.venv\Scripts\python.exe voice_.py
 ```
 
+Browser mode:
+
+```powershell
+.\.venv\Scripts\python.exe voice_.py browser
+```
+
 Say **Hey Chexsa**, wait for the greeting, then give a request. You can also say
-**Hey Chexsa, open YouTube** in one sentence. Chexsa speaks a short acknowledgment
-and prints the request. It does not perform the task yet.
+**Hey Chexsa, open YouTube** in one sentence when running browser mode.
+Chexsa acknowledges the request, runs the selected agent, and speaks its result.
 
-Say **Hey Chexsa, stop** or press **Ctrl+C** to close it.
+Say **Hey Chexsa, stop** or press **Ctrl+C** to close it. During a running task,
+Ctrl+C cancels that task; voice then returns to listening.
 
+- You choose browser or desktop mode at startup; there is no automatic mode choice yet.
 - Speech recognition sends recordings to Google's speech service and needs internet.
-- This prototype detects the wake phrase from transcribed speech; it is not an offline wake-word detector.
-- Windows reads the greeting and acknowledgment aloud without an AI model call.
-- Listening pauses while Chexsa speaks, so it does not record its own reply.
+- The wake phrase is detected from transcribed speech, not by an offline wake-word detector.
+- Windows speaks fixed greetings and acknowledgments without an AI model call.
+- Agent tasks use your existing model settings and API quota, like terminal tasks.
+- Listening pauses during speech and task execution. Spoken stop commands work while listening.
 - Voice must be running to hear the wake phrase; it does not start with Windows.
-- The main CLI, browser, and desktop agents are not connected to voice yet.

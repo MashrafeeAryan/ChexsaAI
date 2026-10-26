@@ -1,11 +1,16 @@
-"""Standalone voice prototype: run python voice_.py.
+"""Speak requests to the selected browser or desktop agent.
 
-Google transcribes recordings; Windows speaks replies. Requests are only printed.
-No browser, desktop, or model connections.
+Run python voice_.py for desktop, or python voice_.py browser for Chrome.
+Google transcribes recordings; Windows speaks replies.
 """
 
 from random import choice
 import re
+import sys
+
+from agent_ import run_agent
+from desktop_agent_ import run_desktop_agent
+from browser_ import close_browser
 
 GREETING = "Hi Mashrafee, what can I do for you today?"
 ACKNOWLEDGMENTS = (
@@ -51,8 +56,13 @@ def listen(recognizer, microphone):
         raise RuntimeError("Speech recognition is unavailable. Check your internet connection.") from None
 
 
-# Try the voice conversation alone; captured requests are printed, never executed.
-def main():
+# Listen for requests, pass them to the chosen agent, and speak its response.
+def main(mode="desktop"):
+    if mode not in ("desktop", "browser"):
+        print("Choose desktop or browser mode.")
+        return
+    # Reuse the same app or browser connection across spoken requests.
+    state = {}
     try:
         import speech_recognition as sr
     except ImportError:
@@ -63,7 +73,7 @@ def main():
         recognizer = sr.Recognizer()
         recognizer.operation_timeout = 10  # Do not wait forever for transcription.
         microphone = sr.Microphone()
-        print("Voice prototype: requests are captured, not executed.")
+        print(f"Chexsa voice - {mode} mode")
         print("Say Hey Chexsa. Press Ctrl+C to stop.")
         with microphone as source:
             recognizer.adjust_for_ambient_noise(source, duration=0.5)
@@ -86,7 +96,18 @@ def main():
                 speak("Goodbye, Mashrafee.")
                 break
             acknowledge()
-            print("Captured request (not executed):", request)
+            print("You >", request)
+            try:
+                response = run_agent(request, state) if mode == "browser" else run_desktop_agent(request, state)
+            except KeyboardInterrupt:
+                response = "Task cancelled."
+            except RuntimeError as error:
+                print("Chexsa >", error)
+                response = "I couldn't finish that request. Check the terminal for details."
+            except Exception:
+                response = "I couldn't finish that request. Check your connection and the selected app."
+            print("Chexsa >", response)
+            speak(response)
     except KeyboardInterrupt:
         pass
     except (OSError, AttributeError):
@@ -96,9 +117,12 @@ def main():
     except Exception:
         print("Voice stopped. Check that Windows speech and your audio device are available.")
     finally:
+        # Disconnect Chrome on exit; leave desktop documents open.
+        if state.get("playwright") is not None:
+            close_browser(state["playwright"])
         print("Voice stopped.")
 
 
-# Running this file starts only the voice prototype.
+# Choose the mode just like the terminal version.
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else "desktop")
