@@ -40,7 +40,26 @@ def test_text_formats():
             assert path.read_bytes() == text.encode("utf-8")
 
 
+# Word output must be a valid package, retain paragraphs, and never overwrite a document.
+def test_word_documents():
+    from zipfile import ZipFile
+    from docx import Document
+    with TemporaryDirectory() as directory, patch.object(files_, "OUTPUT_DIR", Path(directory)):
+        for index, content in enumerate(("AI and education\r\n\r\nCaf\u00e9\tand learning.\r\n", "")):
+            path = Path(files_.write_file(f"document{index}.docx", content))
+            expected = content.replace("\r\n", "\n")
+            with ZipFile(path) as package:
+                assert package.testzip() is None
+                assert "word/document.xml" in package.namelist()
+            assert "\n".join(p.text for p in Document(path).paragraphs) == expected
+            assert files_.read_file(path) == expected
+            before = path.read_bytes()
+            with unittest.TestCase().assertRaises(FileExistsError):
+                files_.write_file(str(path), "Replacement")
+            assert path.read_bytes() == before
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
-        test_create_and_preserve, test_reject_invalid_files, test_text_formats,
+        test_create_and_preserve, test_reject_invalid_files, test_text_formats, test_word_documents,
     ))
