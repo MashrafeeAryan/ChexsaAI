@@ -1,9 +1,19 @@
 """Open Chrome and read the current page."""
 
+import json
 import os
 from pathlib import Path
+from weakref import WeakKeyDictionary
 
 from playwright.sync_api import Error, sync_playwright
+
+# Remember which Chrome nodes belong to the latest page observation.
+_observations = WeakKeyDictionary()
+_CONTROL_ROLES = {
+    "button", "link", "textbox", "searchbox", "combobox", "checkbox", "radio",
+    "switch", "spinbutton", "slider", "tab", "menuitem", "menuitemcheckbox",
+    "menuitemradio", "option", "treeitem",
+}
 
 
 # Connect to Chrome, or open it with Chexsa's saved browser profile.
@@ -46,16 +56,113 @@ def open_page(page, url):
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
 
-# Read the page in a form we can later give to the AI.
+# Read controls using the exact node IDs Chrome already gives us.
+# Example return value (Chrome supplies the real node IDs):
+# {
+#     "url": "https://example.com/mail",
+#     "title": "Inbox",
+#     "elements": (
+#         '[10] button "Compose" | context: main "Inbox"\n'
+#         '[12] textbox "Recipients" | context: dialog "New Message"\n'
+#         '[14] textbox "Subject" | context: dialog "New Message"\n'
+#         '[16] textbox "Message Body" | context: dialog "New Message"\n'
+#         '[18] button "Send" | context: dialog "New Message"'
+#     ),
+#     "content": (
+#         '- main "Inbox":\n'
+#         '  - button "Compose"\n'
+#         '- dialog "New Message":\n'
+#         '  - textbox "Recipients"\n'
+#         '  - textbox "Subject"\n'
+#         '  - textbox "Message Body"\n'
+#         '  - button "Send"'
+#     )
+# }
 def read_page(page):
-    return {
-        "url": page.url,
-        "title": page.title(),
-        # Chrome describes visible page content using names like button and textbox.
-        "elements": page.locator("body").aria_snapshot(),
-    }
+    previous = _observations.pop(page, None)
+    if previous:
+        try:
+            previous["session"].detach()
+        except Error:
+            pass  # A closed tab may have already ended its connection.
+
+    # CDP is Chrome's remote-control connection. It exposes exact node IDs.
+    session = page.context.new_cdp_session(page)
+    try:
+        document = session.send("DOM.getDocument", {"depth": 0})["root"]["backendNodeId"]
+        nodes = session.send("Accessibility.getFullAXTree")["nodes"]
+        by_id = {node["nodeId"]: node for node in nodes}
+        targets, lines = set(), []
+        for node in nodes:
+            role = node.get("role", {}).get("value", "").lower()
+            target = node.get("backendDOMNodeId")
+            if node.get("ignored") or role not in _CONTROL_ROLES or not target:
+                continue
+            targets.add(target)
+            name = node.get("name", {}).get("value", "")
+            line = f"[{target}] {role} {json.dumps(name, ensure_ascii=False)}"
+
+            # Walk up the page structure to show where duplicate controls belong.
+            context = []
+            parent = by_id.get(node.get("parentId"))
+            while parent:
+                parent_role = parent.get("role", {}).get("value", "").lower()
+                if parent_role in ("dialog", "alertdialog", "main", "form", "navigation", "region"):
+                    parent_name = parent.get("name", {}).get("value", "")
+                    context.append(f"{parent_role} {json.dumps(parent_name, ensure_ascii=False)}")
+                parent = by_id.get(parent.get("parentId"))
+            if context:
+                line += " | context: " + " > ".join(reversed(context))
+            lines.append(line)
+
+        result = {
+            "url": page.url,
+            "title": page.title(),
+            "elements": "\n".join(lines),
+            # Keep the full page description locally too, including ordinary text.
+            "content": page.locator("body").aria_snapshot(),
+        }
+        # Keep only nodes seen in the latest observation of this tab.
+        _observations[page] = {"session": session, "document": document, "nodes": targets}
+        return result
+    except Exception:
+        try:
+            session.detach()
+        except Error:
+            pass  # The tab may have closed while we were reading it.
+        raise
+
+
+# Check that a Chrome node was observed in this tab and is still on the page.
+def resolve_node(page, backend_node_id):
+    observation = _observations.get(page)
+    if type(backend_node_id) is not int or not observation or backend_node_id not in observation["nodes"]:
+        raise RuntimeError("This node was not observed in this tab. Read the page again.")
+    if page.is_closed():
+        raise RuntimeError("This tab is closed. Read an open tab again.")
+    session = observation["session"]
+    try:
+        document = session.send("DOM.getDocument", {"depth": 0})["root"]["backendNodeId"]
+        if document != observation["document"]:
+            raise RuntimeError("The page changed. Read it again before using this node.")
+        # A removed node can still have an ID, so check that it remains on the page.
+        node = session.send("DOM.resolveNode", {"backendNodeId": backend_node_id})["object"]["objectId"]
+        try:
+            connected = session.send("Runtime.callFunctionOn", {
+                "objectId": node,
+                "functionDeclaration": "function() { return this.isConnected; }",
+                "returnByValue": True,
+            })["result"].get("value")
+            if not connected:
+                raise RuntimeError("The element was removed. Read the page again.")
+        finally:
+            session.send("Runtime.releaseObject", {"objectId": node})
+        return session, backend_node_id
+    except Error:
+        raise RuntimeError("This element is no longer available. Read the page again.") from None
 
 
 # Release Playwright; Chrome launched by this file closes too.
 def close_browser(playwright):
+    _observations.clear()
     playwright.stop()
