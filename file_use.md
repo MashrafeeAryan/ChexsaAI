@@ -93,3 +93,6 @@ Relative paths go inside the repository's `output/` folder. You can also request
 an absolute path. Chexsa reads the contents back before reporting success.
 Existing files are never overwritten, and generated code is not executed.
 Python files receive a syntax check. Office documents and images need other tools.
+
+When a save is the final requested step, Chexsa reports the saved paths immediately
+after verification. Requests for more files or actions can continue before finishing.

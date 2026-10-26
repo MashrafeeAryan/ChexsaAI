@@ -240,7 +240,7 @@ def test_direct_file_task():
     with TemporaryDirectory() as directory:
         path = Path(directory) / "hello.py"
         actions = [
-            {"tool": "write_file", "arguments": {"path": str(path), "content": "print('hello')\n"}},
+            {"tool": "write_file", "arguments": {"path": str(path), "content": "print('hello')\n", "done": False}},
             {"tool": "reply", "arguments": {"text": str(path), "done": True}},
         ]
         with patch.object(agent, "get_desktop_action", side_effect=actions), patch.object(agent, "open_app") as launch, \
@@ -262,7 +262,7 @@ def test_direct_file_task():
             return actions[1]
         text_path = Path(directory) / "notes.txt"
         with patch.object(agent, "get_desktop_action", side_effect=[
-            {"tool": "write_file", "arguments": {"path": str(text_path), "content": "Hello Mashrafee"}},
+            {"tool": "write_file", "arguments": {"path": str(text_path), "content": "Hello Mashrafee", "done": False}},
             {"tool": "reply", "arguments": {"text": "Saved", "done": True}},
         ]), patch.object(agent, "open_app") as launch:
             assert agent.run_desktop_agent("Create notes.txt containing Hello Mashrafee", {}) == "Saved"
@@ -274,6 +274,45 @@ def test_direct_file_task():
                 agent.run_desktop_agent("Create hello.py", {})
 
 
+# A final save finishes after one actual tool-call response, without another model request.
+def test_final_file_save_finishes():
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "fibonacci.py"
+        code = "def fibonacci(n):\n    a, b = 0, 1\n    for _ in range(n):\n        yield a\n        a, b = b, a + b\n"
+        client = Mock()
+        client.chat.completions.create.return_value = _response("write_file", {
+            "path": str(path), "content": code, "done": True,
+        })
+        with patch.object(agent, "_client", client), patch.dict(os.environ, {"LLM_MODEL": "fake"}), \
+             patch.object(agent, "open_app") as launch:
+            result = agent.run_desktop_agent("Create fibonacci.py", {})
+        assert "Created and saved" in result and str(path) in result
+        assert path.read_text() == code
+        client.chat.completions.create.assert_called_once()
+        launch.assert_not_called()
+
+
+# Saving the first file must not end a request for two files; a failed save cannot report success.
+def test_multiple_and_failed_file_saves():
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    with TemporaryDirectory() as directory:
+        paths = [Path(directory) / name for name in ("first.txt", "second.txt")]
+        actions = [{"tool": "write_file", "arguments": {
+            "path": str(path), "content": "Hello", "done": index == 1,
+        }} for index, path in enumerate(paths)]
+        with patch.object(agent, "get_desktop_action", side_effect=actions) as choose:
+            result = agent.run_desktop_agent("Create first.txt and second.txt", {})
+            assert choose.call_count == 2
+            assert all(str(path) in result and path.read_text() == "Hello" for path in paths)
+        with patch.object(agent, "get_desktop_action", return_value=actions[-1]), \
+             patch.object(agent, "write_file", side_effect=RuntimeError("File read-back failed")):
+            with unittest.TestCase().assertRaisesRegex(RuntimeError, "read-back failed"):
+                agent.run_desktop_agent("Create second.txt", {})
+
+
 # Let unittest run these functions without adding application or test classes.
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
@@ -282,4 +321,5 @@ def load_tests(loader, tests, pattern):
         test_failures_and_limits, test_cli_modes_and_exit,
         test_app_lookup_and_shortcut_guards, test_startup_window_recovery,
         test_closed_app_allows_a_new_request, test_real_sdk_with_fake_transport, test_direct_file_task,
+        test_final_file_save_finishes, test_multiple_and_failed_file_saves,
     ))
