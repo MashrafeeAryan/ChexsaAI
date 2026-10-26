@@ -68,8 +68,8 @@ Chexsa waits for your request before opening an app.
 | **Browser** | Open YouTube and search for JavaScript tutorials. |
 | **Desktop** | Open Word and write a 300-word essay about how AI impacts humans. |
 
-With the virtual environment activated, you can also use `python cli_.py`
-for desktop or `python cli_.py browser` for browser mode.
+With the virtual environment activated, use `python cli_.py desktop`
+for desktop mode or `python cli_.py browser` for browser mode.
 
 **Leave the chat:** type `exit` or `quit`. **Cancel a request:** press `Ctrl+C`.
 Windows may require you to bring the app to the front before keyboard input continues.
