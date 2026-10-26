@@ -1,19 +1,38 @@
+<div align="center">
+
 # ChexsaAI
 
-A small command-line AI agent for Chrome and Windows apps. The browser and
-desktop engines run separately for now. The rebuilt Python files end in `_`.
+**Your browser. Your desktop. Your next task.**
 
-## Set up
+A small command-line AI assistant for Chrome and Windows apps.
 
-Use Windows, Python 3.11 or newer, and installed Google Chrome for browser tasks.
-Word tasks also require Microsoft Word. From the repository folder:
+![Windows](https://img.shields.io/badge/Windows-0078D4?style=flat-square)
+![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square)
+![Terminal](https://img.shields.io/badge/Interface-Terminal-0D9488?style=flat-square)
+
+[Get started](#get-started) &nbsp; / &nbsp; [Run Chexsa](#run-chexsa) &nbsp; / &nbsp; [Explore the code](#explore-the-code)
+
+</div>
+
+---
+
+## Get started
+
+You need **Windows** and **Python 3.11 or newer**. Browser tasks use installed
+**Google Chrome**; Word tasks also require **Microsoft Word**.
+
+### 1. Install
+
+Run these commands from the repository folder:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-Create `.env` beside `cli_.py` with your existing Groq settings:
+### 2. Connect your model
+
+Create a `.env` file beside `cli_.py`. For Groq:
 
 ```dotenv
 LLM_API_KEY=your-key
@@ -21,32 +40,47 @@ LLM_BASE_URL=https://api.groq.com/openai/v1
 LLM_MODEL=openai/gpt-oss-120b
 ```
 
-The model must support native tool calls for desktop tasks. Other OpenAI-compatible
-providers can use their own base URL and model. `.env` stays out of Git.
-`LLM_PROVIDER` is not used by the rebuild.
+> Keep your API key private. `.env` is excluded from Git.
 
-## Run
+Other OpenAI-compatible providers can use their own base URL and model. Desktop
+mode requires a model with native tool calling. `LLM_PROVIDER` is not used.
 
-Desktop mode:
+## Run Chexsa
+
+Choose a mode. Browser and desktop run separately for now.
+
+### Desktop
 
 ```powershell
 .\.venv\Scripts\chexsa.exe
 ```
 
-Browser mode:
+### Browser
 
 ```powershell
 .\.venv\Scripts\chexsa.exe browser
 ```
 
-You can also run `python cli_.py` or `python cli_.py browser` with the virtual
-environment activated. Type `exit` or `quit` to close; Ctrl+C cancels a request.
-Starting the CLI does not open Chrome or Word. It waits for your request.
+Chexsa waits for your request before opening an app.
 
-Browser example: `Open YouTube and search for JavaScript tutorials.`
+| Mode | Example request |
+| :--- | :--- |
+| **Browser** | Open YouTube and search for JavaScript tutorials. |
+| **Desktop** | Open Word and write a 300-word essay about how AI impacts humans. |
 
-Desktop example: `Open Word and write a 300-word essay about how AI impacts humans.`
-Windows may require you to bring the app to the front before keyboard input can continue.
+With the virtual environment activated, you can also use `python cli_.py`
+for desktop or `python cli_.py browser` for browser mode.
 
-Read [file_use.md](file_use.md) for each file's purpose and
-[ARCHITECTURE.md](ARCHITECTURE.md) for the current flow.
+**Leave the chat:** type `exit` or `quit`. **Cancel a request:** press `Ctrl+C`.
+Windows may require you to bring the app to the front before keyboard input continues.
+
+---
+
+## Explore the code
+
+| Guide | What you will find |
+| :--- | :--- |
+| [File guide](file_use.md) | A simple explanation of each file. |
+| [Architecture](ARCHITECTURE.md) | How the browser and desktop pieces connect. |
+
+The rebuilt Python filenames end in `_`, such as `cli_.py`.
