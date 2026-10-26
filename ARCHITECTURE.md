@@ -1,7 +1,8 @@
 # Current ChexsaAI architecture
 
-The rebuild uses plain functions and dictionaries. There are seven runtime Python
-files. The user chooses desktop or browser mode; the model does not switch engines.
+The rebuild uses plain functions and dictionaries. The user chooses desktop or
+browser mode; the model does not switch engines. `voice_.py` accepts spoken
+requests, calls the selected agent, and speaks its response.
 
 ```text
 cli_.py: user request
@@ -19,15 +20,13 @@ cli_.py: user request
                     -> read again -> next model decision
 ```
 
-## Limits and future work
+## Future work
 
-Both controllers allow at most 10 model decisions per request. SDK retries are off,
-API requests time out after 30 seconds, and uncertain input errors stop the run.
-Repeated identical actions without a relevant observation change stop as well.
-The same browser tab or app state can be reused for a later request, but task history
-is not persisted or automatically resumed.
-
-Voice, automatic engine routing, skill storage/reuse, shared skills, advanced browser
-actions, screenshots, and general outcome verification are future work. The rebuild
-has no Gmail-specific automation. Lower prompt size on a fixture is not proof of
-lower billed tokens for all tasks.
+- **Voice:** improve wake-word detection and microphone reliability.
+- **Automatic mode choice:** let Chexsa choose browser or desktop tools.
+- **Saved skills:** remember successful steps and reuse them.
+- **Shared skills:** learn useful workflows from other users.
+- **More browser tools:** add tabs, scrolling, uploads, and other actions.
+- **Screenshots:** let the model use page images when needed.
+- **Better result checks:** confirm that the whole task succeeded.
+- **Saved progress:** continue an interrupted task safely.
