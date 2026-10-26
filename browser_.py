@@ -234,6 +234,98 @@ def click_node(page, backend_node_id):
                 pass
 
 
+# Replace a text field's contents, then check that the exact field kept the text.
+def type_node(page, backend_node_id, text):
+    if not isinstance(text, str):
+        raise RuntimeError("Typing requires text.")
+    session, target = resolve_node(page, backend_node_id)
+    node = None
+    attempted = False
+    try:
+        session.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": target})
+        node = session.send("DOM.resolveNode", {"backendNodeId": target})["object"]["objectId"]
+        response = session.send("Runtime.callFunctionOn", {
+            "objectId": node,
+            "returnByValue": True,
+            "functionDeclaration": """function() {
+                if (!this.isConnected) return "The text field was removed.";
+                const plainInput = this.tagName === 'INPUT' &&
+                    ['text', 'search', 'email', 'url', 'tel', 'password'].includes(this.type);
+                if (!plainInput && this.tagName !== 'TEXTAREA' && !this.isContentEditable)
+                    return "This element is not a supported text field.";
+                if (this.readOnly || this.matches(':disabled') ||
+                    this.closest('[aria-disabled="true"], [aria-readonly="true"], [inert]'))
+                    return "This text field cannot be edited.";
+                const r = this.getBoundingClientRect();
+                if (!r.width || !r.height || getComputedStyle(this).visibility !== 'visible')
+                    return "This text field is not visible.";
+                this.focus({preventScroll: true});
+                let active = this.ownerDocument.activeElement;
+                while (active && active.shadowRoot && active.shadowRoot.activeElement)
+                    active = active.shadowRoot.activeElement;
+                if (!this.isConnected || active !== this) return "Could not focus this text field.";
+                // Select the old text so the new text replaces it instead of being appended.
+                if (this.isContentEditable) {
+                    const range = this.ownerDocument.createRange();
+                    range.selectNodeContents(this);
+                    const selection = this.ownerDocument.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                } else {
+                    this.select();
+                }
+                return null;
+            }""",
+        })
+        if response.get("exceptionDetails") or "value" not in response.get("result", {}):
+            raise RuntimeError("Could not prepare this text field. Read the page again.")
+        error = response["result"]["value"]
+        if error:
+            raise RuntimeError(error + " Read the page again.")
+
+        attempted = True
+        if text:
+            session.send("Input.insertText", {"text": text})
+        else:
+            # Backspace clears selected text when the requested value is empty.
+            for event in ("rawKeyDown", "keyUp"):
+                session.send("Input.dispatchKeyEvent", {
+                    "type": event, "key": "Backspace", "code": "Backspace",
+                    "windowsVirtualKeyCode": 8,
+                })
+        response = session.send("Runtime.callFunctionOn", {
+            "objectId": node,
+            "returnByValue": True,
+            "functionDeclaration": """function() {
+                if (!this.isConnected) return null;
+                if (!this.isContentEditable) return this.value;
+                // Chrome leaves a placeholder line break in an emptied editable area.
+                if (this.childNodes.length === 1 && this.firstChild.nodeName === 'BR') return '';
+                return this.innerText;
+            }""",
+        })
+        # Read back this exact node. A changed or missing value is not success.
+        expected = text.replace("\r\n", "\n").replace("\r", "\n")
+        if response.get("exceptionDetails") or response.get("result", {}).get("value") != expected:
+            raise RuntimeError("Text entry could not be verified. Read the page before retrying.")
+    except Error:
+        if attempted:
+            raise RuntimeError("Text entry is uncertain. Read the page before retrying.") from None
+        raise RuntimeError("Could not type into this field. Read the page again.") from None
+    finally:
+        if node is not None:
+            try:
+                session.send("Runtime.releaseObject", {"objectId": node})
+            except Error:
+                pass  # The page may have removed the field during typing.
+        if attempted:
+            _observations.pop(page, None)
+            try:
+                session.detach()
+            except Error:
+                pass
+
+
 # Release Playwright; Chrome launched by this file closes too.
 def close_browser(playwright):
     _observations.clear()
