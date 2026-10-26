@@ -16,6 +16,10 @@ dependencies = [
     "python-dotenv",
 ]
 
+[project.optional-dependencies]
+# Install microphone support only when trying the voice prototype.
+voice = ["SpeechRecognition[audio]>=3.14,<4"]
+
 [project.scripts]
 # Both terminal modes start from the new CLI.
 chexsa = "cli_:main"
@@ -30,4 +34,5 @@ py-modules = [
     "desktop_agent_",
     "llm_",
     "observations_",
+    "voice_",
 ]
