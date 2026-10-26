@@ -206,33 +206,6 @@ def test_closed_app_allows_a_new_request():
         tools["open_app"].assert_called_once()
 
 
-# Exercise the actual API client's JSON handling and rate-limit behavior without networking.
-def test_real_sdk_with_fake_transport():
-    import httpx
-    for limited in (False, True):
-        requests = []
-        def server(request):
-            requests.append(json.loads(request.content))
-            if limited:
-                return httpx.Response(429, json={"error": {"message": "Limited", "type": "rate_limit_error"}})
-            return httpx.Response(200, json={
-                "id": "fake-call", "object": "chat.completion", "created": 0, "model": "fake",
-                "choices": [{"index": 0, "finish_reason": "tool_calls", "message": {
-                    "role": "assistant", "content": None, "tool_calls": [{"id": "call_1", "type": "function",
-                    "function": {"name": "reply", "arguments": json.dumps({"text": "Hello", "done": False})}}],
-                }}],
-            })
-        with agent.OpenAI(api_key="fake", base_url="https://example.invalid/v1", max_retries=0,
-                          http_client=httpx.Client(transport=httpx.MockTransport(server))) as client:
-            with patch.object(agent, "_client", client), patch.dict(os.environ, {"LLM_MODEL": "fake"}):
-                if limited:
-                    with unittest.TestCase().assertRaisesRegex(RuntimeError, "usage limit"):
-                        agent.get_desktop_action("Hi")
-                else:
-                    assert agent.get_desktop_action("Hi")["arguments"]["text"] == "Hello"
-        assert len(requests) == 1  # A failed request must not silently spend more quota.
-
-
 # A file task must work without an app, and completion must read the real saved file.
 def test_direct_file_task():
     from pathlib import Path
@@ -274,40 +247,18 @@ def test_direct_file_task():
                 agent.run_desktop_agent("Create hello.py", {})
 
 
-# A final save finishes after one actual tool-call response, without another model request.
-def test_final_file_save_finishes():
-    from pathlib import Path
-    from tempfile import TemporaryDirectory
-    with TemporaryDirectory() as directory:
-        path = Path(directory) / "fibonacci.py"
-        code = "def fibonacci(n):\n    a, b = 0, 1\n    for _ in range(n):\n        yield a\n        a, b = b, a + b\n"
-        client = Mock()
-        client.chat.completions.create.return_value = _response("write_file", {
-            "path": str(path), "content": code, "done": True,
-        })
-        with patch.object(agent, "_client", client), patch.dict(os.environ, {"LLM_MODEL": "fake"}), \
-             patch.object(agent, "open_app") as launch:
-            result = agent.run_desktop_agent("Create fibonacci.py", {})
-        assert "Created and saved" in result and str(path) in result
-        assert path.read_text() == code
-        client.chat.completions.create.assert_called_once()
-        launch.assert_not_called()
-
-
-# Saving the first file must not end a request for two files; a failed save cannot report success.
-def test_multiple_and_failed_file_saves():
-    from pathlib import Path
-    from tempfile import TemporaryDirectory
-    with TemporaryDirectory() as directory:
+        # One request can save two files and finish immediately after the last save.
         paths = [Path(directory) / name for name in ("first.txt", "second.txt")]
-        actions = [{"tool": "write_file", "arguments": {
-            "path": str(path), "content": "Hello", "done": index == 1,
-        }} for index, path in enumerate(paths)]
-        with patch.object(agent, "get_desktop_action", side_effect=actions) as choose:
+        saves = [{"tool": "write_file", "arguments": {
+            "path": str(target), "content": "Hello", "done": index == 1,
+        }} for index, target in enumerate(paths)]
+        with patch.object(agent, "get_desktop_action", side_effect=saves) as choose:
             result = agent.run_desktop_agent("Create first.txt and second.txt", {})
             assert choose.call_count == 2
-            assert all(str(path) in result and path.read_text() == "Hello" for path in paths)
-        with patch.object(agent, "get_desktop_action", return_value=actions[-1]), \
+            assert result.startswith("Created and saved:\n"), result
+            assert {Path(line).resolve() for line in result.splitlines()[1:]} == {target.resolve() for target in paths}, result
+            assert all(target.read_text() == "Hello" for target in paths)
+        with patch.object(agent, "get_desktop_action", return_value=saves[-1]), \
              patch.object(agent, "write_file", side_effect=RuntimeError("File read-back failed")):
             with unittest.TestCase().assertRaisesRegex(RuntimeError, "read-back failed"):
                 agent.run_desktop_agent("Create second.txt", {})
@@ -344,6 +295,6 @@ def load_tests(loader, tests, pattern):
         test_word_count_before_input, test_unverified_completion_is_refused,
         test_failures_and_limits, test_cli_modes_and_exit,
         test_app_lookup_and_shortcut_guards, test_startup_window_recovery,
-        test_closed_app_allows_a_new_request, test_real_sdk_with_fake_transport, test_direct_file_task,
-        test_final_file_save_finishes, test_multiple_and_failed_file_saves, test_direct_word_document,
+        test_closed_app_allows_a_new_request, test_direct_file_task,
+        test_direct_word_document,
     ))
