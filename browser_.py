@@ -157,6 +157,83 @@ def resolve_node(page, backend_node_id):
         raise RuntimeError("This element is no longer available. Read the page again.") from None
 
 
+# Click an observed Chrome node through CDP; this does not move the Windows cursor.
+def click_node(page, backend_node_id):
+    session, target = resolve_node(page, backend_node_id)
+    node = None
+    pressed = False
+    try:
+        session.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": target})
+        node = session.send("DOM.resolveNode", {"backendNodeId": target})["object"]["objectId"]
+
+        # Ask the actual element for a visible point, and check what covers that point.
+        check_point = {
+            "objectId": node,
+            "returnByValue": True,
+            "functionDeclaration": """function() {
+                if (!this.isConnected) return {error: "The element was removed."};
+                if (this.matches(':disabled') || this.closest('[aria-disabled="true"], [inert]'))
+                    return {error: "The element is disabled."};
+                const style = getComputedStyle(this);
+                const r = this.getBoundingClientRect();
+                const left = Math.max(0, r.left), right = Math.min(innerWidth, r.right);
+                const top = Math.max(0, r.top), bottom = Math.min(innerHeight, r.bottom);
+                if (style.visibility !== 'visible' || right <= left || bottom <= top)
+                    return {error: "The element is not visible."};
+                const x = (left + right) / 2, y = (top + bottom) / 2;
+                let hit = this.ownerDocument.elementFromPoint(x, y);
+                // Look inside open shadow roots too, such as custom web controls.
+                while (hit && hit.shadowRoot) {
+                    const inner = hit.shadowRoot.elementFromPoint(x, y);
+                    if (!inner || inner === hit) break;
+                    hit = inner;
+                }
+                for (let current = hit; current; current = current.parentNode || current.host) {
+                    if (current === this) return {x, y};
+                }
+                return {error: "Another element is covering the target."};
+            }""",
+        }
+        previous = None
+        # Moving over a control can change the page. Check again before pressing.
+        for event in ("mouseMoved", "mousePressed"):
+            response = session.send("Runtime.callFunctionOn", check_point)
+            point = response.get("result", {}).get("value")
+            if response.get("exceptionDetails") or not isinstance(point, dict):
+                raise RuntimeError("Could not check the target. Read the page again.")
+            if "error" in point:
+                raise RuntimeError(point["error"] + " Read the page again.")
+            if previous and (abs(point["x"] - previous["x"]) > 1 or abs(point["y"] - previous["y"]) > 1):
+                raise RuntimeError("The target moved. Read the page again before clicking.")
+            arguments = {"type": event, "x": point["x"], "y": point["y"]}
+            if event == "mousePressed":
+                arguments.update(button="left", clickCount=1)
+                pressed = True
+            session.send("Input.dispatchMouseEvent", arguments)
+            previous = point
+        session.send("Input.dispatchMouseEvent", {
+            "type": "mouseReleased", "x": point["x"], "y": point["y"],
+            "button": "left", "clickCount": 1,
+        })
+    except Error:
+        if pressed:
+            raise RuntimeError("The click outcome is uncertain. Read the page before retrying.") from None
+        raise RuntimeError("Could not click this element. Read the page again.") from None
+    finally:
+        if node is not None:
+            try:
+                session.send("Runtime.releaseObject", {"objectId": node})
+            except Error:
+                pass  # Clicking may have loaded a new page and removed the old node.
+        if pressed:
+            # Require a new reading before another click; never repeat an uncertain click.
+            _observations.pop(page, None)
+            try:
+                session.detach()
+            except Error:
+                pass
+
+
 # Release Playwright; Chrome launched by this file closes too.
 def close_browser(playwright):
     _observations.clear()
