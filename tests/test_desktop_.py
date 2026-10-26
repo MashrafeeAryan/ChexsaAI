@@ -3,9 +3,10 @@
 from contextlib import ExitStack
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, PropertyMock, patch
 
 import desktop_
+
 
 
 # Check that we return the right app, wait for its window, and refuse guesses.
@@ -62,6 +63,7 @@ def test_invalid_launches():
 # Same-name buttons need separate IDs, while hidden and layout-only items stay out.
 def test_read_window_controls():
     window = Mock()
+    window.element_info.runtime_id = (42, 1000)
     window.window_text.return_value = "Document - Example"
     controls = []
     for node_id, kind, name, visible, enabled in (
@@ -94,6 +96,7 @@ def test_read_window_controls():
 # Missing controls are reported, and reading a hidden window fails clearly.
 def test_read_window_unavailable():
     window, disappeared, missing_id = Mock(), Mock(), Mock()
+    window.element_info.runtime_id = (42, 1001)
     disappeared.is_visible.side_effect = OSError("Control disappeared")
     disappeared.element_info.control_type = "Button"
     missing_id.element_info = SimpleNamespace(control_type="Edit", runtime_id=0)
@@ -106,9 +109,90 @@ def test_read_window_unavailable():
         desktop_.read_window(window)
 
 
-# Let the existing unittest command run these plain test functions without new classes.
+# Build a small fake reading so action checks never need a real desktop or API.
+def _reading(kind="Edit"):
+    window, control = Mock(), Mock()
+    window.element_info.runtime_id = (42, 100)
+    window.handle = 100
+    window.window_text.return_value = "Test window"
+    control.element_info = SimpleNamespace(runtime_id=(42, 1), control_type=kind, name="Target")
+    control.top_level_parent.return_value = window
+    control.iface_value.CurrentIsReadOnly = False
+    window.descendants.return_value = [control]
+    return desktop_.read_window(window), control
+
+
+# A click must use the chosen object once, even if another button has the same name.
+def test_click_exact_control_and_refresh():
+    reading, first = _reading("Button")
+    second = Mock()
+    second.element_info = SimpleNamespace(runtime_id=(42, 2), control_type="Button", name="Target")
+    second.top_level_parent.return_value = reading["window"]
+    reading["window"].descendants.return_value = [first, second]
+    current = desktop_.read_window(reading["window"])
+    with unittest.TestCase().assertRaisesRegex(RuntimeError, "old or already used"):
+        desktop_.click_control(reading, [42, 1])
+    desktop_.click_control(current, [42, 2])
+    first.iface_invoke.Invoke.assert_not_called()
+    second.iface_invoke.Invoke.assert_called_once()
+    with unittest.TestCase().assertRaisesRegex(RuntimeError, "old or already used"):
+        desktop_.click_control(current, [42, 2])
+    second.iface_invoke.Invoke.assert_called_once()
+
+
+# Reject invalid, missing, moved, hidden, disabled, and detached targets before input.
+def test_action_target_guards():
+    for case in ("invalid", "missing", "changed", "moved", "hidden", "disabled", "closed"):
+        reading, control = _reading("Button")
+        node_id = [42, 1]
+        if case == "invalid":
+            node_id = [True, 1]
+        elif case == "missing":
+            node_id = [42, 999]
+        elif case == "changed":
+            control.element_info.runtime_id = (42, 2)
+        elif case == "moved":
+            control.top_level_parent.return_value.element_info.runtime_id = (42, 999)
+        elif case == "hidden":
+            control.is_visible.return_value = False
+        elif case == "disabled":
+            control.is_enabled.return_value = False
+        elif case == "closed":
+            reading["window"].is_visible.return_value = False
+        with unittest.TestCase().assertRaises((RuntimeError, ValueError)):
+            desktop_.click_control(reading, node_id)
+        control.iface_invoke.Invoke.assert_not_called()
+        control.click_input.assert_not_called()
+
+
+# Failed clicks remain uncertain and cannot be repeated with the same reading.
+def test_click_failure_is_not_retried():
+    reading, control = _reading("Button")
+    control.iface_invoke.Invoke.side_effect = OSError("Connection lost")
+    with unittest.TestCase().assertRaisesRegex(RuntimeError, "uncertain"):
+        desktop_.click_control(reading, [42, 1])
+    with unittest.TestCase().assertRaisesRegex(RuntimeError, "old or already used"):
+        desktop_.click_control(reading, [42, 1])
+    control.iface_invoke.Invoke.assert_called_once()
+
+
+# A mouse fallback must refuse a point covered by another control.
+def test_click_covered_target():
+    reading, control = _reading("Edit")
+    unrelated = Mock()
+    unrelated.element_info.runtime_id = (99, 1)
+    unrelated.parent.return_value = None
+    with patch.object(type(control), "iface_invoke", new_callable=PropertyMock, create=True) as invoke:
+        invoke.side_effect = desktop_.NoPatternInterfaceError
+        with patch.object(desktop_, "Desktop") as desktop:
+            desktop.return_value.from_point.return_value = unrelated
+            with unittest.TestCase().assertRaisesRegex(RuntimeError, "uncertain"):
+                desktop_.click_control(reading, [42, 1])
+    control.click_input.assert_not_called()
+
+
+# Run the plain test functions with the existing unittest command.
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
-        test_window_selection, test_invalid_launches,
-        test_read_window_controls, test_read_window_unavailable,
+        test_window_selection, test_invalid_launches, test_read_window_controls, test_read_window_unavailable, test_click_exact_control_and_refresh, test_action_target_guards, test_click_failure_is_not_retried, test_click_covered_target,
     ))
