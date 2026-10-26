@@ -63,15 +63,7 @@ def open_browser():
 #         '[16] textbox "Message Body" | context: dialog "New Message"\n'
 #         '[18] button "Send" | context: dialog "New Message"'
 #     ),
-#     "content": (
-#         '- main "Inbox":\n'
-#         '  - button "Compose"\n'
-#         '- dialog "New Message":\n'
-#         '  - textbox "Recipients"\n'
-#         '  - textbox "Subject"\n'
-#         '  - textbox "Message Body"\n'
-#         '  - button "Send"'
-#     )
+#     "content": "Inbox\nCompose\nRecipients\nSubject\nMessage Body\nSend"
 # }
 def read_page(page):
     previous = _observations.pop(page, None)
@@ -87,14 +79,19 @@ def read_page(page):
         document = session.send("DOM.getDocument", {"depth": 0})["root"]["backendNodeId"]
         nodes = session.send("Accessibility.getFullAXTree")["nodes"]
         by_id = {node["nodeId"]: node for node in nodes}
-        targets, lines = set(), []
+        targets, lines, text_lines = set(), [], []
         for node in nodes:
+            if node.get("ignored"):
+                continue
             role = node.get("role", {}).get("value", "").lower()
+            name = node.get("name", {}).get("value", "")
+            # Read ordinary text from this same tree. InlineTextBox repeats it.
+            if role == "statictext" and name.strip():
+                text_lines.append(name)
             target = node.get("backendDOMNodeId")
-            if node.get("ignored") or role not in _CONTROL_ROLES or not target:
+            if role not in _CONTROL_ROLES or not target:
                 continue
             targets.add(target)
-            name = node.get("name", {}).get("value", "")
             line = f"[{target}] {role} {json.dumps(name, ensure_ascii=False)}"
 
             # Walk up the page structure to show where duplicate controls belong.
@@ -114,11 +111,13 @@ def read_page(page):
             "url": page.url,
             "title": page.title(),
             "elements": "\n".join(lines),
-            # Keep the full page description locally too, including ordinary text.
-            "content": page.locator("body").aria_snapshot(),
+            # Plain accessible text, rather than a second formatted tree snapshot.
+            "content": "\n".join(text_lines),
         }
-        # Keep only nodes seen in the latest observation of this tab.
-        _observations[page] = {"session": session, "document": document, "nodes": targets}
+        # Keep the full tree locally too. The AI payload does not include it.
+        _observations[page] = {
+            "session": session, "document": document, "nodes": targets, "tree": nodes,
+        }
         return result
     except Exception:
         try:
