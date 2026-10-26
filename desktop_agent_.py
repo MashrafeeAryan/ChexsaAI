@@ -56,6 +56,7 @@ def get_desktop_action(request, observation=None, history=None):
     if observation is not None:
         # Keep Windows objects and previous full window readings off the model request.
         payload["window"] = {key: observation[key] for key in ("title", "elements", "unavailable_controls")}
+        payload["window"]["document_ids"] = observation.get("document_ids", [])
     try:
         response = _client.chat.completions.create(
             model=os.environ["LLM_MODEL"], tools=_TOOLS, tool_choice="required", parallel_tool_calls=False,
@@ -67,6 +68,10 @@ def get_desktop_action(request, observation=None, history=None):
                 "Keep any filename or path the user supplied. If none is supplied, choose a descriptive .py filename. "
                 "Use only Windows IDs shown in the current reading. Read again after every action. "
                 "To write a new document, create a blank document first; do not overwrite a user's existing document. "
+                "For an essay or document, choose a field marked document body, inside a Document region. "
+                "Do not put document text into sidebar prompts, search boxes, or ribbon fields. "
+                "If no document body is visible, create a blank document and observe before typing. "
+                "Reuse a rejected draft when correcting the target; do not regenerate it unnecessarily. "
                 "Use observed controls or standard shortcuts such as Ctrl+N. Do not use terminals or run shell commands. "
                 "Generate the requested writing yourself and pass it to type_text. It REPLACES the entire chosen field/document. "
                 "Use plain text without emoji. If a word count is requested, count whitespace-separated words, including headings. "
@@ -150,6 +155,7 @@ def run_desktop_agent(request, state):
     counts = re.findall(r"\b(\d+)[ -]+words?\b", request, re.I)
     expected_words = int(counts[0]) if len(counts) == 1 else None
     needs_text = expected_words is not None or re.search(r"\b(write|type|enter|fill|essay|draft)\b", request, re.I)
+    document_task = bool(re.search(r"\b(essay|report|article|story|poem)\b", request, re.I))
     verified_write = None
     verified_file = None
     file_task = re.search(r"\.py\b", request, re.I) and re.search(r"\b(create|write|save|make|generate)\b", request, re.I)
@@ -207,7 +213,10 @@ def run_desktop_agent(request, state):
             result = press_key(observation, arguments["keys"])
         elif name == "type_text":
             count = len(arguments["text"].split())
-            if expected_words is not None and count != expected_words:
+            # When an app exposes a document, keep document writing out of unrelated fields.
+            if document_task and observation.get("document_ids") and arguments["node_id"] not in observation["document_ids"]:
+                result = "Nothing typed: this field is outside the document. Create a blank document if needed, then choose its document body from a fresh reading."
+            elif expected_words is not None and count != expected_words:
                 result = f"Nothing typed: the text has {count} words; the request requires {expected_words}. Revise the text first."
             else:
                 result = type_text(observation, arguments["node_id"], arguments["text"])

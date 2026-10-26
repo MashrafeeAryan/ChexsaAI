@@ -252,6 +252,27 @@ def test_transient_text_match_is_not_success():
     control.iface_value.SetValue.assert_called_once_with("Hello")
 
 
+# Word-like page fields belong to a Document; an Ideas-style field in a Pane does not.
+def test_editor_parent_context():
+    window, document, page, sidebar = Mock(), Mock(), Mock(), Mock()
+    window.element_info.runtime_id = (42, 90)
+    document.element_info = SimpleNamespace(runtime_id=(42, 1), control_type="Document", name="Draft")
+    page.element_info = SimpleNamespace(runtime_id=(42, 2), control_type="Edit", name="Page 1 content")
+    sidebar.element_info = SimpleNamespace(runtime_id=(42, 3), control_type="Edit", name="Write your ideas")
+    pane = Mock()
+    pane.element_info = SimpleNamespace(runtime_id=(42, 4), control_type="Pane", name="Ideas")
+    document.parent.return_value = window
+    page.parent.return_value = document
+    sidebar.parent.return_value = pane
+    pane.parent.return_value = window
+    window.descendants.return_value = [document, page, sidebar]
+    reading = desktop_.read_window(window)
+    assert reading["document_ids"] == [[42, 1], [42, 2]]
+    assert 'context: Document "Draft" | document body' in reading["elements"]
+    assert 'context: Pane "Ideas"' in reading["elements"]
+    sidebar.set_focus.assert_not_called()
+
+
 # Let the existing unittest command run these plain test functions without new classes.
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
@@ -260,5 +281,5 @@ def load_tests(loader, tests, pattern):
         test_click_exact_control_and_refresh, test_action_target_guards,
         test_click_failure_is_not_retried, test_type_field_verification,
         test_type_document_focus_and_verification, test_click_covered_target,
-        test_document_emoji_is_rejected_before_editing, test_transient_text_match_is_not_success,
+        test_document_emoji_is_rejected_before_editing, test_transient_text_match_is_not_success, test_editor_parent_context,
     ))
