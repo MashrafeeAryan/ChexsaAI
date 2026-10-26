@@ -1,6 +1,6 @@
 """Command-line input for ChexsaAI."""
 
-from browser_ import close_browser, open_browser, open_page
+from browser_ import close_browser, open_browser
 from llm_ import get_reply
 
 
@@ -37,7 +37,7 @@ def main():
                         playwright, page = open_browser()
                     elif page.is_closed():
                         page = page.context.new_page()
-                    open_page(page, action["url"])
+                    page.goto(action["url"], wait_until="domcontentloaded", timeout=30000)
                     # Report success only after Playwright finishes opening the page.
                     print(f"Chexsa > Opened {page.url}")
                 else:

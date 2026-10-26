@@ -51,11 +51,6 @@ def open_browser():
         raise
 
 
-# Open an address in the chosen tab.
-def open_page(page, url):
-    page.goto(url, wait_until="domcontentloaded", timeout=30000)
-
-
 # Read controls using the exact node IDs Chrome already gives us.
 # Example return value (Chrome supplies the real node IDs):
 # {
