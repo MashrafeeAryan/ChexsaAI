@@ -192,15 +192,12 @@ def test_word():
         observation = read_window(window)
         targets = []
         for node, control in observation["controls"].items():
-            if list(node) in observation["document_ids"]:
+            if control.element_info.control_type == "Document":
                 try:
                     if "Old test content." in control.iface_text.DocumentRange.GetText(-1):
                         targets.append(node)
                 except Exception:
                     pass
-        # Prefer the editable page inside the document over its outer container.
-        pages = [node for node in targets if observation["controls"][node].element_info.control_type == "Edit"]
-        targets = pages or targets
         assert len(targets) == 1, "Could not identify one editable Word document"
         text = "AI impact on education\n\nAI can support learning and help teachers prepare lessons.\nLiteral symbols: + ^ % ~ (test) {ENTER}. Caf\u00e9"
         try:

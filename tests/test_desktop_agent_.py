@@ -29,7 +29,7 @@ def test_native_tool_payload_and_validation():
         assert agent.get_desktop_action("Hi", observation)["tool"] == "reply"
         sent = client.chat.completions.create.call_args.kwargs
         payload = json.loads(sent["messages"][-1]["content"])
-        assert set(payload["window"]) == {"title", "elements", "unavailable_controls", "document_ids"}
+        assert set(payload["window"]) == {"title", "elements", "unavailable_controls"}
         assert sent["tool_choice"] == "required" and sent["parallel_tool_calls"] is False
         for name, arguments in (("unknown", {}), ("click_control", {"node_id": [True]}),
                                 ("reply", {"text": "Hi", "done": "yes"}),
@@ -48,7 +48,7 @@ def _tools(stack):
     tools = {name: stack.enter_context(patch.object(agent, name)) for name in names}
     tools["find_app"].return_value = r"C:\Apps\example.exe"
     tools["open_app"].return_value.process_id.return_value = 12
-    tools["_observe"].return_value = {"title": "Test", "elements": '[42, 1] Document "Body"', "document_ids": [[42, 1]]}
+    tools["_observe"].return_value = {"title": "Test", "elements": '[42, 1] Document "Body"'}
     tools["type_text"].return_value = "Text entered and verified."
     tools["press_key"].return_value = "Keys sent."
     return tools
@@ -266,36 +266,6 @@ def test_direct_file_task():
                 agent.run_desktop_agent("Create hello.py", {})
 
 
-# Any document app must reject sidebar targets before input, regardless of its name.
-def test_sidebar_is_not_the_document():
-    text = " ".join(["word"] * 100)
-    with ExitStack() as stack:
-        tools = _tools(stack)
-        tools["read_text"].return_value = text
-        tools["get_desktop_action"].side_effect = [
-            {"tool": "type_text", "arguments": {"node_id": [42, 2], "text": text}},
-            {"tool": "type_text", "arguments": {"node_id": [42, 1], "text": text}},
-            {"tool": "reply", "arguments": {"text": "Written", "done": True}},
-        ]
-        state = {"window": Mock(), "executable": "another-editor.exe"}
-        assert agent.run_desktop_agent("Write a 100 word essay", state) == "Written"
-        tools["type_text"].assert_called_once_with(tools["_observe"].return_value, [42, 1], text)
-
-
-# Plain editors without a Document region must still accept writing requests.
-def test_plain_editor_still_accepts_writing():
-    with ExitStack() as stack:
-        tools = _tools(stack)
-        tools["_observe"].return_value["document_ids"] = []
-        tools["read_text"].return_value = "Hello"
-        tools["get_desktop_action"].side_effect = [
-            {"tool": "type_text", "arguments": {"node_id": [42, 1], "text": "Hello"}},
-            {"tool": "reply", "arguments": {"text": "Written", "done": True}},
-        ]
-        assert agent.run_desktop_agent("Write an essay in my plain editor", {"window": Mock()}) == "Written"
-        tools["type_text"].assert_called_once()
-
-
 # Let unittest run these functions without adding application or test classes.
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
@@ -303,5 +273,5 @@ def load_tests(loader, tests, pattern):
         test_word_count_before_input, test_unverified_completion_is_refused,
         test_failures_and_limits, test_cli_modes_and_exit,
         test_app_lookup_and_shortcut_guards, test_startup_window_recovery,
-        test_closed_app_allows_a_new_request, test_real_sdk_with_fake_transport, test_direct_file_task, test_sidebar_is_not_the_document, test_plain_editor_still_accepts_writing,
+        test_closed_app_allows_a_new_request, test_real_sdk_with_fake_transport, test_direct_file_task,
     ))

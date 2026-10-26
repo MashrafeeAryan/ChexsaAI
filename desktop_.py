@@ -72,7 +72,7 @@ def read_window(window):
         raise RuntimeError("Windows could not identify this window. Read it again.")
     _observations.pop(window_id, None)
     title = window.window_text()
-    controls, lines, document_ids = {}, [], []
+    controls, lines = {}, []
     unavailable = 0
     for control in window.descendants():
         try:
@@ -87,29 +87,6 @@ def read_window(window):
             line = f"{json.dumps(node_id)} {info.control_type} {json.dumps(info.name or '', ensure_ascii=False)}"
             if not control.is_enabled():
                 line += " | disabled"
-            # Editors can look alike. Show whether a field belongs to a document.
-            in_document = info.control_type == "Document"
-            context = []
-            if info.control_type in ("Edit", "Document", "ComboBox"):
-                parent = control.parent()
-                for _ in range(8):  # Bound the walk if an app exposes a broken tree.
-                    if parent is None:
-                        break
-                    parent_info = parent.element_info
-                    identity = parent_info.runtime_id
-                    if isinstance(identity, (list, tuple)) and tuple(identity) == window_id:
-                        break
-                    kind, name = parent_info.control_type, parent_info.name
-                    if kind == "Document":
-                        in_document = True
-                    if isinstance(kind, str) and isinstance(name, str) and name.strip():
-                        context.append(f"{kind} {json.dumps(name, ensure_ascii=False)}")
-                    parent = parent.parent()
-            if context:
-                line += " | context: " + " > ".join(reversed(context))
-            if in_document and info.control_type in ("Edit", "Document"):
-                document_ids.append(list(node_id))
-                line += " | document body" if info.control_type == "Edit" else " | document container"
             controls[node_id] = control
             lines.append(line)
         except (COMError, OSError):
@@ -117,8 +94,7 @@ def read_window(window):
 
     # Only title and elements are for the model. The control objects stay in Python.
     observation = {"title": title, "elements": "\n".join(lines), "controls": controls,
-                   "unavailable_controls": unavailable, "window": window, "window_id": window_id,
-                   "document_ids": document_ids}
+                   "unavailable_controls": unavailable, "window": window, "window_id": window_id}
     _observations[window_id] = observation
     return observation
 
@@ -246,7 +222,7 @@ def type_text(observation, node_id, text):
                 raise RuntimeError("The field's text did not match what was requested.")
             sleep(0.05)
     except Exception as error:
-        raise RuntimeError(f"Text entry could not be verified: {error} Read the window before trying again.") from error
+        raise RuntimeError("Text entry could not be verified. Read the window and investigate before typing again.") from error
     return "Text entered and verified."
 
 
