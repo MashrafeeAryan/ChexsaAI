@@ -12,6 +12,7 @@ The new Python files end in `_`. The old code was removed; Git history keeps it.
 | `llm_.py` | Sends the browser request to the model and checks its JSON answer. |
 | `observations_.py` | Finds page changes and chooses a smaller page view for the model. |
 | `desktop_agent_.py` | Gives the model desktop tools and checks progress on its task. |
+| `files_.py` | Creates a new text or code file, saves it, and checks the saved contents. |
 | `desktop_.py` | Finds Windows apps, reads controls, clicks, types, and sends shortcuts. |
 | `voice_.py` | Listens for Hey Chexsa, sends requests to the selected agent, and speaks the result. |
 
@@ -36,6 +37,7 @@ The new Python files end in `_`. The old code was removed; Git history keeps it.
 | `tests/test_browser_observation_.py` | Checks page reading, node identity, changes, search, clicks, and typing. |
 | `tests/test_desktop_.py` | Checks Windows control selection, clicking, typing, and stale-target guards. |
 | `tests/test_desktop_agent_.py` | Checks desktop model tools, task progress, word counts, limits, and CLI modes. |
+| `tests/test_files_.py` | Checks file creation, saved contents, and protection against overwriting existing files. |
 | `tests/test_voice_.py` | Checks wake phrases, spoken replies, agent selection, and cleanup with fake audio. |
 | `tests/browser_changes_integration_.py` | Runs the new browser loop on a large local page in isolated Chrome. |
 | `tests/desktop_actions_integration_.py` | Manually tests real disposable Windows controls and a temporary Word document. |
@@ -77,3 +79,17 @@ Ctrl+C cancels that task; voice then returns to listening.
 - Agent tasks use your existing model settings and API quota, like terminal tasks.
 - Listening pauses during speech and task execution. Spoken stop commands work while listening.
 - Voice must be running to hear the wake phrase; it does not start with Windows.
+
+## Create a file without opening an editor
+
+Start desktop mode with `python cli_.py`. For example:
+
+- `Create fibonacci.py with a function that returns the first 10 Fibonacci numbers.`
+- `Create notes.txt containing Hello Mashrafee.`
+- `Create a Markdown file called ideas.md with my project ideas.`
+
+The model chooses the path and text; `files_.py` creates and saves the file.
+Relative paths go inside the repository's `output/` folder. You can also request
+an absolute path. Chexsa reads the contents back before reporting success.
+Existing files are never overwritten, and generated code is not executed.
+Python files receive a syntax check. Office documents and images need other tools.
