@@ -16,6 +16,22 @@ A small command-line AI assistant for Chrome and Windows apps.
 
 ---
 
+## Why I am building ChexsaAI
+
+My goal is to make ChexsaAI the least expensive capable AI agent I can build.
+Eventually, I want it to handle complete browser and desktop tasks for hours
+without supervision. Before expanding its capabilities, I want to optimize each
+step: **use fewer tokens, finish tasks faster, and keep results reliable.**
+
+I am building and evaluating it with low-cost models rather than relying only on
+expensive ones. The current model is **OpenAI GPT-OSS 120B, served through Groq**.
+I also plan to evaluate **DeepSeek models**. Groq is the inference provider;
+the model makes the decisions.
+
+The aim is to give the model the information it needs, avoid repeatedly sending
+unchanged content, and reduce unnecessary model calls. Reusing successful
+workflows is another goal for making repeated tasks cheaper and faster.
+
 ## Get started
 
 You need **Windows** and **Python 3.11 or newer**. Browser tasks use installed
