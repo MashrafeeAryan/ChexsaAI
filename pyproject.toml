@@ -35,4 +35,5 @@ py-modules = [
     "llm_",
     "observations_",
     "voice_",
+    "files_",
 ]
