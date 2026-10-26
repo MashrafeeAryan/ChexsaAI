@@ -49,5 +49,4 @@ Desktop example: `Open Word and write a 300-word essay about how AI impacts huma
 Windows may require you to bring the app to the front before keyboard input can continue.
 
 Read [file_use.md](file_use.md) for each file's purpose and
-[ARCHITECTURE.md](ARCHITECTURE.md) for the current flow. Future goals are in
-[PROJECT_GOALS_.md](PROJECT_GOALS_.md).
+[ARCHITECTURE.md](ARCHITECTURE.md) for the current flow.

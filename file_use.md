@@ -24,8 +24,6 @@ The new Python files end in `_`. The old code was removed; Git history keeps it.
 | `README.md` | Explains setup, commands, working features, and current limits. |
 | `ARCHITECTURE.md` | Explains how the browser and desktop pieces connect. |
 | `file_use.md` | This file: explains the purpose of each file. |
-| `PROJECT_GOALS_.md` | Saves the intended token-saving and reusable-skill goals. |
-| `TEST_NOTES_.md` | Records past measurements and what has or has not been verified. |
 | `.github/workflows/ci.yml` | Runs unit tests and an isolated Chrome fixture in GitHub Actions. |
 | `.github/workflows/release.yml` | Builds a Python package when a version tag is pushed. |
 
