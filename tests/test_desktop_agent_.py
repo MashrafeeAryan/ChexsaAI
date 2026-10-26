@@ -313,6 +313,30 @@ def test_multiple_and_failed_file_saves():
                 agent.run_desktop_agent("Create second.txt", {})
 
 
+# Both immediate and later completion must verify Word packages without opening Word.
+def test_direct_word_document():
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from docx import Document
+    for final_save in (True, False):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "essay.docx"
+            content = "AI in education\n\nAI can help teachers and students."
+            actions = [{"tool": "write_file", "arguments": {
+                "path": str(path), "content": content, "done": final_save,
+            }}]
+            if not final_save:
+                actions.append({"tool": "reply", "arguments": {"text": "Saved", "done": True}})
+            with patch.object(agent, "get_desktop_action", side_effect=actions) as choose, \
+                 patch.object(agent, "open_app") as launch, patch.object(agent, "_observe") as observe:
+                result = agent.run_desktop_agent("Create a Word document called essay.docx", {})
+                assert result
+                assert choose.call_count == (1 if final_save else 2)
+                launch.assert_not_called()
+                observe.assert_not_called()
+            assert "\n".join(p.text for p in Document(path).paragraphs) == content
+
+
 # Let unittest run these functions without adding application or test classes.
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
@@ -321,5 +345,5 @@ def load_tests(loader, tests, pattern):
         test_failures_and_limits, test_cli_modes_and_exit,
         test_app_lookup_and_shortcut_guards, test_startup_window_recovery,
         test_closed_app_allows_a_new_request, test_real_sdk_with_fake_transport, test_direct_file_task,
-        test_final_file_save_finishes, test_multiple_and_failed_file_saves,
+        test_final_file_save_finishes, test_multiple_and_failed_file_saves, test_direct_word_document,
     ))

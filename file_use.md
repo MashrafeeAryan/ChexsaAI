@@ -12,7 +12,7 @@ The new Python files end in `_`. The old code was removed; Git history keeps it.
 | `llm_.py` | Sends the browser request to the model and checks its JSON answer. |
 | `observations_.py` | Finds page changes and chooses a smaller page view for the model. |
 | `desktop_agent_.py` | Gives the model desktop tools and checks progress on its task. |
-| `files_.py` | Creates a new text or code file, saves it, and checks the saved contents. |
+| `files_.py` | Creates text, code, or Word (.docx) files, saves them, and checks the contents. |
 | `desktop_.py` | Finds Windows apps, reads controls, clicks, types, and sends shortcuts. |
 | `voice_.py` | Listens for Hey Chexsa, sends requests to the selected agent, and speaks the result. |
 
@@ -87,12 +87,15 @@ Start desktop mode with `python cli_.py`. For example:
 - `Create fibonacci.py with a function that returns the first 10 Fibonacci numbers.`
 - `Create notes.txt containing Hello Mashrafee.`
 - `Create a Markdown file called ideas.md with my project ideas.`
+- `Create ai_essay.docx with a short essay about AI in education.`
 
 The model chooses the path and text; `files_.py` creates and saves the file.
 Relative paths go inside the repository's `output/` folder. You can also request
 an absolute path. Chexsa reads the contents back before reporting success.
 Existing files are never overwritten, and generated code is not executed.
-Python files receive a syntax check. Office documents and images need other tools.
+Python files receive a syntax check. A `.docx` file is a real Word document, with
+each line saved as a paragraph; no Word installation is needed to create it.
+Other Office formats and images need different tools.
 
 When a save is the final requested step, Chexsa reports the saved paths immediately
 after verification. Requests for more files or actions can continue before finishing.
