@@ -100,3 +100,21 @@
 - Word and Notepad installed-app lookup succeeded. Startup-window recovery stays within the known process; a closed app does not permanently block a new request.
 - Full live Groq-to-Word 300-word execution is not validated in this step. Word keyboard fallback still rejects unsupported supplementary characters before editing.
 - Current connection changes are local and uncommitted. No push or main-branch changes.
+
+
+## Rebuild-only cleanup - 2026-10-26
+
+- Saved pending browser, desktop, and documentation work in separate local commits.
+- Removed 50 tracked legacy files: the old engines, routing/voice entry points,
+  old integration scripts, and tests/fixtures that only exercised the old code.
+- Kept the seven rebuilt runtime modules, four unit-test files, two integration
+  fixtures, documentation, CI, and packaging. Updated the package command to cli_:main.
+- Before removal: 176 unit tests passed. After removal: all 52 tests covering the
+  rebuilt implementation passed. The reduction comes from deleting legacy tests.
+- Compilation and whitespace checks passed. The isolated 1,000-button Chrome
+  fixture passed typing, clicking, omitted-control discovery, and navigation reset.
+- Reinstalled the editable package. Both direct and installed CLI commands started
+  and exited in desktop and browser modes from another folder with empty API settings.
+  The old chexsa-voice command was removed, and the local .env was preserved.
+- No live API calls, personal browser tabs, or Word documents were used in cleanup.
+  Full live-model-to-Word acceptance remains unverified.

@@ -147,10 +147,11 @@ def test_cli_modes_and_exit():
         with patch("builtins.input", side_effect=["Hi", "exit"]), patch("builtins.print"), \
              patch.object(cli_, "run_desktop_agent", return_value="Hello") as desktop, \
              patch.object(cli_, "run_agent", return_value="Hello") as browser:
-            cli_.main(mode)
+            with patch.object(cli_.sys, "argv", ["chexsa", mode]):
+                cli_.main()
             assert desktop.call_count == (1 if mode == "desktop" else 0)
             assert browser.call_count == (1 if mode == "browser" else 0)
-    with patch("builtins.input", return_value="exit"), patch("builtins.print"), \
+    with patch.object(cli_.sys, "argv", ["chexsa"]), patch("builtins.input", return_value="exit"), patch("builtins.print"), \
          patch.object(cli_, "run_desktop_agent") as desktop, patch.object(cli_, "run_agent") as browser:
         cli_.main()
         desktop.assert_not_called()

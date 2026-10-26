@@ -7,8 +7,11 @@ from desktop_agent_ import run_desktop_agent
 from browser_ import close_browser
 
 
-def main(mode="desktop"):
+def main(mode=None):
     """Run a simple chat in desktop or browser mode; routing comes later."""
+    # Read the mode here so the installed chexsa command works like this file.
+    if mode is None:
+        mode = sys.argv[1] if len(sys.argv) > 1 else "desktop"
     if mode not in ("desktop", "browser"):
         print("Choose desktop or browser mode.")
         return
@@ -55,4 +58,4 @@ def main(mode="desktop"):
 
 # Start the chat only when you run this file directly.
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "desktop")
+    main()

@@ -1,360 +1,92 @@
-# ✨ Chexsa
+# ChexsaAI
 
-### Your personal AI that can use your computer.
+A small command-line AI agent for Chrome and Windows apps. The browser and
+desktop engines run separately for now. The rebuilt Python files end in `_`.
 
-For a simple explanation of every project file, read [file_use.md](file_use.md).
+## Set up
 
-Chexsa is an open-source AI assistant that is being built to **see what is happening on your computer and take actions for you**.
-
-Instead of only answering questions, Chexsa can work through a task step by step.
-
-> You tell Chexsa what you want.  
-> Chexsa figures out what to do next and gets to work.
-
----
-
-## 🌸 What can Chexsa do?
-
-Right now, Chexsa can use your browser.
-
-You can ask it things like:
-
-```text
-Open Gemini and ask what the capital of the USA is.
-```
-
-```text
-Open YouTube and search for a Java tutorial.
-```
-
-```text
-Go to this website and fill out the form.
-```
-
-Chexsa looks at the page, decides what to do, performs the action, and looks again.
-
-```text
-You
- ↓
-Chexsa
- ↓
-See what is there
- ↓
-Decide what to do
- ↓
-Do it
- ↓
-Repeat
-```
-
-No separate script needs to be written for every website.
-
----
-
-## 🖥️ Desktop control
-
-Chexsa is also learning how to use normal Windows apps.
-
-The goal is to support requests like:
-
-```text
-Open Word and write a paragraph about AI.
-```
-
-```text
-Open my document and add a new section.
-```
-
-Chexsa can already read many Windows buttons, menus, text boxes, and windows. Desktop actions are still being developed.
-
----
-
-## 🚧 Current progress
-
-| Feature | Status |
-|---|---|
-| Terminal chat | ✅ |
-| Open websites | ✅ |
-| Click and type | ✅ |
-| Search websites | ✅ |
-| Work with browser tabs | ✅ |
-| Scroll pages | ✅ |
-| Upload files | ✅ |
-| Read webpage content | ✅ |
-| "Hey Chexsa" voice commands | ✅ |
-| Read Windows apps | 🚧 |
-| Control Windows apps | 🚧 |
-| Browser + desktop together | 🔜 |
-| Choose chat, browser, or desktop from your request | ✅ |
-| Check its own work | ✅ Browser verification |
-| Learn repeated tasks | 🔜 |
-
-Chexsa is still an early project, so some things will break while it grows.
-
----
-
-## 💡 The idea
-
-Most AI assistants work like this:
-
-```text
-You ask something
-      ↓
-AI answers
-```
-
-Chexsa is trying to work like this:
-
-```text
-You ask for something
-        ↓
-Chexsa understands the goal
-        ↓
-Chexsa uses your computer
-        ↓
-Task complete
-```
-
-The bigger goal is a personal AI that can work across websites, apps, and files instead of being limited to a chat box.
-
----
-
-## 🌱 Where Chexsa is going
-
-A future goal is for Chexsa to learn from tasks it has already completed.
-
-Instead of figuring out the same workflow from scratch every time, it could save what worked and reuse it later.
-
-```text
-First time
-Think through the task
-        ↓
-Task succeeds
-        ↓
-Save what worked
-        ↓
-Next time
-Reuse it
-```
-
-This could make repeated tasks faster and more reliable.
-
----
-
-## 🛠️ Getting Started
-
-Chexsa currently works best on **Windows**.
-
-### 1. Clone it
-
-```bash
-git clone https://github.com/MashrafeeAryan/Chexsa.git
-cd Chexsa
-```
-
-### 2. Install it
-
-```bash
-pip install -e .
-```
-
-### 3. Add your AI provider
-
-Create a `.env` file.
-
-For an OpenAI-compatible provider:
-
-```env
-LLM_PROVIDER=openai_compatible
-LLM_MODEL=your-model
-LLM_API_KEY=your-api-key
-LLM_BASE_URL=your-api-url
-```
-
-Or use Gemini:
-
-```env
-LLM_PROVIDER=gemini
-LLM_MODEL=your-model
-GEMINI_API_KEY=your-api-key
-```
-
-Never upload your API keys to GitHub.
-
-OpenAI-compatible models use page text and element refs by default. This works
-with Groq's text-only GPT-OSS models. Only set `LLM_SUPPORTS_VISION=1` if your
-chosen model accepts images; this enables screenshot and coordinate actions.
-Gemini enables images by default. `LLM_TIMEOUT_SECONDS` defaults to 30 seconds.
-
-### 4. Start Chexsa
+Use Windows, Python 3.11 or newer, and installed Google Chrome for browser tasks.
+Word tasks also require Microsoft Word. From the repository folder:
 
 ```powershell
-chexsa
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-Chexsa uses your saved `.env` settings and the normal browser task limits.
+Create `.env` beside `cli_.py` with your existing Groq settings:
 
-If you ask to send an email without giving the message, Chexsa asks for it. If
-you provide the message but omit a subject, it uses a short neutral subject.
-
-Chexsa first waits for your request. Greetings and normal questions stay in chat.
-Browser tasks connect to Chrome; Windows app tasks use the desktop agent.
-Voice mode makes the same choice after hearing your command.
-
-For a browser task, Chexsa reuses Chrome's debugging connection on port 9222.
-A normal Chrome window without that connection cannot be attached automatically.
-If needed, Chexsa starts a separate persistent profile under
-`%LOCALAPPDATA%/Chexsa/chrome` and skips Chrome's first-run setup.
-
-Chrome account sign-in/sync is not required. Sign into Gmail or other websites
-once in the Chexsa profile; their saved login state is reused across sessions,
-subject to the website's normal expiry and security checks. This profile does
-not copy logins from your usual Chrome profile and does not use Guest mode.
-
-Type a task at `You >`. Ctrl+C cancels a running task. Exit with `exit` or `quit`.
-Chrome stays open when Chexsa disconnects. If the selected tab closes, the next
-observation selects an open tab or creates a blank one. Old element refs are
-rejected, so a pending action cannot silently hit a different tab.
-
-To reuse another saved Chrome profile, add its user-data root and profile folder
-to `.env`:
-
-```env
-CHEXSA_CHROME_USER_DATA_DIR=C:\path\to\your\saved-chrome-data
-CHEXSA_CHROME_PROFILE=Profile 1
+```dotenv
+LLM_API_KEY=your-key
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_MODEL=openai/gpt-oss-120b
 ```
 
-Chexsa reads that root's `DevToolsActivePort` to attach to an enabled session.
-An explicit `CHEXSA_CDP_URL` takes priority. The profile-folder setting selects a
-profile when launching; attaching uses the account exposed by the existing
-debugging connection. Otherwise a custom profile launches
-on its own port, so it cannot accidentally attach to a different profile on 9222.
+The model must support native tool calls for desktop tasks. Other OpenAI-compatible
+providers can use their own base URL and model. `.env` stays out of Git.
+`LLM_PROVIDER` is not used by the rebuild.
 
-For your normal Chrome data directory, Chrome 144+ provides an opt-in route:
-enable debugging at `chrome://inspect/#remote-debugging`, then allow Chrome's
-connection prompt. Point the setting above at the normal user-data root.
-Chexsa does not change that setting or copy your login data. See
-[Chrome's connection guide](https://developer.chrome.com/docs/devtools/agents/use-cases/auto-connect).
+## Run
 
-The browser engine keeps large pages locally and sends focused regions to the
-model. It supports node-bound refs, search/expansion, visual fallback, verified
-results, and recovery without automatically repeating uncertain submissions.
-See [ARCHITECTURE.md](ARCHITECTURE.md) for settings and behavior.
-
-### Test your actual model
+Desktop mode:
 
 ```powershell
-python scripts/test_live_browser.py
+.\.venv\Scripts\chexsa.exe
 ```
 
-This runs the terminal with your saved API settings, tests chat and YouTube
-navigation/search, and checks the real resulting page. It uses a separate empty
-Chrome profile and does not read your personal tabs. It uses API quota. Add
-`--email` to test sending on a local fake inbox with a fixture recipient;
-no real email is sent. Results and timings go to `.chexsa/live-smoke.json`.
-
-Free API token limits can delay repeated tasks. Chexsa announces a short quota
-wait and makes bounded retries, instead of silently waiting through SDK retries. Longer
-or repeated quota failures stop with a clear result and preserve browser progress.
-
-
----
-
-
-## 🎙️ Voice Mode
-
-Chexsa can listen for **"Hey Chexsa"** and route the rest of the sentence to chat,
-the browser, or the Windows desktop, just like terminal mode.
-
-Install the optional voice tools:
+Browser mode:
 
 ```powershell
-pip install -e ".[voice]"
+.\.venv\Scripts\chexsa.exe browser
 ```
 
-Start voice mode:
+You can also run `python cli_.py` or `python cli_.py browser` with the virtual
+environment activated. Type `exit` or `quit` to close; Ctrl+C cancels a request.
+Starting the CLI does not open Chrome or Word. It waits for your request.
+
+Browser example: `Open YouTube and search for JavaScript tutorials.`
+
+Desktop example: `Open Word and write a 300-word essay about how AI impacts humans.`
+This is the intended writing workflow. The real Windows text-field fixture passes;
+the complete live-model-to-Word workflow still needs verification. Windows may
+require you to bring the app to the front before keyboard input can continue.
+
+## What is implemented
+
+- Browser: open a URL, observe the page, search collected controls, click exact
+  Chrome nodes, and replace text with read-back verification.
+- Large pages: collect the complete page locally, send at most 40 current controls
+  plus bounded change lists, and let the model search omitted controls.
+- Desktop: open an installed app, read its controls, click, replace text, send
+  supported keyboard shortcuts, and verify entered text and requested numeric
+  word counts. The desktop must be available for keyboard or mouse input.
+- Both loops stop after 10 model decisions. API requests have a 30-second timeout
+  and no automatic retries. Tests use fake model replies unless explicitly stated.
+
+The browser connects to Chrome's debugging port 9222 if available. Otherwise it
+opens Chrome with a persistent profile at `%LOCALAPPDATA%/Chexsa/chrome`.
+Website logins in that profile can survive restarts. This does not copy logins
+from a regular Chrome profile. Exit releases the browser connection; an owned
+Chrome process may close, and desktop documents are left open.
+
+The browser model currently has no dedicated tab, scroll, upload, select-option,
+checkbox, batch, screenshot, or email-verification tools. Some simple page controls
+can still be operated with clicks. Voice, automatic browser/desktop routing, saved
+skills, shared learning, and task persistence are not implemented in the rebuild.
+The old implementation is available in Git history.
+
+## Tests
 
 ```powershell
-chexsa-voice
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
+.\.venv\Scripts\python.exe tests/browser_changes_integration_.py
 ```
 
-Or start Chrome and voice mode together:
+The Chrome fixture uses a temporary headless profile and a fake model; it does not
+read personal tabs or spend API quota. CI runs it and the unit suite on Windows.
+`tests/desktop_actions_integration_.py` contains manual disposable-window and Word
+tests; running that full script can bring windows to the front. It uses no AI API.
 
-```powershell
-.\scripts\start_voice.ps1
-```
-
-Then say:
-
-```text
-Hey Chexsa, search JavaScript tutorials on YouTube.
-```
-
-You can also say only **"Hey Chexsa"** and Chexsa will listen once more for your command.
-
-Voice mode must be running to hear the wake phrase. Speech is currently transcribed with Google Speech Recognition through the SpeechRecognition package.
-
----
-
-## ✅ Tests
-
-Run the fast unit tests:
-
-```powershell
-python -m unittest discover -s tests -p "test_*.py" -v
-```
-
-Run the isolated Chrome integration fixtures (no model key or real email needed):
-
-```powershell
-.\scripts\test_browser.ps1
-```
-
-GitHub Actions runs the unit and Chrome fixture tests on Python 3.11 and 3.12 for pushes and pull requests. The fixture suite includes 20 consecutive email workflows, delayed/refused/uncertain sends, large pages, frames, and visual targeting. It uses a scripted model; live Gmail and model-provider behavior require separate account-based validation. Version tags such as `v0.1.0` also build release packages automatically.
-
----
-
-## 🗺️ Roadmap
-
-```text
-Browser control              ✅
-        ↓
-Windows app control          🚧
-        ↓
-Browser + desktop together
-        ↓
-Check whether browser actions worked ✅
-        ↓
-Recover when something fails
-        ↓
-Learn reusable tasks
-        ↓
-Personal memory
-```
-
----
-
-## ⚠️ Early Project
-
-Chexsa is experimental.
-
-It can interact with real websites and is being developed to control more of your computer. Avoid using it for anything where a wrong action could cause serious problems.
-
----
-
-## 🤝 Contributing
-
-Chexsa is open source and still growing.
-
-Bug reports, ideas, experiments, and pull requests are welcome.
-
----
-
-<div align="center">
-
-### 🌸 Chexsa
-
-**An AI that doesn't just tell you what to do.  
-It helps do it.**
-
-</div>
+Read [file_use.md](file_use.md) for each file's purpose and
+[ARCHITECTURE.md](ARCHITECTURE.md) for the current flow. Recorded measurements are
+in [TEST_NOTES_.md](TEST_NOTES_.md); future goals are in
+[PROJECT_GOALS_.md](PROJECT_GOALS_.md).

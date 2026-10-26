@@ -5,37 +5,29 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "chexsa"
 version = "0.1.0"
-description = "A personal computer-use AI agent."
+description = "A personal browser and Windows desktop AI agent."
 requires-python = ">=3.11"
 
-# Libraries Chexsa needs to run.
+# Libraries used by the rebuilt browser and desktop tools.
 dependencies = [
-    "google-genai",
     "openai",
     "playwright",
     "pywinauto==0.6.9",
     "python-dotenv",
 ]
 
-[project.optional-dependencies]
-voice = [
-    "SpeechRecognition[audio]>=3.14,<4",
-]
-
 [project.scripts]
-# Start Chexsa from the terminal.
-chexsa = "cli:main"
-chexsa-voice = "voice:main"
+# Both terminal modes start from the new CLI.
+chexsa = "cli_:main"
 
 [tool.setuptools]
-packages = ["chexsa_browser"]
-# Python files that are part of Chexsa.
+packages = []
 py-modules = [
-    "agent",
-    "app_runtime",
-    "desktop_state",
-    "desktop_actions",
-    "llm",
-    "cli",
-    "voice",
+    "agent_",
+    "browser_",
+    "cli_",
+    "desktop_",
+    "desktop_agent_",
+    "llm_",
+    "observations_",
 ]
