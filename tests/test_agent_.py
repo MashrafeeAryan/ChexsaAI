@@ -43,7 +43,7 @@ class AgentLoopTests(unittest.TestCase):
             {"action": "reply", "text": "Finished"},
         ])
         decisions = []
-        def choose(message, observation, history):
+        def choose(message, observation, history, previous=None):
             decisions.append((message, deepcopy(observation), deepcopy(history)))
             return next(actions)
         self.tools["get_reply"].side_effect = choose
@@ -136,6 +136,29 @@ class AgentLoopTests(unittest.TestCase):
         self.assertEqual(self.tools["get_reply"].call_count, 1)
 
 
+    def test_previous_snapshot_is_passed_to_the_next_decision(self):
+        snapshots = [dict(self.observation, title=str(step)) for step in range(2)]
+        self.tools["read_page"].side_effect = snapshots
+        actions = iter([{"action": "observe"}, {"action": "type", "backend_node_id": 12, "text": "Hello"}, {"action": "reply", "text": "Finished"}])
+        previous_readings = []
+        def choose(message, observation, history, previous):
+            previous_readings.append(deepcopy(previous))
+            return next(actions)
+        self.tools["get_reply"].side_effect = choose
+        self.assertEqual(agent_.run_agent("Fill subject", {}), "Finished")
+        self.assertEqual(previous_readings, [None, None, snapshots[0]])
+
+    def test_local_search_does_not_click_or_type(self):
+        self.tools["get_reply"].side_effect = [
+            {"action": "find_elements", "query": "Send", "offset": 0},
+            {"action": "reply", "text": "Found it"},
+        ]
+        self.assertEqual(agent_.run_agent("Find Send", {"playwright": self.connection, "page": self.page}), "Found it")
+        self.tools["click_node"].assert_not_called()
+        self.tools["type_node"].assert_not_called()
+        self.assertEqual(self.tools["read_page"].call_count, 2)
+
+
 class AgentModelPayloadTests(unittest.TestCase):
     def test_request_and_results_are_sent_without_duplicate_page_content(self):
         environment = {"LLM_API_KEY": "fake-key", "LLM_BASE_URL": "https://example.invalid/v1", "LLM_MODEL": "fake-model"}
@@ -150,6 +173,41 @@ class AgentModelPayloadTests(unittest.TestCase):
         self.assertEqual(payload["previous_actions"], history)
         self.assertNotIn("content", payload["page"])
         self.assertNotIn("LOCAL ONLY", messages[-1]["content"])
+
+
+    def test_unseen_target_is_rejected_until_local_search_exposes_it(self):
+        observation = {
+            "url": "https://example.test", "title": "Controls", "page_id": 1, "document_id": 1,
+            "controls": {number: {"line": f'[{number}] button "Target {number}"', "role": "button", "name": f"Target {number}", "context": [], "value": "", "states": {}} for number in range(1, 101)},
+            "text_nodes": {},
+        }
+        environment = {"LLM_API_KEY": "fake-key", "LLM_BASE_URL": "https://example.invalid/v1", "LLM_MODEL": "fake-model"}
+        with patch.dict(os.environ, environment, clear=True), patch.object(llm_, "_client", None), patch.object(llm_, "OpenAI") as client:
+            client.return_value.chat.completions.create.return_value = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"action":"click","backend_node_id":99}'))])
+            with self.assertRaises(RuntimeError):
+                llm_.get_reply("Continue", observation)
+            history = [{"action": {"action": "find_elements", "query": "Target 99", "offset": 0}, "result": "Search requested"}]
+            action = llm_.get_reply("Continue", observation, history, observation)
+            self.assertEqual(action["backend_node_id"], 99)
+            payload = json.loads(client.return_value.chat.completions.create.call_args.kwargs["messages"][-1]["content"])
+            self.assertIn('[99] button "Target 99"', payload["page"]["search"]["elements"])
+            self.assertNotIn("controls", payload["page"])
+
+    def test_search_action_requires_valid_query_offset_and_observation(self):
+        observation = {"url": "https://example.test", "title": "Page", "elements": '[12] button "Send"'}
+        environment = {"LLM_API_KEY": "fake-key", "LLM_BASE_URL": "https://example.invalid/v1", "LLM_MODEL": "fake-model"}
+        with patch.dict(os.environ, environment, clear=True), patch.object(llm_, "_client", None), patch.object(llm_, "OpenAI") as client:
+            create = client.return_value.chat.completions.create
+            for query, offset, valid in (("Send", 0, True), ("", 40, True), ("Send", -1, False), ("Send", True, False), (12, 0, False)):
+                create.return_value = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({"action": "find_elements", "query": query, "offset": offset})))])
+                if valid:
+                    self.assertEqual(llm_.get_reply("Find", observation)["action"], "find_elements")
+                else:
+                    with self.assertRaises(RuntimeError):
+                        llm_.get_reply("Find", observation)
+            create.return_value = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"action":"find_elements","query":"Send"}'))])
+            with self.assertRaises(RuntimeError):
+                llm_.get_reply("Find")
 
 
 if __name__ == "__main__":

@@ -52,7 +52,7 @@ def open_browser():
 
 
 # Read controls using the exact node IDs Chrome already gives us.
-# Example return value (Chrome supplies the real node IDs):
+# Readable return fields (extra local fields keep identities, controls, and text nodes):
 # {
 #     "url": "https://example.com/mail",
 #     "title": "Inbox",
@@ -80,6 +80,7 @@ def read_page(page):
         nodes = session.send("Accessibility.getFullAXTree")["nodes"]
         by_id = {node["nodeId"]: node for node in nodes}
         targets, lines, text_lines = set(), [], []
+        controls, text_nodes = {}, {}
         for node in nodes:
             if node.get("ignored"):
                 continue
@@ -87,7 +88,16 @@ def read_page(page):
             name = node.get("name", {}).get("value", "")
             # Read ordinary text from this same tree. InlineTextBox repeats it.
             if role == "statictext" and name.strip():
-                text_lines.append(name)
+                # Chrome also puts field values in text children; keep those values local.
+                ancestor = by_id.get(node.get("parentId"))
+                while ancestor and ancestor.get("role", {}).get("value", "").lower() not in (
+                    "textbox", "searchbox", "combobox", "spinbutton",
+                ):
+                    ancestor = by_id.get(ancestor.get("parentId"))
+                if ancestor is None:
+                    text_lines.append(name)
+                    text_id = node.get("backendDOMNodeId", "ax:" + node["nodeId"])
+                    text_nodes[text_id] = name
             target = node.get("backendDOMNodeId")
             if role not in _CONTROL_ROLES or not target:
                 continue
@@ -106,10 +116,23 @@ def read_page(page):
             if context:
                 line += " | context: " + " > ".join(reversed(context))
             lines.append(line)
+            # Keep values and states locally so changes include more than renamed buttons.
+            states = {
+                prop["name"]: prop.get("value", {}).get("value")
+                for prop in node.get("properties", [])
+                if prop["name"] in ("disabled", "readonly", "checked", "selected", "expanded", "pressed", "focused")
+            }
+            controls[target] = {
+                "line": line, "role": role, "name": name, "context": context,
+                "value": node.get("value", {}).get("value", ""), "states": states,
+            }
 
         result = {
             "url": page.url,
             "title": page.title(),
+            # These local fields let us compare the same nodes on the same document.
+            "page_id": id(page), "document_id": document,
+            "controls": controls, "text_nodes": text_nodes,
             "elements": "\n".join(lines),
             # Plain accessible text, rather than a second formatted tree snapshot.
             "content": "\n".join(text_lines),

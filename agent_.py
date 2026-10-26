@@ -12,10 +12,11 @@ def run_agent(message, browser):
     history = []
     last_action = None
     last_observation = None
+    previous = None
 
     # Each turn can make one model call. This fixed limit prevents endless API calls.
     for step in range(10):
-        action = get_reply(message, observation, history)
+        action = get_reply(message, observation, history, previous)
         if action["action"] == "reply":
             # A reply ends the run: an answer, missing information, or a final report.
             return action["text"]
@@ -33,6 +34,8 @@ def run_agent(message, browser):
         # Any action error leaves this function immediately. Uncertain actions are not retried.
         if action["action"] == "observe":
             result = "Browser connected; current page will be read."
+        elif action["action"] == "find_elements":
+            result = "Local search requested; fresh matches are supplied with the next observation."
         elif action["action"] == "navigate":
             page.goto(action["url"], wait_until="domcontentloaded", timeout=30000)
             result = "Navigation finished."
@@ -48,6 +51,7 @@ def run_agent(message, browser):
         history.append({"action": action.copy(), "result": result})
         last_action, last_observation = action.copy(), observation
         # Observe after every action; the next decision gets current nodes and page state.
+        previous = observation
         observation = read_page(page)
 
     return "Stopped after 10 model decisions. The request may be unfinished; please check the page."
