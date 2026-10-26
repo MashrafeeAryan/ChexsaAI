@@ -202,7 +202,7 @@ def test_type_document_focus_and_verification():
         control.iface_text.DocumentRange.GetText.return_value = "Hello {ENTER} + AI\r"
         with patch.object(type(control), "iface_value", new_callable=PropertyMock, create=True) as value:
             value.side_effect = desktop_.NoPatternInterfaceError
-            with patch.object(control, "type_keys") as send, patch.object(desktop_.win32gui, "GetForegroundWindow", return_value=foreground):
+            with patch.object(control, "type_keys") as send, patch.object(desktop_.win32gui, "GetForegroundWindow", return_value=foreground), patch.object(desktop_.win32gui, "SetForegroundWindow"):
                 if focus and foreground == 100:
                     assert "verified" in desktop_.type_text(reading, [42, 1], "Hello {ENTER} + AI")
                     assert send.call_count == 2
@@ -222,7 +222,7 @@ def test_click_covered_target():
     unrelated.parent.return_value = None
     with patch.object(type(control), "iface_invoke", new_callable=PropertyMock, create=True) as invoke:
         invoke.side_effect = desktop_.NoPatternInterfaceError
-        with patch.object(desktop_, "Desktop") as desktop:
+        with patch.object(desktop_, "Desktop") as desktop, patch.object(desktop_, "focus_window"):
             desktop.return_value.from_point.return_value = unrelated
             with unittest.TestCase().assertRaisesRegex(RuntimeError, "uncertain"):
                 desktop_.click_control(reading, [42, 1])

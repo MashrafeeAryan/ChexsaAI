@@ -123,6 +123,59 @@ def test_native_window(test_mouse=True):
             process.wait()
 
 
+# Run the actual controller and Windows text tools with a fake native-tool API reply.
+def test_connected_agent():
+    import json
+    import os
+    from types import SimpleNamespace
+    from unittest.mock import Mock, patch
+    import desktop_agent_ as agent
+
+    process = subprocess.Popen([sys.executable, __file__, "--fixture"], stdout=subprocess.PIPE,
+                               text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+    handle = int(process.stdout.readline())
+    try:
+        window = Desktop(backend="uia").window(handle=handle).wrapper_object()
+        initial = read_window(window)
+        target = next(node for node, control in initial["controls"].items() if control.element_info.automation_id == "201")
+        essay = " ".join(["learning"] * 300)
+        payloads = []
+        def choose(**kwargs):
+            payload = json.loads(kwargs["messages"][-1]["content"])
+            payloads.append(payload)
+            count = len(payload["previous_actions"])
+            if count == 0:
+                name, arguments = "type_text", {"node_id": list(target), "text": "Too short"}
+            elif count == 1:
+                assert "Nothing typed" in payload["previous_actions"][-1]["result"]
+                assert payload["previous_actions"][-1]["arguments"]["text"] == "Too short"
+                name, arguments = "type_text", {"node_id": list(target), "text": essay}
+            else:
+                assert all("text" not in action["arguments"] for action in payload["previous_actions"])
+                name, arguments = "reply", {"text": "Written and verified", "done": True}
+            call = SimpleNamespace(function=SimpleNamespace(name=name, arguments=json.dumps(arguments)))
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=[call]))])
+        client = Mock()
+        client.chat.completions.create.side_effect = choose
+        with patch.object(agent, "_client", client), patch.dict(os.environ, {"LLM_MODEL": "fake"}), \
+             patch.object(agent, "type_text", wraps=agent.type_text) as entry:
+            state = {"window": window, "process_id": process.pid}
+            result = agent.run_desktop_agent("Write 300 words in the first field of this open test window", state)
+        actual = _edit_text(win32gui.GetDlgItem(handle, 201))
+        assert actual == essay and len(actual.split()) == 300
+        assert result == "Written and verified"
+        assert len(payloads) == 3 and entry.call_count == 1
+        print("PASS: native tool calling, wrong-count rejection, real 300-word entry, fresh completion check. Zero API calls.", flush=True)
+    finally:
+        if win32gui.IsWindow(handle):
+            win32gui.PostMessage(handle, win32con.WM_CLOSE, 0, 0)
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+
+
 # Use a new, unsaved Word document and independently verify its text through Word's API.
 def test_word():
     import win32com.client
@@ -169,5 +222,6 @@ if __name__ == "__main__":
         fixture()
     else:
         test_native_window()
+        test_connected_agent()
         test_word()
         print("Zero model calls. No personal documents used.")

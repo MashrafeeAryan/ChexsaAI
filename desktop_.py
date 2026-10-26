@@ -3,6 +3,8 @@
 import json  # Keeps names readable when they contain quotes or line breaks.
 from pathlib import Path
 import shlex  # Separates a program path from any startup options.
+from shutil import which
+import winreg  # Windows keeps registered app paths here.
 import win32gui  # Checks which window will actually receive keyboard input.
 from time import monotonic, sleep
 
@@ -138,6 +140,7 @@ def click_control(observation, node_id):
         if invoke is not None:
             invoke.Invoke()  # Ask Windows to activate this exact control without aiming a mouse.
         else:
+            focus_window(observation["window"])
             control.set_focus()  # Focus the exact control through Windows accessibility.
             point = control.rectangle().mid_point()
             hit = Desktop(backend="uia").from_point(point.x, point.y)
@@ -189,6 +192,7 @@ def type_text(observation, node_id, text):
         if value is not None:
             value.SetValue(text)
         else:
+            focus_window(observation["window"])
             control.set_focus()  # Focus the exact control through Windows accessibility.
             if win32gui.GetForegroundWindow() != observation["window"].handle or not control.has_keyboard_focus():
                 raise RuntimeError("The selected editor did not receive keyboard focus.")
@@ -220,3 +224,75 @@ def type_text(observation, node_id, text):
     except Exception as error:
         raise RuntimeError("Text entry could not be verified. Read the window and investigate before typing again.") from error
     return "Text entered and verified."
+
+
+
+def find_app(executable):
+    """Find an installed program by its filename, without running shell commands."""
+    if not isinstance(executable, str) or not executable.lower().endswith(".exe") or any(
+        char in executable for char in '\\/:"<>|&;%^\r\n'
+    ):
+        raise ValueError("Give just an installed program name, such as winword.exe.")
+    path = which(executable)
+    if path:
+        return path
+    # Office and other apps may be registered in Windows without being on PATH.
+    for registry in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        for view in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
+            try:
+                with winreg.OpenKey(registry, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\" + executable,
+                                    0, winreg.KEY_READ | view) as key:
+                    path = str(winreg.QueryValueEx(key, None)[0]).strip('"')
+                    if Path(path).is_file():
+                        return path
+            except OSError:
+                continue
+    raise RuntimeError("Could not find the installed app: " + executable)
+
+
+def focus_window(window):
+    """Bring the chosen window forward, and stop if Windows refuses to focus it."""
+    window.set_focus()
+    if win32gui.GetForegroundWindow() != window.handle:
+        try:
+            win32gui.SetForegroundWindow(window.handle)
+        except Exception:
+            raise RuntimeError("Bring the selected app to the front, then try again.") from None
+    if win32gui.GetForegroundWindow() != window.handle:
+        raise RuntimeError("The selected app did not become the foreground window.")
+
+
+def press_key(observation, keys):
+    """Send a key or shortcut to this window, such as Enter or Ctrl+N."""
+    if not isinstance(keys, list) or not keys or len(keys) > 4 or any(not isinstance(key, str) for key in keys):
+        raise ValueError("Give a key list, such as ['CTRL', 'N'].")
+    keys = [key.upper() for key in keys]
+    modifiers = {"CTRL": "^", "ALT": "%", "SHIFT": "+"}
+    named = {name: "{" + name + "}" for name in (
+        "ENTER", "TAB", "ESC", "BACKSPACE", "DELETE", "SPACE", "UP", "DOWN", "LEFT", "RIGHT", "HOME", "END",
+    )}
+    base = keys[-1]
+    if any(key not in modifiers for key in keys[:-1]) or len(set(keys)) != len(keys):
+        raise ValueError("Use modifiers first and one key last.")
+    if base not in named and not (len(base) == 1 and base.isascii() and base.isalnum()):
+        raise ValueError("That key is not supported yet.")
+    if _observations.get(observation["window_id"]) is not observation:
+        raise RuntimeError("Read the window again before sending keys.")
+    window = observation["window"]
+    if tuple(window.element_info.runtime_id or ()) != observation["window_id"] or not window.is_visible():
+        raise RuntimeError("The observed window is no longer available.")
+    _observations.pop(observation["window_id"], None)
+    focus_window(window)
+    sequence = "".join(modifiers[key] for key in keys[:-1]) + named.get(base, base.lower())
+    window.type_keys(sequence, set_foreground=False, pause=0, turn_off_numlock=False)
+    return "Keys sent. Read the window again to check the result."
+
+
+def read_text(observation, node_id):
+    """Read a chosen field again so completion uses its current text."""
+    control = _get_control(observation, node_id)
+    try:
+        text = control.iface_value.CurrentValue
+    except NoPatternInterfaceError:
+        text = control.iface_text.DocumentRange.GetText(-1)
+    return text.replace("\r\n", "\n").replace("\r", "\n")
