@@ -8,7 +8,6 @@ from unittest.mock import Mock, PropertyMock, patch
 import desktop_
 
 
-
 # Check that we return the right app, wait for its window, and refuse guesses.
 def test_window_selection():
     cases = ("direct", "loading", "handoff", "ambiguous", "missing")
@@ -176,6 +175,45 @@ def test_click_failure_is_not_retried():
     control.iface_invoke.Invoke.assert_called_once()
 
 
+# Ordinary fields must contain exactly the requested literal text after entry.
+def test_type_field_verification():
+    reading, control = _reading()
+    text = "AI + education: {ENTER} ^ % ~ (test)\nCafé"
+    control.iface_value.CurrentValue = text
+    assert "verified" in desktop_.type_text(reading, [42, 1], text)
+    control.iface_value.SetValue.assert_called_once_with(text)
+    with unittest.TestCase().assertRaisesRegex(RuntimeError, "old or already used"):
+        desktop_.type_text(reading, [42, 1], text)
+    for case in ("readonly", "mismatch", "invalid", "not_editable"):
+        reading, control = _reading("Button" if case == "not_editable" else "Edit")
+        control.iface_value.CurrentIsReadOnly = case == "readonly"
+        control.iface_value.CurrentValue = "Truncated"
+        with unittest.TestCase().assertRaises((RuntimeError, ValueError)):
+            desktop_.type_text(reading, [42, 1], None if case == "invalid" else "Hello")
+        assert control.iface_value.SetValue.call_count == (1 if case == "mismatch" else 0)
+
+
+# Documents need confirmed focus and literal typing, with no automatic retry.
+def test_type_document_focus_and_verification():
+    for focus, foreground in ((True, 100), (False, 100), (True, 999)):
+        reading, control = _reading("Document")
+        control.has_keyboard_focus.return_value = focus
+        control.iface_text.DocumentRange.GetAttributeValue.return_value = False
+        control.iface_text.DocumentRange.GetText.return_value = "Hello {ENTER} + AI\r"
+        with patch.object(type(control), "iface_value", new_callable=PropertyMock, create=True) as value:
+            value.side_effect = desktop_.NoPatternInterfaceError
+            with patch.object(control, "type_keys") as send, patch.object(desktop_.win32gui, "GetForegroundWindow", return_value=foreground):
+                if focus and foreground == 100:
+                    assert "verified" in desktop_.type_text(reading, [42, 1], "Hello {ENTER} + AI")
+                    assert send.call_count == 2
+                    literal = send.call_args.args[0]
+                    assert "{{}ENTER{}}" in literal and "{+}" in literal
+                else:
+                    with unittest.TestCase().assertRaisesRegex(RuntimeError, "could not be verified"):
+                        desktop_.type_text(reading, [42, 1], "Hello")
+                    send.assert_not_called()
+
+
 # A mouse fallback must refuse a point covered by another control.
 def test_click_covered_target():
     reading, control = _reading("Edit")
@@ -191,8 +229,36 @@ def test_click_covered_target():
     control.click_input.assert_not_called()
 
 
-# Run the plain test functions with the existing unittest command.
+# Unsupported document characters must be rejected before focus or text changes.
+def test_document_emoji_is_rejected_before_editing():
+    reading, control = _reading("Document")
+    with patch.object(type(control), "iface_value", new_callable=PropertyMock, create=True) as value:
+        value.side_effect = desktop_.NoPatternInterfaceError
+        with unittest.TestCase().assertRaisesRegex(RuntimeError, "not supported"):
+            desktop_.type_text(reading, [42, 1], "Hello 😀")
+    control.set_focus.assert_not_called()
+    control.type_keys.assert_not_called()
+
+
+# A brief match followed by different text must never count as verified entry.
+def test_transient_text_match_is_not_success():
+    reading, control = _reading()
+    values = iter(["Hello", "Changed later"])
+    with patch.object(type(control.iface_value), "CurrentValue", new_callable=PropertyMock, create=True) as value:
+        value.side_effect = lambda: next(values, "Changed later")
+        with patch.object(desktop_, "monotonic", side_effect=[0, 0, 0.3, 3]), patch.object(desktop_, "sleep"):
+            with unittest.TestCase().assertRaisesRegex(RuntimeError, "could not be verified"):
+                desktop_.type_text(reading, [42, 1], "Hello")
+    control.iface_value.SetValue.assert_called_once_with("Hello")
+
+
+# Let the existing unittest command run these plain test functions without new classes.
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
-        test_window_selection, test_invalid_launches, test_read_window_controls, test_read_window_unavailable, test_click_exact_control_and_refresh, test_action_target_guards, test_click_failure_is_not_retried, test_click_covered_target,
+        test_window_selection, test_invalid_launches,
+        test_read_window_controls, test_read_window_unavailable,
+        test_click_exact_control_and_refresh, test_action_target_guards,
+        test_click_failure_is_not_retried, test_type_field_verification,
+        test_type_document_focus_and_verification, test_click_covered_target,
+        test_document_emoji_is_rejected_before_editing, test_transient_text_match_is_not_success,
     ))

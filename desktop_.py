@@ -3,11 +3,12 @@
 import json  # Keeps names readable when they contain quotes or line breaks.
 from pathlib import Path
 import shlex  # Separates a program path from any startup options.
+import win32gui  # Checks which window will actually receive keyboard input.
 from time import monotonic, sleep
 
 from pywinauto import Application, Desktop  # Open apps and find their windows.
 from pywinauto.application import ProcessNotFoundError, process_module
-from pywinauto.uia_defines import NoPatternInterfaceError
+from pywinauto.uia_defines import IUIA, NoPatternInterfaceError
 from comtypes import COMError  # Windows may report an error when a control disappears.
 
 
@@ -149,3 +150,73 @@ def click_control(observation, node_id):
     except Exception as error:
         raise RuntimeError("The click outcome is uncertain. Read the window before continuing; do not repeat it automatically.") from error
     return "Click sent. Read the window again to check the result."
+
+
+def type_text(observation, node_id, text):
+    """Replace the chosen field or document's text and check what was entered.
+
+    Stop on an uncertain result instead of automatically typing the text again.
+    """
+    if not isinstance(text, str) or "\0" in text:
+        raise ValueError("Give text without null characters to enter.")
+    control = _get_control(observation, node_id)
+    if control.element_info.control_type not in ("Edit", "Document", "ComboBox"):
+        raise RuntimeError("Choose an editable field or document.")
+    try:
+        value = control.iface_value
+    except NoPatternInterfaceError:
+        value = None
+    if value is not None:
+        if value.CurrentIsReadOnly:
+            raise RuntimeError("This field is read-only.")
+    else:
+        # This keyboard path cannot yet verify emoji reliably; stop before editing.
+        if any(ord(char) > 0xFFFF for char in text):
+            raise RuntimeError("Emoji and other supplementary characters are not supported in this editor yet.")
+        # Document editors such as Word expose readable text but no direct text setter.
+        try:
+            text_range = control.iface_text.DocumentRange
+            readonly = text_range.GetAttributeValue(IUIA().ui_automation_client.UIA_IsReadOnlyAttributeId)
+            if readonly is True or readonly == 1:
+                raise RuntimeError("This document is read-only.")
+            text_range.GetText(-1)  # Check that we can read the text back before typing.
+        except NoPatternInterfaceError:
+            raise RuntimeError("This control does not support verified text entry.") from None
+
+    expected = text.replace("\r\n", "\n").replace("\r", "\n")
+    _observations.pop(observation["window_id"], None)
+    try:
+        if value is not None:
+            value.SetValue(text)
+        else:
+            control.set_focus()  # Focus the exact control through Windows accessibility.
+            if win32gui.GetForegroundWindow() != observation["window"].handle or not control.has_keyboard_focus():
+                raise RuntimeError("The selected editor did not receive keyboard focus.")
+            control.type_keys("^a", pause=0, turn_off_numlock=False, set_foreground=False)  # Select this editor's existing text.
+            if win32gui.GetForegroundWindow() != observation["window"].handle or not control.has_keyboard_focus():
+                raise RuntimeError("Keyboard focus changed before typing.")
+            # Escape shortcut symbols so text such as {ENTER} is typed literally.
+            keys = "".join("{" + char + "}" if char in "+^%~(){}" else char for char in expected)
+            control.type_keys(keys or "{BACKSPACE}", pause=0, with_spaces=True, with_tabs=True,
+                              with_newlines=True, turn_off_numlock=False, set_foreground=False)
+        # Let the app finish processing input; checking again never repeats the typing.
+        deadline = monotonic() + 2
+        matched_at = None
+        while True:
+            actual = value.CurrentValue if value is not None else control.iface_text.DocumentRange.GetText(-1)
+            actual = actual.replace("\r\n", "\n").replace("\r", "\n")
+            # Word may include its required final paragraph mark in the text reading.
+            now = monotonic()
+            if actual == expected or (value is None and actual == expected + "\n"):
+                if matched_at is None:
+                    matched_at = now
+                elif now - matched_at >= 0.2:
+                    break  # Require a stable read-back, not a single brief match.
+            else:
+                matched_at = None
+            if now >= deadline:
+                raise RuntimeError("The field's text did not match what was requested.")
+            sleep(0.05)
+    except Exception as error:
+        raise RuntimeError("Text entry could not be verified. Read the window and investigate before typing again.") from error
+    return "Text entered and verified."
