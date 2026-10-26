@@ -1,10 +1,9 @@
 <div align="center">
-
 # ChexsaAI
 
 **Your browser. Your desktop. Your next task.**
 
-A small command-line AI assistant for Chrome and Windows apps.
+A small command-line AI assistant for Chrome and Windows apps. (Plan to develop in app)
 
 ![Windows](https://img.shields.io/badge/Windows-0078D4?style=flat-square)
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square)
