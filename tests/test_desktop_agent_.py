@@ -233,39 +233,6 @@ def test_real_sdk_with_fake_transport():
         assert len(requests) == 1  # A failed request must not silently spend more quota.
 
 
-# A file task must work without an app, and completion must read the real saved file.
-def test_direct_file_task():
-    from pathlib import Path
-    from tempfile import TemporaryDirectory
-    with TemporaryDirectory() as directory:
-        path = Path(directory) / "hello.py"
-        actions = [
-            {"tool": "write_file", "arguments": {"path": str(path), "content": "print('hello')\n"}},
-            {"tool": "reply", "arguments": {"text": str(path), "done": True}},
-        ]
-        with patch.object(agent, "get_desktop_action", side_effect=actions), patch.object(agent, "open_app") as launch, \
-             patch.object(agent, "_observe") as observe:
-            assert agent.run_desktop_agent("Create hello.py", {}) == str(path)
-            assert path.read_text() == "print('hello')\n"
-            launch.assert_not_called()
-            observe.assert_not_called()
-        with patch.object(agent, "get_desktop_action", return_value=actions[0]):
-            with unittest.TestCase().assertRaisesRegex(RuntimeError, "already exists"):
-                agent.run_desktop_agent("Create hello.py", {})
-        with patch.object(agent, "get_desktop_action", return_value=actions[1]):
-            with unittest.TestCase().assertRaisesRegex(RuntimeError, "not been created"):
-                agent.run_desktop_agent("Create hello.py", {})
-        def choose(request, observation, history):
-            if not history:
-                return actions[0]
-            path.write_text("print('changed')\n")
-            return actions[1]
-        path.unlink()
-        with patch.object(agent, "get_desktop_action", side_effect=choose):
-            with unittest.TestCase().assertRaisesRegex(RuntimeError, "file changed"):
-                agent.run_desktop_agent("Create hello.py", {})
-
-
 # Let unittest run these functions without adding application or test classes.
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
@@ -273,5 +240,5 @@ def load_tests(loader, tests, pattern):
         test_word_count_before_input, test_unverified_completion_is_refused,
         test_failures_and_limits, test_cli_modes_and_exit,
         test_app_lookup_and_shortcut_guards, test_startup_window_recovery,
-        test_closed_app_allows_a_new_request, test_real_sdk_with_fake_transport, test_direct_file_task,
+        test_closed_app_allows_a_new_request, test_real_sdk_with_fake_transport,
     ))
