@@ -18,8 +18,8 @@ import llm_
 from observations_ import get_changes, page_context
 
 
-# Exercise the complete loop, including discovery of a control omitted from the view.
 def main():
+    """Runs Chrome on a large test page and checks typing, clicking, page changes, and local search without an AI API."""
     payloads, old_sizes = [], []
     original = agent_.get_reply
 

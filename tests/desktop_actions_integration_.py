@@ -63,8 +63,8 @@ def _edit_text(handle):
     return buffer.value
 
 
-# Check exact clicks, stale targets, literal text, clearing, and readonly fields.
 def test_native_window(test_mouse=True):
+    "Checks clicking and typing in a disposable Windows test app, including duplicate buttons."
     process = subprocess.Popen([sys.executable, __file__, "--fixture"], stdout=subprocess.PIPE,
                                text=True, creationflags=subprocess.CREATE_NO_WINDOW)
     handle = int(process.stdout.readline())
@@ -123,8 +123,8 @@ def test_native_window(test_mouse=True):
             process.wait()
 
 
-# Run the actual controller and Windows text tools with a fake native-tool API reply.
 def test_connected_agent():
+    "Checks the desktop loop on a real test window with fake model replies."
     import json
     import os
     from types import SimpleNamespace
@@ -176,8 +176,8 @@ def test_connected_agent():
             process.wait()
 
 
-# Use a new, unsaved Word document and independently verify its text through Word's API.
 def test_word():
+    "Checks text entry in a new disposable Word document without editing personal documents."
     import win32com.client
     word = win32com.client.DispatchEx("Word.Application")
     existing_documents = word.Documents.Count

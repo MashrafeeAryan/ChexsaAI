@@ -8,8 +8,8 @@ from unittest.mock import Mock, PropertyMock, patch
 import desktop_
 
 
-# Check that we return the right app, wait for its window, and refuse guesses.
 def test_window_selection():
+    "Checks that the correct app window is chosen and ambiguous matches are rejected."
     cases = ("direct", "loading", "handoff", "ambiguous", "missing")
     for case in cases:
         app, desktop = Mock(), Mock()
@@ -45,8 +45,8 @@ def test_window_selection():
                 assert desktop_.open_app(r'"C:\Apps\notepad.exe" /new') is target, case
 
 
-# Invalid names and failed launches must stop before selecting a window.
 def test_invalid_launches():
+    "Checks that invalid app names and failed launches stop cleanly."
     with patch.object(desktop_, "Application") as application:
         for value in (None, 17, "", "   "):
             with unittest.TestCase().assertRaises(ValueError):
@@ -59,8 +59,8 @@ def test_invalid_launches():
             desktop.return_value.windows.assert_not_called()
 
 
-# Same-name buttons need separate IDs, while hidden and layout-only items stay out.
 def test_read_window_controls():
+    "Checks that visible Windows controls keep separate IDs, including same-name buttons."
     window = Mock()
     window.element_info.runtime_id = (42, 1000)
     window.window_text.return_value = "Document - Example"
@@ -92,8 +92,8 @@ def test_read_window_controls():
         control.set_focus.assert_not_called()
 
 
-# Missing controls are reported, and reading a hidden window fails clearly.
 def test_read_window_unavailable():
+    "Checks that missing controls and hidden windows are handled clearly."
     window, disappeared, missing_id = Mock(), Mock(), Mock()
     window.element_info.runtime_id = (42, 1001)
     disappeared.is_visible.side_effect = OSError("Control disappeared")
@@ -121,8 +121,8 @@ def _reading(kind="Edit"):
     return desktop_.read_window(window), control
 
 
-# A click must use the chosen object once, even if another button has the same name.
 def test_click_exact_control_and_refresh():
+    "Checks that clicking uses the exact chosen control and then requires a fresh reading."
     reading, first = _reading("Button")
     second = Mock()
     second.element_info = SimpleNamespace(runtime_id=(42, 2), control_type="Button", name="Target")
@@ -139,8 +139,8 @@ def test_click_exact_control_and_refresh():
     second.iface_invoke.Invoke.assert_called_once()
 
 
-# Reject invalid, missing, moved, hidden, disabled, and detached targets before input.
 def test_action_target_guards():
+    "Checks that old, missing, moved, hidden, and disabled controls cannot receive input."
     for case in ("invalid", "missing", "changed", "moved", "hidden", "disabled", "closed"):
         reading, control = _reading("Button")
         node_id = [42, 1]
@@ -164,8 +164,8 @@ def test_action_target_guards():
         control.click_input.assert_not_called()
 
 
-# Failed clicks remain uncertain and cannot be repeated with the same reading.
 def test_click_failure_is_not_retried():
+    "Checks that a failed click is not repeated automatically."
     reading, control = _reading("Button")
     control.iface_invoke.Invoke.side_effect = OSError("Connection lost")
     with unittest.TestCase().assertRaisesRegex(RuntimeError, "uncertain"):
@@ -175,8 +175,8 @@ def test_click_failure_is_not_retried():
     control.iface_invoke.Invoke.assert_called_once()
 
 
-# Ordinary fields must contain exactly the requested literal text after entry.
 def test_type_field_verification():
+    "Checks that a text field contains exactly what was requested after typing."
     reading, control = _reading()
     text = "AI + education: {ENTER} ^ % ~ (test)\nCafé"
     control.iface_value.CurrentValue = text
@@ -193,8 +193,8 @@ def test_type_field_verification():
         assert control.iface_value.SetValue.call_count == (1 if case == "mismatch" else 0)
 
 
-# Documents need confirmed focus and literal typing, with no automatic retry.
 def test_type_document_focus_and_verification():
+    "Checks that document typing needs the correct focus and a matching text reading."
     for focus, foreground in ((True, 100), (False, 100), (True, 999)):
         reading, control = _reading("Document")
         control.has_keyboard_focus.return_value = focus
@@ -214,8 +214,8 @@ def test_type_document_focus_and_verification():
                     send.assert_not_called()
 
 
-# A mouse fallback must refuse a point covered by another control.
 def test_click_covered_target():
+    "Checks that a mouse click stops if another control covers the target."
     reading, control = _reading("Edit")
     unrelated = Mock()
     unrelated.element_info.runtime_id = (99, 1)
@@ -229,8 +229,8 @@ def test_click_covered_target():
     control.click_input.assert_not_called()
 
 
-# Unsupported document characters must be rejected before focus or text changes.
 def test_document_emoji_is_rejected_before_editing():
+    "Checks that unsupported emoji are rejected before keyboard typing starts."
     reading, control = _reading("Document")
     with patch.object(type(control), "iface_value", new_callable=PropertyMock, create=True) as value:
         value.side_effect = desktop_.NoPatternInterfaceError
@@ -240,8 +240,8 @@ def test_document_emoji_is_rejected_before_editing():
     control.type_keys.assert_not_called()
 
 
-# A brief match followed by different text must never count as verified entry.
 def test_transient_text_match_is_not_success():
+    "Checks that a brief text match followed by different text is not reported as success."
     reading, control = _reading()
     values = iter(["Hello", "Changed later"])
     with patch.object(type(control.iface_value), "CurrentValue", new_callable=PropertyMock, create=True) as value:

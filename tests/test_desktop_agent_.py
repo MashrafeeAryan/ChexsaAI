@@ -19,8 +19,8 @@ def _response(name, arguments):
     return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=[call]))])
 
 
-# Windows objects must stay local, and the model sees only the selected window view.
 def test_native_tool_payload_and_validation():
+    "Checks that desktop tool requests contain allowed arguments and keep Windows objects local."
     client = Mock()
     client.chat.completions.create.return_value = _response("reply", {"text": "Hello", "done": False})
     observation = {"title": "Test", "elements": '[42, 1] Edit "Body"', "unavailable_controls": 0,
@@ -54,8 +54,8 @@ def _tools(stack):
     return tools
 
 
-# Opening, creating, writing 300 words, and finishing must retain the original goal.
 def test_complete_desktop_flow():
+    "Checks the open-app, new-document, type, and completion steps with fake tools."
     text = " ".join(["word"] * 300)
     request = "Open Word and write an essay in 300 words"
     actions = iter([
@@ -81,8 +81,8 @@ def test_complete_desktop_flow():
         assert tools["_observe"].call_count == 3
 
 
-# Wrong-length writing must be revised before any text reaches the app.
 def test_word_count_before_input():
+    "Checks that a wrong word count is rejected before text is entered."
     correct = " ".join(["word"] * 300)
     with ExitStack() as stack:
         tools = _tools(stack)
@@ -96,8 +96,8 @@ def test_word_count_before_input():
         tools["type_text"].assert_called_once_with(tools["_observe"].return_value, [42, 1], correct)
 
 
-# A model completion claim cannot replace verified writing and a fresh text check.
 def test_unverified_completion_is_refused():
+    "Checks that the model cannot claim writing is finished without matching saved evidence."
     with ExitStack() as stack:
         tools = _tools(stack)
         tools["get_desktop_action"].return_value = {"tool": "reply", "arguments": {"text": "Done", "done": True}}
@@ -115,8 +115,8 @@ def test_unverified_completion_is_refused():
             agent.run_desktop_agent("Write Hello", {"window": Mock()})
 
 
-# Uncertain input stops immediately; repeated actions and model calls are bounded.
 def test_failures_and_limits():
+    "Checks that uncertain actions, repeated actions, and endless model calls stop."
     with ExitStack() as stack:
         tools = _tools(stack)
         tools["get_desktop_action"].return_value = {"tool": "click_control", "arguments": {"node_id": [42, 1]}}
@@ -141,8 +141,8 @@ def test_failures_and_limits():
         assert tools["get_desktop_action"].call_count == 10
 
 
-# Desktop is the default; browser mode still calls the original browser engine.
 def test_cli_modes_and_exit():
+    "Checks that desktop and browser modes call the right agent and exit cleanly."
     for mode in ("desktop", "browser"):
         with patch("builtins.input", side_effect=["Hi", "exit"]), patch("builtins.print"), \
              patch.object(cli_, "run_desktop_agent", return_value="Hello") as desktop, \
@@ -158,8 +158,8 @@ def test_cli_modes_and_exit():
         browser.assert_not_called()
 
 
-# App names cannot contain shell arguments, and shortcuts consume their reading once.
 def test_app_lookup_and_shortcut_guards():
+    "Checks app lookup and keyboard shortcuts without allowing shell arguments or old readings."
     for name in ("winword.exe /x", "cmd.exe & other.exe", "C:\\Apps\\word.exe", "word"):
         with unittest.TestCase().assertRaises(ValueError):
             desktop_.find_app(name)
@@ -178,8 +178,8 @@ def test_app_lookup_and_shortcut_guards():
         desktop_.press_key(observation, ["ENTER"])
 
 
-# A disappearing startup window may be replaced only by one window in its own process.
 def test_startup_window_recovery():
+    "Checks that a replaced startup window is found only inside the same app process."
     old, replacement, native = Mock(), Mock(), Mock()
     old.is_visible.return_value = False
     native.handle = 123
@@ -193,8 +193,8 @@ def test_startup_window_recovery():
         desktop.return_value.windows.assert_called_once_with(process=12)
 
 
-# Closing an app between requests must not leave the CLI permanently stuck.
 def test_closed_app_allows_a_new_request():
+    "Checks that closing an app does not prevent a later request from opening it again."
     with ExitStack() as stack:
         tools = _tools(stack)
         tools["_observe"].side_effect = [RuntimeError("Closed"), {"title": "New app", "elements": ""}]
@@ -206,8 +206,8 @@ def test_closed_app_allows_a_new_request():
         tools["open_app"].assert_called_once()
 
 
-# A file task must work without an app, and completion must read the real saved file.
 def test_direct_file_task():
+    "Checks file creation, existing-file protection, final completion, multiple files, and failed saves without an editor."
     from pathlib import Path
     from tempfile import TemporaryDirectory
     with TemporaryDirectory() as directory:
@@ -264,8 +264,8 @@ def test_direct_file_task():
                 agent.run_desktop_agent("Create second.txt", {})
 
 
-# Both immediate and later completion must verify Word packages without opening Word.
 def test_direct_word_document():
+    "Checks that Word files can be created and verified without opening Word."
     from pathlib import Path
     from tempfile import TemporaryDirectory
     from docx import Document

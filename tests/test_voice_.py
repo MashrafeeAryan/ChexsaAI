@@ -8,23 +8,23 @@ import sys
 import voice_
 
 
-# Speech uses Windows directly and waits for the spoken message to finish.
 def test_windows_speech():
+    "Checks that spoken replies use the Windows speech engine."
     with patch("win32com.client.Dispatch") as speaker:
         voice_.speak(voice_.GREETING)
         speaker.assert_called_once_with("SAPI.SpVoice")
         speaker.return_value.Speak.assert_called_once_with(voice_.GREETING)
 
 
-# Acknowledgments come from fixed phrases, not an API request.
 def test_acknowledgment():
+    "Checks that short replies such as On it come from fixed phrases without a model call."
     with patch.object(voice_, "choice", return_value="On it."), patch.object(voice_, "speak") as speak:
         assert voice_.acknowledge() == "On it."
         speak.assert_called_once_with("On it.")
 
 
-# Wake matching accepts punctuation and combined requests, but ignores other speech.
 def test_wake_phrase():
+    "Checks that Hey Chexsa is recognized and unrelated speech is ignored."
     assert voice_.get_request("Hey Chexsa!") == ""
     assert voice_.get_request("HEY, CHEXSA open Word") == "open Word"
     assert voice_.get_request("Hey Chexsa, open YouTube.") == "open YouTube."
@@ -32,8 +32,8 @@ def test_wake_phrase():
         assert voice_.get_request(text) is None
 
 
-# Exercise wake, greeting, follow-up, acknowledgment, and exit without using audio.
 def test_conversation():
+    "Checks the greeting, spoken request, desktop-agent call, and spoken result using fake audio."
     fake = SimpleNamespace(Recognizer=Mock(), Microphone=MagicMock())
     with patch.dict(sys.modules, {"speech_recognition": fake}), \
          patch.object(voice_, "listen", side_effect=["background words", "Hey Chexsa", "open Word", "Hey Chexsa quit."]), \
@@ -47,8 +47,8 @@ def test_conversation():
         speak.assert_any_call("Word opened")
 
 
-# Combined requests need no second recording; silence must never trigger an action.
 def test_combined_request_and_silence():
+    "Checks a wake phrase plus command in one sentence and ignores silence."
     fake = SimpleNamespace(Recognizer=Mock(), Microphone=MagicMock())
     with patch.dict(sys.modules, {"speech_recognition": fake}), \
          patch.object(voice_, "listen", side_effect=["hey chexsa", "", "hey chexsa open YouTube", "hey chexsa stop"]), \
@@ -62,8 +62,8 @@ def test_combined_request_and_silence():
         assert any("didn't catch" in call.args[0] for call in speak.call_args_list)
 
 
-# Unclear recordings are ignored; transcription failures stop without retrying.
 def test_transcription_errors():
+    "Checks that unclear speech is ignored and a speech-service error stops cleanly."
     fake = SimpleNamespace(WaitTimeoutError=TimeoutError, UnknownValueError=ValueError, RequestError=ConnectionError)
     for error in (TimeoutError(), ValueError(), ConnectionError()):
         recognizer, microphone = Mock(), MagicMock()
@@ -78,8 +78,8 @@ def test_transcription_errors():
         microphone.__exit__.assert_called_once()
 
 
-# Failures are spoken without retrying; later requests reuse state and exit disconnects.
 def test_agent_error_and_cleanup():
+    "Checks that voice reports agent errors, reuses state, and disconnects the browser on exit."
     fake = SimpleNamespace(Recognizer=Mock(), Microphone=MagicMock())
     connection = Mock()
     states = []
@@ -104,8 +104,8 @@ def test_agent_error_and_cleanup():
         speak.assert_any_call("Page read")
 
 
-# Starting or stopping voice must not call an agent or open an app by itself.
 def test_no_task_on_startup_or_invalid_mode():
+    "Checks that starting or stopping voice does not run a task by itself."
     fake = SimpleNamespace(Recognizer=Mock(), Microphone=MagicMock())
     with patch.dict(sys.modules, {"speech_recognition": fake}), \
          patch.object(voice_, "listen", side_effect=["background speech", "hey chexsa stop"]), \

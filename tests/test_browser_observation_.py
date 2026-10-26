@@ -45,6 +45,7 @@ class BrowserObservationTests(unittest.TestCase):
         raise AssertionError(f"Unexpected Chrome command: {command}")
 
     def test_text_is_preserved_without_inline_or_hidden_duplicates(self):
+        "Checks that page text is kept without repeating hidden or duplicate text."
         observation = browser_.read_page(self.page)
         self.assertEqual(observation["content"], "Inbox\nSend\nSend")
         self.assertEqual(observation["url"], self.page.url)
@@ -55,6 +56,7 @@ class BrowserObservationTests(unittest.TestCase):
         ])
 
     def test_duplicate_controls_keep_their_native_ids_and_parent_context(self):
+        "Checks that same-name buttons keep separate IDs and location labels."
         observation = browser_.read_page(self.page)
         self.assertIn('[16] button "Send" | context: main "Inbox"', observation["elements"])
         self.assertIn('[19] button "Send" | context: dialog "New Message"', observation["elements"])
@@ -63,6 +65,7 @@ class BrowserObservationTests(unittest.TestCase):
         self.assertEqual(browser_._observations[self.page]["nodes"], {16, 19, 113})
 
     def test_full_original_tree_stays_local_including_values_and_hierarchy(self):
+        "Checks that the complete page structure stays on the computer."
         original = deepcopy(self.nodes)
         observation = browser_.read_page(self.page)
         saved = browser_._observations[self.page]
@@ -73,12 +76,14 @@ class BrowserObservationTests(unittest.TestCase):
         self.assertNotIn("session", observation)
 
     def test_empty_tree_returns_empty_strings(self):
+        "Checks that an empty page can be read without crashing."
         self.nodes = []
         observation = browser_.read_page(self.page)
         self.assertEqual(observation["elements"], "")
         self.assertEqual(observation["content"], "")
 
     def test_new_read_replaces_previous_text_and_disconnects_previous_session(self):
+        "Checks that a new page reading replaces the old reading and releases its connection."
         browser_.read_page(self.page)
         self.nodes = [{"nodeId": "20", "role": {"value": "StaticText"}, "name": {"value": "Message sent"}}]
         observation = browser_.read_page(self.page)
@@ -88,6 +93,7 @@ class BrowserObservationTests(unittest.TestCase):
 
 
     def test_reordering_existing_nodes_does_not_create_changes(self):
+        "Checks that moving the same controls around does not make them look new."
         before = browser_.read_page(self.page)
         self.nodes.reverse()
         after = browser_.read_page(self.page)
@@ -97,6 +103,7 @@ class BrowserObservationTests(unittest.TestCase):
             self.assertEqual(changes[key], [])
 
     def test_values_states_names_and_text_changes_are_detected(self):
+        "Checks that changes to text, names, values, and control state are noticed."
         before = browser_.read_page(self.page)
         self.nodes[8]["name"]["value"] = "Send now"
         self.nodes[12]["value"]["value"] = "New subject"
@@ -110,6 +117,7 @@ class BrowserObservationTests(unittest.TestCase):
         self.assertEqual(changes["added"], [])
 
     def test_replaced_same_name_button_is_removed_and_added(self):
+        "Checks that replacing a button creates a new target even when its name stays the same."
         before = browser_.read_page(self.page)
         self.nodes[8]["backendDOMNodeId"] = 119
         after = browser_.read_page(self.page)
@@ -119,12 +127,14 @@ class BrowserObservationTests(unittest.TestCase):
         self.assertEqual(changes["updated"], [])
 
     def test_new_document_tab_or_url_resets_the_view(self):
+        "Checks that changing the page or tab starts a fresh page view."
         before = browser_.read_page(self.page)
         for key, value in (("document_id", 999), ("page_id", 999), ("url", "https://example.test/other")):
             after = dict(before, **{key: value})
             self.assertTrue(observations_.get_changes(before, after)["full"])
 
     def test_large_unchanged_page_is_not_resent_for_one_changed_control(self):
+        "Checks that one small change does not resend a large unchanged page."
         self.nodes.extend({
             "nodeId": str(1000 + number), "parentId": "1", "backendDOMNodeId": 1000 + number,
             "role": {"value": "button"}, "name": {"value": f"Archive {number}"},
@@ -142,6 +152,7 @@ class BrowserObservationTests(unittest.TestCase):
         self.assertNotIn("New subject", str(view))
 
     def test_search_finds_omitted_controls_and_supports_continuation(self):
+        "Checks that local search finds controls left out of the small view and can show more results."
         self.nodes.extend({
             "nodeId": str(1000 + number), "backendDOMNodeId": 1000 + number,
             "role": {"value": "button"}, "name": {"value": f"Archive {number}"},
@@ -157,6 +168,7 @@ class BrowserObservationTests(unittest.TestCase):
         self.assertIn("Archive 69", second["elements"])
 
     def test_field_values_stay_local_while_value_changes_are_reported(self):
+        "Checks that field values stay local while changes to those fields are reported."
         before = browser_.read_page(self.page)
         self.nodes[12]["value"]["value"] = "SENSITIVE VALUE"
         after = browser_.read_page(self.page)
@@ -167,6 +179,7 @@ class BrowserObservationTests(unittest.TestCase):
 
 
     def test_dialog_controls_are_not_crowded_out_by_many_goal_word_matches(self):
+        "Checks that a dialog stays visible to the model on a crowded page."
         unrelated = [{
             "nodeId": str(1000 + number), "backendDOMNodeId": 1000 + number,
             "role": {"value": "button"}, "name": {"value": f"Archive {number}"},
@@ -180,6 +193,7 @@ class BrowserObservationTests(unittest.TestCase):
 
 
     def test_text_children_of_fields_do_not_copy_values_into_page_text(self):
+        "Checks that text inside a field does not leak its value into ordinary page text."
         self.nodes.append({"nodeId": "99", "parentId": "13", "backendDOMNodeId": 999,
                            "role": {"value": "StaticText"}, "name": {"value": "SENSITIVE VALUE"}})
         observation = browser_.read_page(self.page)

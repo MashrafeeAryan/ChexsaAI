@@ -8,8 +8,8 @@ from unittest.mock import patch
 import files_
 
 
-# New files preserve their code; code with side effects must never run here.
 def test_create_and_preserve():
+    "Checks that new Python files are saved exactly and existing files are not overwritten."
     with TemporaryDirectory() as directory, patch.object(files_, "OUTPUT_DIR", Path(directory)):
         text = "raise RuntimeError('must not run')\n# Caf\u00e9\n"
         path = Path(files_.write_file("example.py", text))
@@ -20,8 +20,8 @@ def test_create_and_preserve():
         assert path.read_text(encoding="utf-8") == text
 
 
-# Bad Python syntax and unsupported file formats must fail before a file is created.
 def test_reject_invalid_files():
+    "Checks that invalid Python code and unsupported file formats are rejected before saving."
     with TemporaryDirectory() as directory:
         for name, content, error in (("bad.py", "def broken(", SyntaxError), ("bad.exe", "pass", ValueError)):
             path = Path(directory) / name
@@ -30,8 +30,8 @@ def test_reject_invalid_files():
             assert not path.exists()
 
 
-# Save ordinary text, Unicode, nested folders, and empty files without an editor.
 def test_text_formats():
+    "Checks text formats, Unicode, line endings, folders, and empty files."
     with TemporaryDirectory() as directory, patch.object(files_, "OUTPUT_DIR", Path(directory)):
         for name, text in (("notes.txt", "Hello Mashrafee\n"), ("docs/readme.md", "# Notes\n"),
                            ("data.json", '{"name": "Caf\u00e9"}'), ("rows.csv", "a,b\r\n1,2\r\n"),
@@ -40,8 +40,8 @@ def test_text_formats():
             assert path.read_bytes() == text.encode("utf-8")
 
 
-# Word output must be a valid package, retain paragraphs, and never overwrite a document.
 def test_word_documents():
+    "Checks that Word files are valid packages and preserve their text without overwriting existing documents."
     from zipfile import ZipFile
     from docx import Document
     with TemporaryDirectory() as directory, patch.object(files_, "OUTPUT_DIR", Path(directory)):
