@@ -82,7 +82,7 @@ Chexsa waits for your request before opening an app.
 | Mode | Example request |
 | :--- | :--- |
 | **Browser** | Open YouTube and search for JavaScript tutorials. |
-| **Desktop** | Open Word and write a 300-word essay about how AI impacts humans. |
+| **Desktop** | Write 300 words in Microsoft Word. |
 
 With the virtual environment activated, use `python cli_.py desktop`
 for desktop mode or `python cli_.py browser` for browser mode.
