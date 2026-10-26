@@ -7,6 +7,3 @@ __pycache__/
 .chexsa/
 build/
 dist/
-
-# Python files created by the assistant.
-output/
