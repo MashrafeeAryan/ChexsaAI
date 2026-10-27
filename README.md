@@ -1,5 +1,5 @@
 <div align="center">
-# ChexsaAI
+ChexsaAI
 
 **Your browser. Your desktop. Your next task.**
 
