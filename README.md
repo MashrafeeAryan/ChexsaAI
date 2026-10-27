@@ -1,7 +1,10 @@
 <div align="center">
-ChexsaAI
+
+<h1>ChexsaAI</h1>
 
 **Your browser. Your desktop. Your next task.**
+
+<h2><a href="https://canva.link/p82hmv1zc6sja43">Watch the demo and setup guide</a></h2>
 
 A small command-line AI assistant for Chrome and Windows apps. (Plan to develop in app)
 
@@ -100,5 +103,3 @@ Windows may require you to bring the app to the front before keyboard input cont
 | :--- | :--- |
 | [File guide](file_use.md) | A simple explanation of each file. |
 | [Architecture](ARCHITECTURE.md) | How the browser and desktop pieces connect. |
-
-The rebuilt Python filenames end in `_`, such as `cli_.py`.
