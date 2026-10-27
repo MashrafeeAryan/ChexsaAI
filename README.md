@@ -4,8 +4,6 @@
 
 **Your browser. Your desktop. Your next task.**
 
-<h2><a href="https://canva.link/p82hmv1zc6sja43">Watch the demo and setup guide</a></h2>
-
 A small command-line AI assistant for Chrome and Windows apps. (Plan to develop in app)
 
 ![Windows](https://img.shields.io/badge/Windows-0078D4?style=flat-square)
@@ -30,6 +28,7 @@ cost, speed, token use, and success rates.
 Long term, I want ChexsaAI to work for hours without supervision.
 
 ## Get started
+You can watch this for setup guidelines and also for a demo: https://canva.link/p82hmv1zc6sja43
 
 You need **Windows** and **Python 3.11 or newer**.
 
