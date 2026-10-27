@@ -28,7 +28,7 @@ cost, speed, token use, and success rates.
 Long term, I want ChexsaAI to work for hours without supervision.
 
 ## Get started
-You can watch this for setup guidelines and also for a demo: https://canva.link/p82hmv1zc6sja43
+You can watch this for setup guidelines and also for a demo: https://jumpshare.com/share/3eQ07EQeuNmfQOjPcF47
 
 You need **Windows** and **Python 3.11 or newer**.
 
