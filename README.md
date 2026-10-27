@@ -28,10 +28,18 @@ Long term, I want ChexsaAI to work for hours without supervision.
 
 ## Get started
 
-You need **Windows** and **Python 3.11 or newer**. Browser tasks use installed
-**Google Chrome**; Word tasks also require **Microsoft Word**.
+You need **Windows** and **Python 3.11 or newer**.
 
-### 1. Install
+### 1. Clone the repository
+
+Open PowerShell and run:
+
+```powershell
+git clone https://github.com/MashrafeeAryan/ChexsaAI.git
+cd ChexsaAI
+```
+
+### 2. Install
 
 Run these commands from the repository folder:
 
@@ -40,7 +48,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-### 2. Connect your model
+### 3. Connect your model
 
 Create a `.env` file beside `cli_.py`. For Groq:
 
