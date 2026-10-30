@@ -1,14 +1,16 @@
 """Command-line input for ChexsaAI."""
-
+# Helps reads the words after filename; ex: python cli_.py desktop
 import sys
 
+# Browser agent
 from agent_ import run_agent
 from desktop_agent_ import run_desktop_agent
 from browser_ import close_browser
 
 
-def main(mode=None):
+def main(mode=None): # modes: browser or deskptop
     """Run a simple chat in desktop or browser mode; routing comes later."""
+
     # Read the mode here so the installed chexsa command works like this file.
     if mode is None:
         mode = sys.argv[1] if len(sys.argv) > 1 else "desktop"
@@ -25,8 +27,9 @@ def main(mode=None):
             try:
                 # strip() removes spaces from the ends of your message.
                 message = input("You > ").strip()
+
             except (EOFError, KeyboardInterrupt):
-                # Leave cleanly if input closes or you press Ctrl+C.
+                # Leave cleanly if input closes or you press Ctrl+C or Ctrl+Z
                 print("\nGoodbye.")
                 break
 
