@@ -93,3 +93,35 @@ class GmailAgentTests(unittest.TestCase):
         ):
             gmail_agent_.run_gmail_agent("Edit it", state)
         self.assertNotIn("pending_send", state)
+
+
+class GmailModelTests(unittest.TestCase):
+    """Validate actual model-call responses using a fake OpenAI client."""
+
+    def test_tool_schema_and_bad_arguments(self):
+        """Tool names, keys, and types are checked before Google sees an action."""
+        from types import SimpleNamespace
+
+        client = Mock()
+        function = SimpleNamespace(
+            name="read_mail", arguments='{"message_id":"mail1","offset":0}'
+        )
+        client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        tool_calls=[SimpleNamespace(function=function)]
+                    )
+                )
+            ]
+        )
+        state = {"client": client}
+        with patch.dict("os.environ", {"LLM_MODEL": "example-model"}):
+            action = gmail_agent_.get_gmail_action("Read it", state, [])
+            self.assertEqual(action["arguments"]["offset"], 0)
+            function.arguments = '{"message_id":"mail1","offset":true}'
+            with self.assertRaises(RuntimeError):
+                gmail_agent_.get_gmail_action("Read it", state, [])
+            function.name = "send_without_review"
+            with self.assertRaises(RuntimeError):
+                gmail_agent_.get_gmail_action("Read it", state, [])

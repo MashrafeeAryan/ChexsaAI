@@ -149,3 +149,71 @@ class GmailWriteTests(unittest.TestCase):
         self.service.users().drafts().send().execute.assert_called_once_with(
             num_retries=0
         )
+
+
+class GmailDraftEditTests(unittest.TestCase):
+    """An edit replaces the same draft and checks its saved contents."""
+
+    def test_edit_keeps_draft_and_thread(self):
+        """Editing a reply preserves its conversation and does not create another draft."""
+        service = Mock()
+        old = message("Old body")
+        old["payload"]["headers"].append(
+            {"name": "In-Reply-To", "value": "<original@example.com>"}
+        )
+        service.users().drafts().get().execute.return_value = {
+            "id": "draft1",
+            "message": old,
+        }
+        service.users().getProfile().execute.return_value = {
+            "emailAddress": "owner@example.com"
+        }
+        service.users().drafts().update().execute.return_value = {"id": "draft1"}
+        saved = {
+            "draft_id": "draft1",
+            "to": "a@example.com",
+            "subject": "Report",
+            "body": "New body\n",
+        }
+        service.reset_mock()
+
+        with patch.object(gmail_, "read_draft", return_value=saved):
+            gmail_.save_draft(
+                service, "a@example.com", "Report", "New body", draft_id="draft1"
+            )
+
+        service.users().drafts().create.assert_not_called()
+        request = service.users().drafts().update.call_args.kwargs
+        self.assertEqual(request["id"], "draft1")
+        self.assertEqual(request["body"]["message"]["threadId"], "thread1")
+        raw = base64.urlsafe_b64decode(request["body"]["message"]["raw"]).decode()
+        self.assertIn("New body", raw)
+        self.assertIn("in-reply-to: <original@example.com>", raw.lower())
+
+    def test_accepted_send_returns_google_id(self):
+        """Only an API response with a message ID counts as an accepted send."""
+        service = Mock()
+        service.users().drafts().send().execute.return_value = {
+            "id": "sent1",
+            "threadId": "thread1",
+        }
+        draft = {
+            "draft_id": "draft1",
+            "id": "mail1",
+            "to": "a@example.com",
+            "subject": "Hello",
+            "body": "Hi",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch.object(gmail_, "account_folder", return_value=Path(directory)),
+                patch.object(gmail_, "read_draft", return_value=draft),
+            ):
+                result = gmail_.send_draft(
+                    service, "draft1", gmail_.draft_fingerprint(draft)
+                )
+                self.assertEqual(result["message_id"], "sent1")
+                with self.assertRaisesRegex(RuntimeError, "submission record"):
+                    gmail_.send_draft(
+                        service, "draft1", gmail_.draft_fingerprint(draft)
+                    )
