@@ -85,7 +85,7 @@ Search your inbox, summarize work, create and edit drafts, reply, and send revie
 ```
 
 Enter `/connect` to select your Google credentials and open Google sign-in.
-See the [Gmail setup guide](GMAIL_SETUP_.md) for the Google Cloud steps and voice commands.
+See the [Gmail setup guide](plugins/gmail/GMAIL_SETUP_.md) for the Google Cloud steps and voice commands.
 
 ### Browser
 

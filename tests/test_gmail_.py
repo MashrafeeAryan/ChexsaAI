@@ -7,7 +7,7 @@ from unittest.mock import patch
 import tempfile
 from pathlib import Path
 
-import gmail_
+from plugins.gmail import gmail_
 
 
 def message(text="Please send the report on Friday."):

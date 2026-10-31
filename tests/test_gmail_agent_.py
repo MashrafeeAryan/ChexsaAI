@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
-import gmail_agent_
+from plugins.gmail import gmail_agent_
 
 
 class GmailAgentTests(unittest.TestCase):

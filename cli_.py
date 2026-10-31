@@ -6,7 +6,7 @@ import sys
 from agent_ import run_agent
 from desktop_agent_ import run_desktop_agent
 from browser_ import close_browser
-from gmail_agent_ import run_gmail_agent
+from plugins.gmail import run_gmail_agent
 
 
 def main(mode=None):  # modes: browser, desktop, or gmail

@@ -3,8 +3,8 @@
 import json
 import os
 
-from gmail_auth_ import connect_gmail, disconnect_gmail
-from gmail_ import (
+from .gmail_auth_ import connect_gmail, disconnect_gmail
+from .gmail_ import (
     draft_fingerprint,
     list_drafts,
     read_draft,

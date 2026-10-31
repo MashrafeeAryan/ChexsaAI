@@ -2,6 +2,8 @@
 
 The new Python files end in `_`. The old code was removed; Git history keeps it.
 
+Gmail integration code stays together in `plugins/gmail/`. Other service integrations can get their own folder under `plugins/`.
+
 ## App files
 
 | File | Simple purpose |
@@ -14,10 +16,10 @@ The new Python files end in `_`. The old code was removed; Git history keeps it.
 | `desktop_agent_.py` | Gives the model desktop tools and checks progress on its task. |
 | `files_.py` | Creates text, code, or Word (.docx) files, saves them, and checks the contents. |
 | `desktop_.py` | Finds Windows apps, reads controls, clicks, types, and sends shortcuts. |
-| `gmail_auth_.py` | Opens Google sign-in and saves encrypted account access outside Git. |
-| `gmail_.py` | Searches and reads mail, verifies drafts, and records sends to prevent duplicates. |
-| `gmail_agent_.py` | Lets the AI choose Gmail tools and remembers the selected draft. |
-| `GMAIL_SETUP_.md` | Explains Google setup, Gmail commands, draft editing, and voice use. |
+| `plugins/gmail/gmail_auth_.py` | Opens Google sign-in and saves encrypted account access outside Git. |
+| `plugins/gmail/gmail_.py` | Searches and reads mail, verifies drafts, and records sends to prevent duplicates. |
+| `plugins/gmail/gmail_agent_.py` | Lets the AI choose Gmail tools and remembers the selected draft. |
+| `plugins/gmail/GMAIL_SETUP_.md` | Explains Google setup, Gmail commands, draft editing, and voice use. |
 | `voice_.py` | Listens for Hey Chexsa, sends requests to the selected agent, and speaks the result. |
 
 ## Setup and docs

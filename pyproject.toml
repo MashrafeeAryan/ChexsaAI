@@ -29,7 +29,6 @@ gmail = ["google-api-python-client>=2,<3", "google-auth-oauthlib>=1,<2", "google
 chexsa = "cli_:main"
 
 [tool.setuptools]
-packages = []
 py-modules = [
     "agent_",
     "browser_",
@@ -40,7 +39,11 @@ py-modules = [
     "observations_",
     "voice_",
     "files_",
-    "gmail_auth_",
-    "gmail_",
-    "gmail_agent_",
 ]
+
+# Include service folders when installing Chexsa.
+[tool.setuptools.packages.find]
+include = ["plugins", "plugins.*"]
+
+[tool.setuptools.package-data]
+"plugins.gmail" = ["*.md"]

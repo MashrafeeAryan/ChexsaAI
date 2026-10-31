@@ -9,7 +9,7 @@ from email.utils import parseaddr
 from html import unescape
 from html.parser import HTMLParser
 
-from gmail_auth_ import account_folder
+from .gmail_auth_ import account_folder
 
 
 def _execute(request):

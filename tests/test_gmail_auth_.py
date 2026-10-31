@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import gmail_auth_
+from plugins.gmail import gmail_auth_
 
 
 class GmailAccountTests(unittest.TestCase):
