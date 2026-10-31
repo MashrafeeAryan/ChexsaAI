@@ -17,7 +17,9 @@ def _execute(request):
     try:
         return request.execute(num_retries=0)
     except Exception:
-        raise RuntimeError("Gmail could not complete the request. Check the connection and account access.") from None
+        raise RuntimeError(
+            "Gmail could not complete the request. Check the connection and account access."
+        ) from None
 
 
 def _check_id(value):
@@ -29,7 +31,10 @@ def _check_id(value):
 
 def _headers(message):
     """Make email header lookup ignore capitalization."""
-    return {item["name"].lower(): item["value"] for item in message.get("payload", {}).get("headers", [])}
+    return {
+        item["name"].lower(): item["value"]
+        for item in message.get("payload", {}).get("headers", [])
+    }
 
 
 def _body(payload):
@@ -41,7 +46,9 @@ def _body(payload):
     if kind.startswith("multipart/"):
         children = payload.get("parts", [])
         if kind == "multipart/alternative":
-            children = sorted(children, key=lambda part: part.get("mimeType") != "text/plain")
+            children = sorted(
+                children, key=lambda part: part.get("mimeType") != "text/plain"
+            )
             return next((text for part in children if (text := _body(part))), "")
         return "\n".join(filter(None, (_body(part) for part in children)))
 
@@ -99,47 +106,84 @@ def search_mail(service, query="in:inbox newer_than:14d", page_token="", limit=1
     if type(limit) is not int or not 1 <= limit <= 20:
         raise ValueError("Read between 1 and 20 search results at a time.")
 
-    listing = _execute(service.users().messages().list(
-        userId="me", q=query, maxResults=limit, pageToken=page_token or None,
-    ))
+    listing = _execute(
+        service.users()
+        .messages()
+        .list(
+            userId="me",
+            q=query,
+            maxResults=limit,
+            pageToken=page_token or None,
+        )
+    )
     messages = []
     for item in listing.get("messages", []):
-        message = _execute(service.users().messages().get(
-            userId="me", id=item["id"], format="metadata",
-            metadataHeaders=["From", "To", "Subject", "Date"],
-        ))
+        message = _execute(
+            service.users()
+            .messages()
+            .get(
+                userId="me",
+                id=item["id"],
+                format="metadata",
+                metadataHeaders=["From", "To", "Subject", "Date"],
+            )
+        )
         messages.append(_summary(message))
 
-    return {"query": query, "messages": messages, "next_page": listing.get("nextPageToken", "")}
+    return {
+        "query": query,
+        "messages": messages,
+        "next_page": listing.get("nextPageToken", ""),
+    }
 
 
 def read_mail(service, message_id, offset=0):
     """Read up to 6,000 body characters. next_offset allows reading the rest."""
     if type(offset) is not int or offset < 0:
         raise ValueError("The body offset must be a nonnegative integer.")
-    message = _execute(service.users().messages().get(
-        userId="me", id=_check_id(message_id), format="full",
-    ))
+    message = _execute(
+        service.users()
+        .messages()
+        .get(
+            userId="me",
+            id=_check_id(message_id),
+            format="full",
+        )
+    )
     result = _summary(message)
     text = _body(message.get("payload", {}))
-    result.update(body=text[offset:offset + 6000], next_offset=offset + 6000 if len(text) > offset + 6000 else None)
+    result.update(
+        body=text[offset : offset + 6000],
+        next_offset=offset + 6000 if len(text) > offset + 6000 else None,
+    )
     return result
 
 
 def list_drafts(service, page_token=""):
     """List draft IDs in small pages; read_draft supplies editable contents."""
-    result = _execute(service.users().drafts().list(userId="me", maxResults=10, pageToken=page_token or None))
-    return {"drafts": result.get("drafts", []), "next_page": result.get("nextPageToken", "")}
+    result = _execute(
+        service.users()
+        .drafts()
+        .list(userId="me", maxResults=10, pageToken=page_token or None)
+    )
+    return {
+        "drafts": result.get("drafts", []),
+        "next_page": result.get("nextPageToken", ""),
+    }
 
 
 def read_draft(service, draft_id):
     """Read the exact draft before editing or sending it."""
-    draft = _execute(service.users().drafts().get(userId="me", id=_check_id(draft_id), format="full"))
+    draft = _execute(
+        service.users().drafts().get(userId="me", id=_check_id(draft_id), format="full")
+    )
     result = _summary(draft["message"])
     headers = _headers(draft["message"])
     result.update(
-        draft_id=draft["id"], body=_body(draft["message"]["payload"]),
-        cc=headers.get("cc", ""), bcc=headers.get("bcc", ""),
+        draft_id=draft["id"],
+        body=_body(draft["message"]["payload"]),
+        cc=headers.get("cc", ""),
+        bcc=headers.get("bcc", ""),
         attachments=_attachment_names(draft["message"]["payload"]),
     )
     return result
@@ -161,26 +205,46 @@ def save_draft(service, to, subject, body, draft_id="", reply_to=""):
 
     headers, thread = {}, ""
     if draft_id:
-        old = _execute(service.users().drafts().get(userId="me", id=_check_id(draft_id), format="full"))
+        old = _execute(
+            service.users()
+            .drafts()
+            .get(userId="me", id=_check_id(draft_id), format="full")
+        )
         # Replacing an existing draft must not silently remove attachments or recipients.
         old_headers = _headers(old["message"])
-        if old_headers.get("cc") or old_headers.get("bcc") or _has_attachment(old["message"]["payload"]):
-            raise ValueError("This draft has attachments or extra recipients. Edit it in Gmail to preserve them.")
+        if (
+            old_headers.get("cc")
+            or old_headers.get("bcc")
+            or _has_attachment(old["message"]["payload"])
+        ):
+            raise ValueError(
+                "This draft has attachments or extra recipients. Edit it in Gmail to preserve them."
+            )
         headers = old_headers
         thread = old["message"].get("threadId", "")
 
     if reply_to:
-        original = _execute(service.users().messages().get(userId="me", id=_check_id(reply_to), format="full"))
+        original = _execute(
+            service.users()
+            .messages()
+            .get(userId="me", id=_check_id(reply_to), format="full")
+        )
         original_headers = _headers(original)
-        address = parseaddr(original_headers.get("reply-to") or original_headers.get("from", ""))[1]
+        address = parseaddr(
+            original_headers.get("reply-to") or original_headers.get("from", "")
+        )[1]
         message_id = original_headers.get("message-id", "")
         if not address or not message_id:
-            raise ValueError("The original email is missing a reply address or Message-ID.")
+            raise ValueError(
+                "The original email is missing a reply address or Message-ID."
+            )
         to = address
         # Threading uses Google's thread ID plus the original RFC email headers.
         headers = {
             "in-reply-to": message_id,
-            "references": (original_headers.get("references", "") + " " + message_id).strip(),
+            "references": (
+                original_headers.get("references", "") + " " + message_id
+            ).strip(),
         }
         subject = original_headers.get("subject", "")
         if not subject.lower().startswith("re:"):
@@ -190,8 +254,12 @@ def save_draft(service, to, subject, body, draft_id="", reply_to=""):
     from email.utils import getaddresses
 
     addresses = getaddresses([to])
-    if not addresses or any(not address or "@" not in address or " " in address for _, address in addresses):
-        raise ValueError("Give full email addresses; Chexsa will not guess a person's address.")
+    if not addresses or any(
+        not address or "@" not in address or " " in address for _, address in addresses
+    ):
+        raise ValueError(
+            "Give full email addresses; Chexsa will not guess a person's address."
+        )
 
     mail = EmailMessage()
     profile = _execute(service.users().getProfile(userId="me"))
@@ -206,21 +274,33 @@ def save_draft(service, to, subject, body, draft_id="", reply_to=""):
         message["threadId"] = thread
 
     drafts = service.users().drafts()
-    request = drafts.update(userId="me", id=draft_id, body={"message": message}) if draft_id else drafts.create(userId="me", body={"message": message})
+    request = (
+        drafts.update(userId="me", id=draft_id, body={"message": message})
+        if draft_id
+        else drafts.create(userId="me", body={"message": message})
+    )
     try:
         saved = _execute(request)
         verified = read_draft(service, saved["id"])
         expected = body.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n")
-        if verified["to"] != str(mail["To"]) or verified["subject"] != subject or verified["body"].rstrip("\n") != expected:
+        if (
+            verified["to"] != str(mail["To"])
+            or verified["subject"] != subject
+            or verified["body"].rstrip("\n") != expected
+        ):
             raise ValueError("Draft verification did not match.")
         return verified
     except Exception:
-        raise RuntimeError("The draft save outcome is uncertain. List and read drafts before creating another copy.") from None
+        raise RuntimeError(
+            "The draft save outcome is uncertain. List and read drafts before creating another copy."
+        ) from None
 
 
 def _has_attachment(payload):
     """Check nested MIME parts before replacing a draft's contents."""
-    return bool(payload.get("filename")) or any(_has_attachment(part) for part in payload.get("parts", []))
+    return bool(payload.get("filename")) or any(
+        _has_attachment(part) for part in payload.get("parts", [])
+    )
 
 
 def _attachment_names(payload):
@@ -235,7 +315,19 @@ def draft_fingerprint(draft):
     """Identify exactly the reviewed message without storing its private body."""
     import json
 
-    data = [draft.get(key, "") for key in ("draft_id", "id", "to", "cc", "bcc", "subject", "body", "attachments")]
+    data = [
+        draft.get(key, "")
+        for key in (
+            "draft_id",
+            "id",
+            "to",
+            "cc",
+            "bcc",
+            "subject",
+            "body",
+            "attachments",
+        )
+    ]
     return hashlib.sha256(json.dumps(data, ensure_ascii=False).encode()).hexdigest()
 
 
@@ -246,26 +338,49 @@ def send_draft(service, draft_id, reviewed_fingerprint):
     """
     current = read_draft(service, draft_id)
     if draft_fingerprint(current) != reviewed_fingerprint:
-        raise RuntimeError("The draft changed after review. Read and review it again before sending.")
+        raise RuntimeError(
+            "The draft changed after review. Read and review it again before sending."
+        )
 
     folder = account_folder()
     folder.mkdir(parents=True, exist_ok=True)
     with closing(sqlite3.connect(folder / "submissions.sqlite3")) as journal:
-        journal.execute("CREATE TABLE IF NOT EXISTS submissions (fingerprint TEXT PRIMARY KEY, status TEXT, message_id TEXT)")
+        journal.execute(
+            "CREATE TABLE IF NOT EXISTS submissions (fingerprint TEXT PRIMARY KEY, status TEXT, message_id TEXT)"
+        )
         try:
-            journal.execute("INSERT INTO submissions VALUES (?, 'pending', '')", (reviewed_fingerprint,))
+            journal.execute(
+                "INSERT INTO submissions VALUES (?, 'pending', '')",
+                (reviewed_fingerprint,),
+            )
             journal.commit()  # Commit intent before a network request can possibly send.
         except sqlite3.IntegrityError:
-            raise RuntimeError("This draft version already has a submission record. Check Sent in Gmail; do not resend automatically.") from None
+            raise RuntimeError(
+                "This draft version already has a submission record. Check Sent in Gmail; do not resend automatically."
+            ) from None
 
         try:
-            result = _execute(service.users().drafts().send(userId="me", body={"id": draft_id}))
+            result = _execute(
+                service.users().drafts().send(userId="me", body={"id": draft_id})
+            )
             if not result.get("id"):
                 raise ValueError("No accepted message ID.")
-            journal.execute("UPDATE submissions SET status='accepted', message_id=? WHERE fingerprint=?", (result["id"], reviewed_fingerprint))
+            journal.execute(
+                "UPDATE submissions SET status='accepted', message_id=? WHERE fingerprint=?",
+                (result["id"], reviewed_fingerprint),
+            )
             journal.commit()
-            return {"status": "accepted", "message_id": result["id"], "thread_id": result.get("threadId", "")}
+            return {
+                "status": "accepted",
+                "message_id": result["id"],
+                "thread_id": result.get("threadId", ""),
+            }
         except Exception:
-            journal.execute("UPDATE submissions SET status='uncertain' WHERE fingerprint=?", (reviewed_fingerprint,))
+            journal.execute(
+                "UPDATE submissions SET status='uncertain' WHERE fingerprint=?",
+                (reviewed_fingerprint,),
+            )
             journal.commit()
-            raise RuntimeError("The send outcome is uncertain. Check Sent in Gmail before taking further action. Chexsa will not send this version again.") from None
+            raise RuntimeError(
+                "The send outcome is uncertain. Check Sent in Gmail before taking further action. Chexsa will not send this version again."
+            ) from None

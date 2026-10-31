@@ -14,7 +14,9 @@ class GmailAccountTests(unittest.TestCase):
     def test_account_location(self):
         """Account files belong to the Windows user, not the checkout."""
         with patch.dict("os.environ", {"LOCALAPPDATA": "C:/ExampleUser"}):
-            self.assertEqual(gmail_auth_.account_folder(), Path("C:/ExampleUser/Chexsa/gmail"))
+            self.assertEqual(
+                gmail_auth_.account_folder(), Path("C:/ExampleUser/Chexsa/gmail")
+            )
 
     def test_disconnect(self):
         """Disconnect removes tokens and also works when already disconnected."""

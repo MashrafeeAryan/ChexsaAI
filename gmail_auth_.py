@@ -4,7 +4,6 @@ import json
 import os
 from pathlib import Path
 
-
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.compose",
@@ -46,7 +45,9 @@ def connect_gmail(client_file=None):
         from google_auth_oauthlib.flow import InstalledAppFlow
         from googleapiclient.discovery import build
     except ImportError:
-        raise RuntimeError('Install Gmail support: python -m pip install -e ".[gmail]"') from None
+        raise RuntimeError(
+            'Install Gmail support: python -m pip install -e ".[gmail]"'
+        ) from None
 
     folder = account_folder()
     token_path = folder / "account.dpapi"
@@ -55,36 +56,53 @@ def connect_gmail(client_file=None):
     # Windows encrypts the saved token for this user. It is not a repo file.
     if token_path.exists() and client_file is None:
         try:
-            data = win32crypt.CryptUnprotectData(token_path.read_bytes(), None, None, None, 0)[1]
-            credentials = Credentials.from_authorized_user_info(json.loads(data), SCOPES)
+            data = win32crypt.CryptUnprotectData(
+                token_path.read_bytes(), None, None, None, 0
+            )[1]
+            credentials = Credentials.from_authorized_user_info(
+                json.loads(data), SCOPES
+            )
             if not credentials.has_scopes(SCOPES):
                 credentials = None
             elif credentials.expired and credentials.refresh_token:
                 credentials.refresh(Request())
         except Exception:
-            raise RuntimeError("Saved Gmail access could not be refreshed. Use /connect to sign in again.") from None
+            raise RuntimeError(
+                "Saved Gmail access could not be refreshed. Use /connect to sign in again."
+            ) from None
 
     if credentials is None or not credentials.valid:
         selected = client_file or os.getenv("GMAIL_CLIENT_FILE") or choose_credentials()
         if not selected:
-            raise RuntimeError("Gmail sign-in cancelled. See the Gmail setup in README.md.")
+            raise RuntimeError(
+                "Gmail sign-in cancelled. See the Gmail setup in README.md."
+            )
 
         try:
             config = json.loads(Path(selected).read_text(encoding="utf-8-sig"))
             if "installed" not in config:
                 raise ValueError("Use Desktop app credentials.")
-            flow = InstalledAppFlow.from_client_config(config, SCOPES, autogenerate_code_verifier=True)
+            flow = InstalledAppFlow.from_client_config(
+                config, SCOPES, autogenerate_code_verifier=True
+            )
             # A temporary loopback port receives Google's reply, not your password.
             credentials = flow.run_local_server(
-                host="127.0.0.1", port=0, timeout_seconds=180,
-                access_type="offline", prompt="consent select_account",
+                host="127.0.0.1",
+                port=0,
+                timeout_seconds=180,
+                access_type="offline",
+                prompt="consent select_account",
                 success_message="Gmail connected. You can close this tab and return to Chexsa.",
             )
         except Exception:
-            raise RuntimeError("Google sign-in failed. Check Desktop app credentials, test users, and Gmail API access.") from None
+            raise RuntimeError(
+                "Google sign-in failed. Check Desktop app credentials, test users, and Gmail API access."
+            ) from None
 
     folder.mkdir(parents=True, exist_ok=True)
-    encrypted = win32crypt.CryptProtectData(credentials.to_json().encode(), "Chexsa Gmail", None, None, None, 0)
+    encrypted = win32crypt.CryptProtectData(
+        credentials.to_json().encode(), "Chexsa Gmail", None, None, None, 0
+    )
     temporary = token_path.with_suffix(".tmp")
     temporary.write_bytes(encrypted)
     temporary.replace(token_path)
