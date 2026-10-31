@@ -3,6 +3,9 @@
 import base64
 import unittest
 from unittest.mock import Mock
+from unittest.mock import patch
+import tempfile
+from pathlib import Path
 
 import gmail_
 
@@ -55,3 +58,56 @@ class GmailReadTests(unittest.TestCase):
         request.execute.side_effect = OSError("private token")
         with self.assertRaisesRegex(RuntimeError, "Gmail could not"):
             gmail_._execute(request)
+
+
+class GmailWriteTests(unittest.TestCase):
+    """Verify drafts and prevent changed or uncertain messages from being sent twice."""
+
+    def setUp(self):
+        self.service = Mock()
+        self.draft = {"draft_id": "draft1", "id": "mail1", "to": "b@example.com", "subject": "Hello", "body": "Hi\n"}
+
+    def test_create_verifies_saved_contents(self):
+        """A successful draft save requires reading the same recipient, subject, and body."""
+        self.service.users().drafts().create().execute.return_value = {"id": "draft1"}
+        with patch.object(gmail_, "read_draft", return_value=self.draft):
+            self.assertEqual(gmail_.save_draft(self.service, "b@example.com", "Hello", "Hi"), self.draft)
+
+    def test_header_injection_is_rejected(self):
+        """A newline cannot add hidden recipients to an email header."""
+        with self.assertRaises(ValueError):
+            gmail_.save_draft(self.service, "b@example.com\nBcc: c@example.com", "Hi", "Hello")
+        self.service.users.assert_not_called()
+
+    def test_reply_uses_original_headers(self):
+        """Replies use the real sender and original thread, not an invented recipient."""
+        original = message()
+        original["payload"]["headers"].append({"name": "Message-ID", "value": "<original@example.com>"})
+        self.service.users().messages().get().execute.return_value = original
+        self.service.users().drafts().create().execute.return_value = {"id": "draft1"}
+        reply = dict(self.draft, to="a@example.com", subject="Re: Report")
+        with patch.object(gmail_, "read_draft", return_value=reply):
+            gmail_.save_draft(self.service, "invented@example.com", "Wrong", "Hi", reply_to="mail1")
+        content = self.service.users().drafts().create.call_args.kwargs["body"]["message"]
+        raw = base64.urlsafe_b64decode(content["raw"]).decode()
+        self.assertIn("in-reply-to: <original@example.com>", raw.lower())
+        self.assertEqual(content["threadId"], "thread1")
+
+    def test_changed_draft_is_not_sent(self):
+        """An edit after review requires a fresh review."""
+        with patch.object(gmail_, "read_draft", return_value=self.draft):
+            with self.assertRaisesRegex(RuntimeError, "changed"):
+                gmail_.send_draft(self.service, "draft1", "old-version")
+        self.service.users.assert_not_called()
+
+    def test_uncertain_send_is_not_repeated_after_restart(self):
+        """The persistent intent record prevents a second submission after a timeout."""
+        self.service.users().drafts().send().execute.side_effect = TimeoutError()
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(gmail_, "account_folder", return_value=Path(directory)), patch.object(gmail_, "read_draft", return_value=self.draft):
+                fingerprint = gmail_.draft_fingerprint(self.draft)
+                with self.assertRaisesRegex(RuntimeError, "uncertain"):
+                    gmail_.send_draft(self.service, "draft1", fingerprint)
+                with self.assertRaisesRegex(RuntimeError, "submission record"):
+                    gmail_.send_draft(self.service, "draft1", fingerprint)
+        self.service.users().drafts().send().execute.assert_called_once_with(num_retries=0)
