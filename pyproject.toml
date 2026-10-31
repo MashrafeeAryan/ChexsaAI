@@ -42,4 +42,5 @@ py-modules = [
     "files_",
     "gmail_auth_",
     "gmail_",
+    "gmail_agent_",
 ]
