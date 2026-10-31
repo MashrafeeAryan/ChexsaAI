@@ -10,3 +10,9 @@ dist/
 
 # Files created by the assistant.
 output/
+
+# Google login files must stay on this computer.
+credentials.json
+client_secret*.json
+token.json
+*.dpapi

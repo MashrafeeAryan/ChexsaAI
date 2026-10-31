@@ -21,6 +21,9 @@ dependencies = [
 # Install microphone support only when trying the voice prototype.
 voice = ["SpeechRecognition[audio]>=3.14,<4"]
 
+# Install Google account support only when using Gmail.
+gmail = ["google-api-python-client>=2,<3", "google-auth-oauthlib>=1,<2", "google-auth-httplib2>=0.2,<1"]
+
 [project.scripts]
 # Both terminal modes start from the new CLI.
 chexsa = "cli_:main"
@@ -37,4 +40,5 @@ py-modules = [
     "observations_",
     "voice_",
     "files_",
+    "gmail_auth_",
 ]
