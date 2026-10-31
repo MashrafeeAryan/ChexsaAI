@@ -6,22 +6,26 @@ import sys
 from agent_ import run_agent
 from desktop_agent_ import run_desktop_agent
 from browser_ import close_browser
+from gmail_agent_ import run_gmail_agent
 
 
-def main(mode=None): # modes: browser or deskptop
-    """Run a simple chat in desktop or browser mode; routing comes later."""
+def main(mode=None):  # modes: browser, desktop, or gmail
+    """Run a simple chat in desktop, browser, or Gmail mode."""
 
     # Read the mode here so the installed chexsa command works like this file.
     if mode is None:
         mode = sys.argv[1] if len(sys.argv) > 1 else "desktop"
-    if mode not in ("desktop", "browser"):
-        print("Choose desktop or browser mode.")
+    if mode not in ("desktop", "browser", "gmail"):
+        print("Choose desktop, browser, or gmail mode.")
         return
     print(f"ChexsaAI — {mode} mode")
     print("Type 'exit' or 'quit' to close.\n")
 
     browser = {}
     desktop = {}
+    gmail = {}
+    if mode == "gmail":
+        print("Use /connect to sign in, /disconnect to forget access, and /send after reviewing a draft.\n")
     try:
         while True:
             try:
@@ -44,7 +48,10 @@ def main(mode=None): # modes: browser or deskptop
 
             try:
                 # Keep both engines separate until we add automatic routing.
-                response = run_desktop_agent(message, desktop) if mode == "desktop" else run_agent(message, browser)
+                if mode == "gmail":
+                    response = run_gmail_agent(message, gmail)
+                else:
+                    response = run_desktop_agent(message, desktop) if mode == "desktop" else run_agent(message, browser)
                 print(f"Chexsa > {response}")
             except KeyboardInterrupt:
                 print("\nChexsa > Request cancelled.")

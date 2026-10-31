@@ -1,6 +1,7 @@
 """Speak requests to the selected browser or desktop agent.
 
 Run python voice_.py for desktop, or python voice_.py browser for Chrome.
+Run python voice_.py gmail for connected email tools.
 Google transcribes recordings; Windows speaks replies.
 """
 
@@ -11,6 +12,7 @@ import sys
 from agent_ import run_agent
 from desktop_agent_ import run_desktop_agent
 from browser_ import close_browser
+from gmail_agent_ import run_gmail_agent
 
 GREETING = "Hi Mashrafee, what can I do for you today?"
 ACKNOWLEDGMENTS = (
@@ -58,8 +60,8 @@ def listen(recognizer, microphone):
 
 # Listen for requests, pass them to the chosen agent, and speak its response.
 def main(mode="desktop"):
-    if mode not in ("desktop", "browser"):
-        print("Choose desktop or browser mode.")
+    if mode not in ("desktop", "browser", "gmail"):
+        print("Choose desktop, browser, or gmail mode.")
         return
     # Reuse the same app or browser connection across spoken requests.
     state = {}
@@ -98,7 +100,10 @@ def main(mode="desktop"):
             acknowledge()
             print("You >", request)
             try:
-                response = run_agent(request, state) if mode == "browser" else run_desktop_agent(request, state)
+                if mode == "gmail":
+                    response = run_gmail_agent(request, state)
+                else:
+                    response = run_agent(request, state) if mode == "browser" else run_desktop_agent(request, state)
             except KeyboardInterrupt:
                 response = "Task cancelled."
             except RuntimeError as error:
