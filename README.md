@@ -67,13 +67,25 @@ mode requires a model with native tool calling. `LLM_PROVIDER` is not used.
 
 ## Run Chexsa
 
-Choose a mode. Browser and desktop run separately for now.
+Choose a mode: browser, desktop, or Gmail.
 
 ### Desktop
 
 ```powershell
 .\.venv\Scripts\chexsa.exe
 ```
+
+### Gmail
+
+Search your inbox, summarize work, create and edit drafts, reply, and send reviewed emails.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[gmail]"
+.\.venv\Scripts\python.exe cli_.py gmail
+```
+
+Enter `/connect` to select your Google credentials and open Google sign-in.
+See the [Gmail setup guide](GMAIL_SETUP_.md) for the Google Cloud steps and voice commands.
 
 ### Browser
 
