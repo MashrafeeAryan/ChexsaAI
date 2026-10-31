@@ -41,4 +41,5 @@ py-modules = [
     "voice_",
     "files_",
     "gmail_auth_",
+    "gmail_",
 ]
