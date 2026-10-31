@@ -136,7 +136,12 @@ def read_draft(service, draft_id):
     """Read the exact draft before editing or sending it."""
     draft = _execute(service.users().drafts().get(userId="me", id=_check_id(draft_id), format="full"))
     result = _summary(draft["message"])
-    result.update(draft_id=draft["id"], body=_body(draft["message"]["payload"]))
+    headers = _headers(draft["message"])
+    result.update(
+        draft_id=draft["id"], body=_body(draft["message"]["payload"]),
+        cc=headers.get("cc", ""), bcc=headers.get("bcc", ""),
+        attachments=_attachment_names(draft["message"]["payload"]),
+    )
     return result
 
 
@@ -189,6 +194,8 @@ def save_draft(service, to, subject, body, draft_id="", reply_to=""):
         raise ValueError("Give full email addresses; Chexsa will not guess a person's address.")
 
     mail = EmailMessage()
+    profile = _execute(service.users().getProfile(userId="me"))
+    mail["From"] = profile["emailAddress"]
     mail["To"], mail["Subject"] = to, subject
     for header in ("in-reply-to", "references"):
         if headers.get(header):
@@ -216,11 +223,19 @@ def _has_attachment(payload):
     return bool(payload.get("filename")) or any(_has_attachment(part) for part in payload.get("parts", []))
 
 
+def _attachment_names(payload):
+    """Include attachment names in send reviews without downloading their contents."""
+    names = [payload["filename"]] if payload.get("filename") else []
+    for part in payload.get("parts", []):
+        names.extend(_attachment_names(part))
+    return names
+
+
 def draft_fingerprint(draft):
     """Identify exactly the reviewed message without storing its private body."""
     import json
 
-    data = [draft.get(key, "") for key in ("draft_id", "id", "to", "subject", "body")]
+    data = [draft.get(key, "") for key in ("draft_id", "id", "to", "cc", "bcc", "subject", "body", "attachments")]
     return hashlib.sha256(json.dumps(data, ensure_ascii=False).encode()).hexdigest()
 
 

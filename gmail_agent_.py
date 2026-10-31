@@ -186,7 +186,10 @@ def run_gmail_agent(request, state):
             draft = read_draft(service, arguments["draft_id"])
             state["pending_send"] = {"id": draft["draft_id"], "fingerprint": draft_fingerprint(draft)}
             return (
-                f'Review email — To: {draft["to"]}\nSubject: {draft["subject"]}\n\n{draft["body"]}\n'
+                f'Review email — To: {draft["to"]}\n'
+                f'Cc: {draft.get("cc", "")}\nBcc: {draft.get("bcc", "")}\n'
+                f'Attachments: {", ".join(draft.get("attachments", [])) or "none"}\n'
+                f'Subject: {draft["subject"]}\n\n{draft["body"]}\n'
                 "Type /send or say Hey Chexsa confirm send to send this exact version. You can ask for edits instead."
             )
 

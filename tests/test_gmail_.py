@@ -65,6 +65,8 @@ class GmailWriteTests(unittest.TestCase):
 
     def setUp(self):
         self.service = Mock()
+        self.service.users().getProfile().execute.return_value = {"emailAddress": "owner@example.com"}
+        self.service.reset_mock()
         self.draft = {"draft_id": "draft1", "id": "mail1", "to": "b@example.com", "subject": "Hello", "body": "Hi\n"}
 
     def test_create_verifies_saved_contents(self):
