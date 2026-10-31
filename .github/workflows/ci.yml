@@ -20,7 +20,7 @@ jobs:
       - name: Install Chexsa
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .
+          python -m pip install -e ".[gmail]"
       - name: Check Python files
         run: python -m compileall -q agent_.py browser_.py cli_.py desktop_.py desktop_agent_.py llm_.py observations_.py voice_.py files_.py gmail_auth_.py gmail_.py gmail_agent_.py tests
       - name: Run unit tests
