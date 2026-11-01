@@ -106,11 +106,17 @@ def _load_engines(states):
         import agent_
         import desktop_agent_
         import llm_
+        import files_
+        import desktop_
         from browser_ import close_browser
         from plugins.gmail import gmail_agent_
     except BaseException:
         pythoncom.CoUninitialize()
         raise
+
+    # App-generated files live outside the install folder, like saved settings.
+    original_output = files_.OUTPUT_DIR
+    files_.OUTPUT_DIR = settings_path().parent / "output"
 
     handlers = {
         "browser": agent_.run_agent,
@@ -142,6 +148,8 @@ def _load_engines(states):
         finally:
             for state in states.values():
                 state.clear()
+            desktop_._observations.clear()
+            files_.OUTPUT_DIR = original_output
             pythoncom.CoUninitialize()
 
     return handlers, reset_clients, cleanup
