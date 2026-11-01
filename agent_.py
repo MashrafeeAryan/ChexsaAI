@@ -2,11 +2,13 @@
 
 from browser_ import click_node, open_browser, read_page, type_node
 from llm_ import get_reply
+from app_runtime_ import check_cancelled
 
 
 # Keep one request and its action history together while working in the browser.
 def run_agent(message, browser):
     # The CLI keeps this dictionary so later requests can reuse the same Chrome tab.
+    check_cancelled(browser)
     page = browser.get("page")
     observation = read_page(page) if page is not None and not page.is_closed() else None
     history = []
@@ -16,7 +18,10 @@ def run_agent(message, browser):
 
     # Each turn can make one model call. This fixed limit prevents endless API calls.
     for step in range(10):
+        check_cancelled(browser)
         action = get_reply(message, observation, history, previous)
+        # Stop may have been pressed while the model was replying.
+        check_cancelled(browser)
         if action["action"] == "reply":
             # A reply ends the run: an answer, missing information, or a final report.
             return action["text"]
@@ -51,6 +56,7 @@ def run_agent(message, browser):
         history.append({"action": action.copy(), "result": result})
         last_action, last_observation = action.copy(), observation
         # Observe after every action; the next decision gets current nodes and page state.
+        check_cancelled(browser)
         previous = observation
         observation = read_page(page)
 

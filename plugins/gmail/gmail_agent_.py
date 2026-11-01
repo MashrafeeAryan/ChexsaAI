@@ -3,6 +3,8 @@
 import json
 import os
 
+from app_runtime_ import check_cancelled
+
 from .gmail_auth_ import connect_gmail, disconnect_gmail
 from .gmail_ import (
     draft_fingerprint,
@@ -208,6 +210,7 @@ def run_gmail_agent(request, state):
 
     Example: 'Draft a hello to a@example.com' saves a draft; '/send' submits a reviewed draft.
     """
+    check_cancelled(state)
     command = request.strip().casefold()
     if command == "/disconnect":
         disconnect_gmail()
@@ -230,6 +233,7 @@ def run_gmail_agent(request, state):
             return (
                 "No reviewed email is waiting to be sent. Ask to review a draft first."
             )
+        check_cancelled(state)
         result = send_draft(service, pending["id"], pending["fingerprint"])
         state["history"] = []
         state.pop("selected_draft", None)
@@ -242,7 +246,9 @@ def run_gmail_agent(request, state):
     history = state.setdefault("history", [])
     seen = set()
     for _ in range(12):
+        check_cancelled(state)
         action = get_gmail_action(request, state, history)
+        check_cancelled(state)
         name, arguments = action["tool"], action["arguments"]
         signature = json.dumps(action, sort_keys=True)
         if signature in seen:

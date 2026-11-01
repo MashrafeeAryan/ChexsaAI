@@ -10,6 +10,7 @@
 
 import json  # Convert model arguments between JSON text and Python data.
 import os  # Read the API settings loaded from .env.
+from app_runtime_ import check_cancelled
 from pathlib import Path
 import re  # Find word counts and file requests in the user's message.
 from time import monotonic, sleep  # Set waiting limits and pause between checks.
@@ -340,6 +341,7 @@ def _observe(state):
 
 # Keep the goal, tool results, and fresh window readings together until the task ends.
 def run_desktop_agent(request, state):
+    check_cancelled(state)
     history = []
     observation = None
 
@@ -376,8 +378,10 @@ def run_desktop_agent(request, state):
 
     # STEP 6: Repeat the cycle, allowing at most 10 model decisions.
     for step in range(10):  # Fixed limit; the CLI does not need timeout or step settings.
+        check_cancelled(state)
         state["model_calls"] = step + 1
         action = get_desktop_action(request, observation, history)
+        check_cancelled(state)
         name, arguments = action["tool"], action["arguments"]
 
         # STEP 6: A reply can end the task; verify any claimed success first.
@@ -491,6 +495,7 @@ def run_desktop_agent(request, state):
         # STEP 5: Read the updated app before asking the AI what to do next.
         # File saves need no window; desktop actions need a fresh reading.
         if name != "write_file":
+            check_cancelled(state)
             observation = _observe(state)
 
     # STEP 6: Stop if the decision limit is reached without finishing.
