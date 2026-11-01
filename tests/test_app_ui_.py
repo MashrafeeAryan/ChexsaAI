@@ -122,6 +122,16 @@ class AppWindowTests(unittest.TestCase):
                 welcome.winfo_y() + welcome.winfo_height(),
                 welcome.master.winfo_height(),
             )
+            # Keep space for each label, the arrow, and the dropdown's inner padding.
+            from tkinter.font import Font
+
+            selector = context["mode_selector"]
+            label_font = Font(root=root, font=selector.cget("font"))
+            for label in selector.cget("values"):
+                self.assertLessEqual(
+                    label_font.measure(label),
+                    selector.winfo_width() - 32 * context["scale"],
+                )
             editor = context["entry"]
             self.assertLess(
                 editor.winfo_rooty() + editor.winfo_height(),
@@ -187,6 +197,33 @@ class AppWindowTests(unittest.TestCase):
             self.assertEqual(context["mode"].get(), "gmail")
             self.assertIn("Summarize", context["entry"].get("1.0", "end"))
             self.assertEqual(calls, [])
+        finally:
+            context["close"]()
+            pump_until(root, lambda: context.get("closed", False))
+            context["worker"].join(timeout=3)
+
+    def test_icon_labels_select_the_right_engine(self):
+        """Pretty labels must still send each request to the matching engine."""
+        root = tk.Tk()
+        root.withdraw()
+        engines = ("desktop", "browser", "gmail")
+        handlers = {
+            name: (lambda text, state, selected=name: "Used " + selected)
+            for name in engines
+        }
+        context = build_app(root, handlers=handlers, initial_settings={})
+        try:
+            pump_until(root, lambda: context["ready"])
+            selector = context["mode_selector"]
+            for index, name in enumerate(engines):
+                selector.current(index)
+                selector.event_generate("<<ComboboxSelected>>")
+                self.assertEqual(context["mode"].get(), name)
+                context["submit"]("Example request")
+                pump_until(root, lambda: not context["busy"])
+                self.assertEqual(context["last_reply"], "Used " + name)
+            context["suggest"]("desktop", "Create an example file")
+            self.assertEqual(selector.current(), 0)
         finally:
             context["close"]()
             pump_until(root, lambda: context.get("closed", False))

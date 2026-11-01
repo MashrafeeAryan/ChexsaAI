@@ -20,6 +20,13 @@ INK = "#172731"
 MUTED = "#6d787f"
 TEAL = "#277f83"
 
+# Friendly labels stay in the window; engines still receive simple lowercase names.
+MODE_LABELS = {
+    "desktop": "🖥︎ Desktop",
+    "browser": "🌐︎ Browser",
+    "gmail": "✉︎ Gmail",
+}
+
 
 def enable_display_scaling():
     """Choose Windows scaling before Tk opens, so desktop tools cannot change it later."""
@@ -153,6 +160,48 @@ def rounded_button(parent, text, command, primary=False, outlined=False):
         ):
             widget.bind(event, repaint, add="+")
     return button
+
+
+def add_tooltip(widget, text):
+    """Explain an icon when someone hovers over it or reaches it with Tab."""
+    state = {"timer": None, "window": None}
+
+    def hide(event=None):
+        """Remove the hint and cancel any hint that has not appeared yet."""
+        if state["timer"] is not None:
+            widget.after_cancel(state["timer"])
+            state["timer"] = None
+        if state["window"] is not None:
+            state["window"].destroy()
+            state["window"] = None
+
+    def show():
+        """Show a small label above the button without taking keyboard focus."""
+        state["timer"] = None
+        if str(widget.cget("state")) == "disabled":
+            return
+        hint = tk.Toplevel(widget)
+        hint.overrideredirect(True)
+        tk.Label(
+            hint, text=text, bg=INK, fg="white", font=("Segoe UI", 10), padx=10, pady=6
+        ).pack()
+        hint.update_idletasks()
+        x = min(
+            widget.winfo_rootx(), widget.winfo_screenwidth() - hint.winfo_reqwidth() - 8
+        )
+        y = max(0, widget.winfo_rooty() - hint.winfo_reqheight() - 8)
+        hint.geometry(f"+{max(0, x)}+{y}")
+        state["window"] = hint
+
+    def schedule(event=None):
+        """Wait briefly so hints do not flash while the pointer crosses the window."""
+        hide()
+        state["timer"] = widget.after(450, show)
+
+    for event in ("<Enter>", "<FocusIn>"):
+        widget.bind(event, schedule, add="+")
+    for event in ("<Leave>", "<FocusOut>", "<ButtonPress>", "<Destroy>"):
+        widget.bind(event, hide, add="+")
 
 
 def load_mascots(root, selected="Foxy", scale=1):
@@ -383,12 +432,19 @@ def build_app(root=None, handlers=None, initial_settings=None):
         row=1, column=0, sticky="ew", pady=(4, 0)
     )
     mode = tk.StringVar(root, value="desktop")
+    mode_label = tk.StringVar(root, value=MODE_LABELS[mode.get()])
+
+    def sync_mode_label(*args):
+        """A suggestion can change the engine too; keep its visible icon in sync."""
+        mode_label.set(MODE_LABELS[mode.get()])
+
+    mode.trace_add("write", sync_mode_label)
     modes = ttk.Combobox(
         actions,
-        textvariable=mode,
-        values=("desktop", "browser", "gmail"),
+        textvariable=mode_label,
+        values=tuple(MODE_LABELS.values()),
         state="readonly",
-        width=10,
+        width=14,
         font=("Segoe UI", 12),
         style="Engine.TCombobox",
         takefocus=True,
@@ -465,6 +521,7 @@ def build_app(root=None, handlers=None, initial_settings=None):
         "audio_cancel": Event(),
         "last_reply": "",
         "mode": mode,
+        "mode_selector": modes,
         "status": status,
         "entry": entry,
         "chat": chat,
@@ -845,9 +902,12 @@ def build_app(root=None, handlers=None, initial_settings=None):
     send.master.pack(side="right", padx=(8, 0))
     stop = rounded_button(actions, "Stop", stop_task, primary=True)
     microphone_button = rounded_button(
-        actions, "Mic", lambda: start_audio("record"), outlined=True
+        actions, "\ue720", lambda: start_audio("record"), outlined=True
     )
+    # This Windows icon is one character, so it does not create an oversized emoji button.
+    microphone_button.configure(font=("Segoe MDL2 Assets", 17), padx=2, pady=6)
     microphone_button.master.pack(side="right", padx=4)
+    add_tooltip(microphone_button, "Record a message")
     speak_button = rounded_button(actions, "Read aloud", lambda: start_audio("speak"))
     review_button = rounded_button(
         review_actions, "Send reviewed email", lambda: submit("/send"), primary=True
@@ -867,7 +927,7 @@ def build_app(root=None, handlers=None, initial_settings=None):
     chips = []
     for label, selected_mode, prompt in (
         ("✉  Check email", "gmail", "What work do I need to do from my emails?"),
-        ("◎  Browse the web", "browser", "Search the web for "),
+        ("🌐︎  Browse the web", "browser", "Search the web for "),
         ("▤  Create a file", "desktop", "Create a file with "),
     ):
         chip = rounded_button(
@@ -915,6 +975,10 @@ def build_app(root=None, handlers=None, initial_settings=None):
 
     def choose_mode(event):
         """Keep the chosen engine readable rather than highlighting it like typed text."""
+        # Example: the label "🌐 Browser" selects the engine named "browser".
+        selected = modes.current()
+        if selected >= 0:
+            mode.set(tuple(MODE_LABELS)[selected])
         modes.selection_clear()
         entry.focus_set()
         controls()
