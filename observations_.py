@@ -3,6 +3,7 @@
 import re
 
 
+
 # Find added, removed, and changed nodes; a new document starts a fresh view.
 def get_changes(previous, current):
     same_page = (
