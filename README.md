@@ -4,7 +4,7 @@
 
 **Your browser. Your desktop. Your next task.**
 
-A small command-line AI assistant for Chrome and Windows apps. (Plan to develop in app)
+A Windows AI assistant with a desktop window and terminal modes for browser, desktop, and Gmail tasks.
 
 ![Windows](https://img.shields.io/badge/Windows-0078D4?style=flat-square)
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square)
@@ -66,6 +66,18 @@ Other OpenAI-compatible providers can use their own base URL and model. Desktop
 mode requires a model with native tool calling. `LLM_PROVIDER` is not used.
 
 ## Run Chexsa
+
+### Desktop app window
+
+```powershell
+.\.venv\Scripts\python.exe app_.py
+```
+
+Use the window for chat, engine selection, status, Stop, settings, microphone
+input, spoken replies, and Gmail connection. See the [desktop app guide](DESKTOP_APP_.md)
+for optional dependencies, development, saved files, and future update plans.
+
+### Terminal modes
 
 Choose a mode: browser, desktop, or Gmail.
 

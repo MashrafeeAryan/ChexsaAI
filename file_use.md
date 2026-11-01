@@ -8,6 +8,9 @@ Gmail integration code stays together in `plugins/gmail/`. Other service integra
 
 | File | Simple purpose |
 | --- | --- |
+| `app_.py` | Shows the desktop chat window, controls, status, and settings dialog. |
+| `app_runtime_.py` | Saves encrypted settings and runs tasks and audio away from the window. |
+| `DESKTOP_APP_.md` | Explains the desktop app, development command, storage, and future updates. |
 | `cli_.py` | Shows the terminal chat and sends your request to the selected engine. |
 | `agent_.py` | Holds the browser task together: ask, act, read again, repeat. |
 | `browser_.py` | Opens or connects to Chrome, reads controls, clicks, and types. |
@@ -44,6 +47,11 @@ Gmail integration code stays together in `plugins/gmail/`. Other service integra
 | `tests/test_desktop_.py` | Checks Windows control selection, clicking, typing, and stale-target guards. |
 | `tests/test_desktop_agent_.py` | Checks desktop model tools, task progress, word counts, limits, and CLI modes. |
 | `tests/test_files_.py` | Checks file creation, saved contents, and protection against overwriting existing files. |
+| `tests/test_app_runtime_.py` | Checks encrypted app settings and the Stop flag. |
+| `tests/test_app_worker_.py` | Checks ordered background work, state reuse, and cancellation before a job. |
+| `tests/test_app_cancel_.py` | Checks that a late model reply cannot act after Stop. |
+| `tests/test_app_ui_.py` | Checks real Tk widgets, chat, Stop, dictation review, layout, and closing. |
+| `tests/test_app_audio_.py` | Checks microphone parsing and stopped speech with fake audio. |
 | `tests/test_voice_.py` | Checks wake phrases, spoken replies, agent selection, and cleanup with fake audio. |
 | `tests/browser_changes_integration_.py` | Runs the new browser loop on a large local page in isolated Chrome. |
 | `tests/desktop_actions_integration_.py` | Manually tests real disposable Windows controls and a temporary Word document. |
