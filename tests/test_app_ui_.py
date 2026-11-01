@@ -221,3 +221,33 @@ class AppWindowTests(unittest.TestCase):
             context["close"]()
             pump_until(root, lambda: context.get("closed", False))
             context["worker"].join(timeout=3)
+
+    def test_appearance_error_does_not_freeze_chat(self):
+        """An unreadable preference file cannot stop the UI from handling later tasks."""
+        root = tk.Tk()
+        root.withdraw()
+        context = build_app(
+            root,
+            handlers={"desktop": lambda *args: "Still working"},
+            initial_settings={},
+        )
+        try:
+            pump_until(root, lambda: context["ready"])
+            context["events"].put(
+                {"kind": "result", "operation": "settings", "text": "Settings saved"}
+            )
+            with patch(
+                "app_.load_settings", side_effect=RuntimeError("Unreadable preferences")
+            ):
+                pump_until(
+                    root,
+                    lambda: "appearance could not refresh"
+                    in context["chat"].get("1.0", "end"),
+                )
+            context["submit"]("Example")
+            pump_until(root, lambda: not context["busy"])
+            self.assertIn("Still working", context["chat"].get("1.0", "end"))
+        finally:
+            context["close"]()
+            pump_until(root, lambda: context.get("closed", False))
+            context["worker"].join(timeout=3)

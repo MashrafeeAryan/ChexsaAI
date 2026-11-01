@@ -626,7 +626,14 @@ def build_app(root=None, handlers=None, initial_settings=None):
                         append_message(chat, "Chexsa", event["text"])
                         context["last_reply"] = event["text"]
                     if event.get("operation") == "settings" and kind == "result":
-                        apply_appearance(context, load_settings())
+                        try:
+                            apply_appearance(context, load_settings())
+                        except (RuntimeError, tk.TclError):
+                            append_message(
+                                chat,
+                                "Settings",
+                                "Settings were saved, but appearance could not refresh. Reopen Settings to check them.",
+                            )
                     status.set(
                         {
                             "result": "Ready",
