@@ -41,3 +41,20 @@ class AppSettingsTests(unittest.TestCase):
         event.set()
         with self.assertRaises(InterruptedError):
             app_runtime_.check_cancelled({"_cancel": event})
+
+    def test_interface_preferences_round_trip(self):
+        """Mascots and display names save locally without becoming model environment keys."""
+        values = {"DISPLAY_NAME": "Example User", "MASCOT": "Fluffy"}
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(
+                app_runtime_,
+                "settings_path",
+                return_value=Path(directory) / "settings.dpapi",
+            ):
+                app_runtime_.save_settings(values)
+                saved = app_runtime_.load_settings()
+        self.assertEqual(saved["MASCOT"], "Fluffy")
+        self.assertEqual(saved["DISPLAY_NAME"], "Example User")
+        self.assertNotIn("MASCOT", app_runtime_.SETTING_KEYS)
+        with self.assertRaises(ValueError):
+            app_runtime_.validate_settings({"MASCOT": "Unknown"})

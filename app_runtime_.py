@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 SETTING_KEYS = ("LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL")
+MASCOTS = ("Foxxy", "Fluffy", "Bruhhh")
 
 
 def settings_path():
@@ -21,8 +22,10 @@ def validate_settings(settings):
     """
     from urllib.parse import urlsplit
 
-    if not isinstance(settings, dict) or set(settings) - set(SETTING_KEYS):
-        raise ValueError("Use only API key, API address, and model settings.")
+    if not isinstance(settings, dict) or set(settings) - (
+        set(SETTING_KEYS) | {"DISPLAY_NAME", "MASCOT"}
+    ):
+        raise ValueError("Use model settings, a display name, and an available mascot.")
 
     result = {}
     for key in SETTING_KEYS:
@@ -30,6 +33,21 @@ def validate_settings(settings):
         if not isinstance(value, str) or "\n" in value or "\r" in value:
             raise ValueError("Each setting must be a single line of text.")
         result[key] = value.strip()
+
+    # Interface preferences stay local; they are never added to model requests.
+    if "DISPLAY_NAME" in settings:
+        name = settings["DISPLAY_NAME"]
+        if (
+            not isinstance(name, str)
+            or len(name) > 60
+            or any(char in name for char in "\r\n\t")
+        ):
+            raise ValueError("Use a short display name on one line.")
+        result["DISPLAY_NAME"] = name.strip()
+    if "MASCOT" in settings:
+        if settings["MASCOT"] not in MASCOTS:
+            raise ValueError("Choose Foxxy, Fluffy, or Bruhhh.")
+        result["MASCOT"] = settings["MASCOT"]
 
     address = result["LLM_BASE_URL"]
     if address:
@@ -210,6 +228,14 @@ def run_worker(jobs, events, cancel, shutdown, initial_settings=None, handlers=N
                     save_settings(values)
                     apply(values)
                     text = "Settings saved for this Windows user."
+                elif job["kind"] == "reset":
+                    # Keep live connections, but discard the previous chat's selected targets.
+                    states["desktop"].clear()
+                    gmail = states["gmail"]
+                    for key in tuple(gmail):
+                        if key not in ("service", "client", "_cancel"):
+                            gmail.pop(key)
+                    text = "New chat ready."
                 elif job["kind"] == "connect":
                     from plugins.gmail.gmail_auth_ import connect_gmail
 
@@ -243,6 +269,7 @@ def run_worker(jobs, events, cancel, shutdown, initial_settings=None, handlers=N
                         )
                         + text,
                         "mode": mode,
+                        "operation": job["kind"],
                         "review": bool(state.get("pending_send"))
                         and not cancel.is_set(),
                     }
