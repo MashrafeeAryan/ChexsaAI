@@ -60,6 +60,9 @@ def build_app(root=None, handlers=None, initial_settings=None):
     modes.pack(side="left")
 
     status = tk.StringVar(root, value="Starting agent worker…")
+    # Reserve controls first; the chat takes the remaining space at any DPI.
+    footer = ttk.Frame(outer)
+    footer.pack(side="bottom", fill="x")
     chat = scrolledtext.ScrolledText(
         outer,
         wrap="word",
@@ -73,16 +76,17 @@ def build_app(root=None, handlers=None, initial_settings=None):
     chat.tag_configure("speaker", font=("Segoe UI", 10, "bold"), foreground="#176a72")
     chat.pack(fill="both", expand=True)
 
-    ttk.Label(outer, textvariable=status).pack(anchor="w", pady=(12, 7))
+    ttk.Label(footer, textvariable=status).pack(anchor="w", pady=(12, 7))
     entry = tk.Text(
-        outer, height=3, wrap="word", font=("Segoe UI", 11), padx=10, pady=8
+        footer, height=3, wrap="word", font=("Segoe UI", 11), padx=10, pady=8
     )
     entry.pack(fill="x")
     ttk.Label(
-        outer,
+        footer,
+        wraplength=640,
         text="Enter sends • Shift+Enter starts a new line • Stop waits for the current operation",
     ).pack(anchor="w", pady=(5, 8))
-    actions = ttk.Frame(outer)
+    actions = ttk.Frame(footer)
     actions.pack(fill="x")
 
     jobs, events = Queue(), Queue()
@@ -380,8 +384,10 @@ def build_app(root=None, handlers=None, initial_settings=None):
         actions, text="Read reply", command=lambda: start_audio("speak")
     )
     speak_button.pack(side="left", padx=8)
+    review_actions = ttk.Frame(footer)
+    review_actions.pack(fill="x", pady=(8, 0))
     review_button = ttk.Button(
-        actions, text="Send reviewed email", command=lambda: submit("/send")
+        review_actions, text="Send reviewed email", command=lambda: submit("/send")
     )
     review_button.pack(side="right")
     settings_button = ttk.Button(toolbar, text="Settings", command=settings_dialog)

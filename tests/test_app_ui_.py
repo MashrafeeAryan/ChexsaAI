@@ -125,7 +125,12 @@ class AppWindowTests(unittest.TestCase):
 
             visit(root)
             for button in buttons:
-                self.assertTrue(button.winfo_ismapped())
+                self.assertTrue(button.winfo_ismapped(), button.cget("text"))
+                self.assertLessEqual(
+                    button.winfo_rootx() + button.winfo_width(),
+                    root.winfo_rootx() + root.winfo_width(),
+                    button.cget("text"),
+                )
                 self.assertLessEqual(
                     button.winfo_rooty() + button.winfo_height(),
                     root.winfo_rooty() + root.winfo_height(),
