@@ -110,6 +110,18 @@ class AppWindowTests(unittest.TestCase):
             root.geometry("720x560")
             pump_until(root, lambda: context["ready"])
             root.update()
+            # Check the welcome against its own area, not just the whole window.
+            # This catches cards hidden behind the message box on smaller screens.
+            welcome = context["welcome"]
+            self.assertGreaterEqual(welcome.winfo_x(), 0)
+            self.assertGreaterEqual(welcome.winfo_y(), 0)
+            self.assertLessEqual(
+                welcome.winfo_x() + welcome.winfo_width(), welcome.master.winfo_width()
+            )
+            self.assertLessEqual(
+                welcome.winfo_y() + welcome.winfo_height(),
+                welcome.master.winfo_height(),
+            )
             editor = context["entry"]
             self.assertLess(
                 editor.winfo_rooty() + editor.winfo_height(),
@@ -138,6 +150,16 @@ class AppWindowTests(unittest.TestCase):
                     button.winfo_rooty() + button.winfo_height(),
                     root.winfo_rooty() + root.winfo_height(),
                 )
+            # A reply adds Read aloud to the same row. It must still fit.
+            context["submit"]("Example request")
+            pump_until(root, lambda: not context["busy"])
+            actions = editor.master.winfo_children()[1]
+            for child in actions.winfo_children():
+                if child.winfo_ismapped():
+                    self.assertLessEqual(
+                        child.winfo_x() + child.winfo_width(), actions.winfo_width()
+                    )
+                    self.assertGreaterEqual(child.winfo_x(), 0)
         finally:
             context["close"]()
             pump_until(root, lambda: context.get("closed", False))

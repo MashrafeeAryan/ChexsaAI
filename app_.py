@@ -21,54 +21,141 @@ MUTED = "#6d787f"
 TEAL = "#277f83"
 
 
-def rounded_panel(parent, height=140):
-    """Draw a rounded outline with a normal Tk frame inside for accessible inputs."""
+def enable_display_scaling():
+    """Choose Windows scaling before Tk opens, so desktop tools cannot change it later."""
+    from sys import platform
+
+    if platform == "win32":
+        from ctypes import c_void_p, windll
+
+        # -4 means sharp text with Windows' per-monitor scaling.
+        # An already configured process keeps its existing setting.
+        try:
+            windll.user32.SetProcessDpiAwarenessContext(c_void_p(-4))
+        except AttributeError:
+            pass  # Older Windows versions keep their normal display behavior.
+
+
+def round_outline(canvas, shape, width, height, radius=18):
+    """Resize a rounded border; the real input or button sits inside it."""
+    from math import cos, radians, sin
+
+    width, height = max(2, width - 1), max(2, height - 1)
+    radius = min(radius, (width - 2) / 2, (height - 2) / 2)
+    points = []
+    for center_x, center_y, start in (
+        (width - radius, radius + 1, -90),
+        (width - radius, height - radius, 0),
+        (radius + 1, height - radius, 90),
+        (radius + 1, radius + 1, 180),
+    ):
+        for step in range(9):
+            angle = radians(start + step * 90 / 8)
+            points.extend(
+                (center_x + radius * cos(angle), center_y + radius * sin(angle))
+            )
+    canvas.coords(shape, *points)
+
+
+def rounded_panel(parent, height=160):
+    """Draw the message box while keeping a normal, accessible text editor inside."""
     canvas = tk.Canvas(
         parent, height=height, bg=parent.cget("bg"), highlightthickness=0
     )
     shape = canvas.create_polygon(
-        0, 0, 1, 1, fill="white", outline="#dedfdd", smooth=True
+        0, 0, 1, 1, fill="white", outline="#dcdedb", smooth=True, splinesteps=24
     )
     inner = tk.Frame(canvas, bg="white")
-    item = canvas.create_window(14, 12, anchor="nw", window=inner)
+    item = canvas.create_window(20, 14, anchor="nw", window=inner)
 
     def resize(event):
-        """Keep the border and its contents together as the window changes size."""
-        width, height, radius = event.width - 1, event.height - 1, 20
-        canvas.coords(
-            shape,
-            radius,
-            1,
-            width - radius,
-            1,
-            width,
-            1,
-            width,
-            radius,
-            width,
-            height - radius,
-            width,
-            height,
-            width - radius,
-            height,
-            radius,
-            height,
-            1,
-            height,
-            1,
-            height - radius,
-            1,
-            radius,
-            1,
-            1,
+        """Keep the editor inside its border when the window gets narrower."""
+        round_outline(canvas, shape, event.width, event.height, radius=28)
+        canvas.itemconfigure(
+            item, width=max(1, event.width - 40), height=max(1, event.height - 28)
         )
-        canvas.itemconfigure(item, width=max(1, width - 28), height=max(1, height - 24))
 
     canvas.bind("<Configure>", resize)
     return canvas, inner
 
 
-def load_mascots(root, selected="Foxy"):
+def rounded_button(parent, text, command, primary=False, outlined=False):
+    """Put a real keyboard-accessible button inside a rounded background.
+
+    Example: button.master.pack() shows it; button.invoke() runs its command.
+    Tk still exposes the text and disabled state to Windows accessibility.
+    """
+    scale = parent.winfo_fpixels("1i") / 96
+    background = TEAL if primary else ("white" if outlined else parent.cget("bg"))
+    hover = "#226e72" if primary else "#e8eeeb"
+    edge = "#dfe3df" if outlined else background
+    panel = tk.Canvas(parent, bg=parent.cget("bg"), highlightthickness=0)
+    shape = panel.create_polygon(
+        0, 0, 1, 1, fill=background, outline=edge, smooth=True, splinesteps=24
+    )
+    button = tk.Button(
+        panel,
+        text=text,
+        command=command,
+        bg=background,
+        fg="white" if primary else INK,
+        activebackground=hover,
+        activeforeground="white" if primary else INK,
+        disabledforeground="#a6afac",
+        relief="flat",
+        bd=0,
+        highlightthickness=0,
+        padx=2,
+        pady=8,
+        font=("Segoe UI", 12),
+        cursor="hand2",
+        takefocus=True,
+    )
+    button.pack(fill="both", expand=True, padx=round(12 * scale), pady=round(3 * scale))
+
+    def repaint(event=None):
+        """Show hover, keyboard focus, and disabled state on the rounded border too."""
+        disabled = str(button.cget("state")) == "disabled"
+        pointer_x, pointer_y = panel.winfo_pointerxy()
+        inside = (
+            panel.winfo_rootx() <= pointer_x < panel.winfo_rootx() + panel.winfo_width()
+            and panel.winfo_rooty()
+            <= pointer_y
+            < panel.winfo_rooty() + panel.winfo_height()
+        )
+        fill = "#e8ebe8" if disabled and primary else background
+        if inside and not disabled:
+            fill = hover
+        border = TEAL if button.focus_get() is button else edge
+        button.configure(bg=fill)
+        panel.itemconfigure(shape, fill=fill, outline=border)
+
+    def activate(event):
+        """The rounded edge works like the button center, including disabled checks."""
+        if str(button.cget("state")) != "disabled":
+            button.focus_set()
+            button.invoke()
+
+    panel.bind(
+        "<Configure>",
+        lambda event: round_outline(
+            panel, shape, event.width, event.height, radius=round(26 * scale)
+        ),
+    )
+    panel.bind("<Button-1>", activate)
+    for widget in (panel, button):
+        for event in (
+            "<Enter>",
+            "<Leave>",
+            "<FocusIn>",
+            "<FocusOut>",
+            "<<RefreshStyle>>",
+        ):
+            widget.bind(event, repaint, add="+")
+    return button
+
+
+def load_mascots(root, selected="Foxy", scale=1):
     """Load the packaged PNGs with Tk itself; terminal users need no image library."""
     from importlib.resources import files
     from math import ceil
@@ -80,9 +167,11 @@ def load_mascots(root, selected="Foxy"):
         )
         images[name] = {
             size: original.subsample(
-                max(1, ceil(max(original.width(), original.height()) / pixels))
+                max(
+                    1, ceil(max(original.width(), original.height()) / (pixels * scale))
+                )
             )
-            for size, pixels in (("small", 38), ("large", 128))
+            for size, pixels in (("small", 48), ("large", 164), ("compact", 72))
         }
     return images
 
@@ -92,13 +181,18 @@ def apply_appearance(context, values):
     name = values.get("DISPLAY_NAME", "Mashrafee") or "there"
     mascot = values.get("MASCOT", "Foxy")
     if mascot not in context["images"]:
-        context["images"].update(load_mascots(context["root"], mascot))
+        context["images"].update(
+            load_mascots(context["root"], mascot, context["scale"])
+        )
     images = context["images"][mascot]
     context["profile_name"].set(name)
+    context["avatar"].itemconfigure(context["avatar_letter"], text=name[:1].upper())
     context["greeting"].set("Hi " + name + ".")
     context["mascot_name"].set(mascot)
     context["brand_icon"].configure(image=images["small"])
-    context["hero_icon"].configure(image=images["large"])
+    context["hero_icon"].configure(
+        image=images["compact" if context.get("compact") else "large"]
+    )
     context["root"].iconphoto(True, images["small"])
 
 
@@ -118,10 +212,18 @@ def build_app(root=None, handlers=None, initial_settings=None):
     Input: optional Tk window and fake engines for tests.
     Output: widgets and controls that tests can exercise without real API calls.
     """
-    root = root if root is not None else tk.Tk()
+    if root is None:
+        enable_display_scaling()
+        root = tk.Tk()
+    scale = root.winfo_fpixels("1i") / 96
+
+    def pixels(value):
+        """Scale fixed sizes along with the text. At 125%, 100 becomes 125 pixels."""
+        return round(value * scale)
+
     root.title("ChexsaAI")
-    root.geometry("1080x780")
-    root.minsize(720, 560)
+    root.geometry(f"{pixels(1120)}x{pixels(780)}")
+    root.minsize(pixels(720), pixels(560))
     root.configure(bg=BG)
     warning = ""
     if initial_settings is None:
@@ -132,84 +234,115 @@ def build_app(root=None, handlers=None, initial_settings=None):
             warning = str(error)
 
     style = ttk.Style(root)
-    style.configure("TCombobox", padding=4)
+    # Windows' default dropdown was tiny and bright blue next to the chat.
+    style.theme_use("clam")
+    style.configure("TCombobox", padding=6, font=("Segoe UI", 12))
+    style.configure(
+        "Engine.TCombobox",
+        padding=(10, 7),
+        arrowsize=14,
+        borderwidth=0,
+        relief="flat",
+        background="#f0f3f1",
+        foreground=INK,
+    )
+    style.map(
+        "Engine.TCombobox",
+        fieldbackground=[("readonly", "#f0f3f1")],
+        selectbackground=[("readonly", "#f0f3f1")],
+        selectforeground=[("readonly", INK)],
+        bordercolor=[("focus", TEAL), ("!focus", "#f0f3f1")],
+    )
+    root.option_add("*TCombobox*Listbox.font", ("Segoe UI", 12))
     profile_name = tk.StringVar(root)
     greeting = tk.StringVar(root)
     mascot_name = tk.StringVar(root)
     chat_title = tk.StringVar(root, value="New chat")
-    images = load_mascots(root, initial_settings.get("MASCOT", "Foxy"))
+    images = load_mascots(root, initial_settings.get("MASCOT", "Foxy"), scale)
 
     # Navigation lives beside the chat; the engine stays on its existing worker.
     root.grid_rowconfigure(0, weight=1)
     root.grid_columnconfigure(1, weight=1)
-    sidebar = tk.Frame(root, bg=SIDEBAR, width=228, padx=16, pady=22)
+    sidebar = tk.Frame(root, bg=SIDEBAR, width=pixels(244), padx=18, pady=24)
     sidebar.grid(row=0, column=0, sticky="nsew")
     sidebar.pack_propagate(False)
     brand = tk.Frame(sidebar, bg=SIDEBAR)
     brand.pack(fill="x", pady=(0, 22))
     brand_icon = tk.Label(brand, bg=SIDEBAR)
     brand_icon.pack(side="left")
-    tk.Label(
-        brand, text="ChexsaAI", font=("Segoe UI", 16, "bold"), bg=SIDEBAR, fg=INK
-    ).pack(side="left", padx=(8, 0))
+    brand_label = tk.Label(
+        brand, text="ChexsaAI", font=("Segoe UI", 19, "bold"), bg=SIDEBAR, fg=INK
+    )
+    brand_label.pack(side="left", padx=(8, 0))
     new_chat_slot = tk.Frame(sidebar, bg=SIDEBAR)
     new_chat_slot.pack(fill="x", pady=(0, 24))
     tk.Label(
         sidebar,
-        text="CHATS",
-        font=("Segoe UI", 9, "bold"),
+        text="Chats",
+        font=("Segoe UI", 12, "bold"),
         bg=SIDEBAR,
         fg=MUTED,
         anchor="w",
     ).pack(fill="x", pady=(0, 12))
     tk.Label(
-        sidebar, text="Today", bg=SIDEBAR, fg=MUTED, font=("Segoe UI", 10), anchor="w"
+        sidebar, text="Today", bg=SIDEBAR, fg=MUTED, font=("Segoe UI", 12), anchor="w"
     ).pack(fill="x", pady=(0, 8))
     tk.Label(
         sidebar,
         textvariable=chat_title,
         bg="#e6e5e1",
         fg=INK,
-        font=("Segoe UI", 10),
+        font=("Segoe UI", 12),
         anchor="w",
         padx=10,
         pady=12,
-        wraplength=160,
+        wraplength=170,
     ).pack(fill="x")
 
     sidebar_bottom = tk.Frame(sidebar, bg=SIDEBAR)
     sidebar_bottom.pack(side="bottom", fill="x")
+    profile = tk.Frame(sidebar_bottom, bg=SIDEBAR)
+    profile.pack(side="bottom", fill="x", pady=(14, 0))
+    avatar = tk.Canvas(profile, width=40, height=40, bg=SIDEBAR, highlightthickness=0)
+    avatar.create_oval(1, 1, 39, 39, fill=TEAL, outline=TEAL)
+    avatar_letter = avatar.create_text(
+        20, 20, text="M", fill="white", font=("Segoe UI", 13, "bold")
+    )
+    avatar.pack(side="left", padx=(0, 10))
+    profile_text = tk.Frame(profile, bg=SIDEBAR)
+    profile_text.pack(side="left", fill="x", expand=True)
     tk.Label(
-        sidebar_bottom,
+        profile_text,
         textvariable=profile_name,
         bg=SIDEBAR,
         fg=INK,
-        font=("Segoe UI", 11, "bold"),
+        font=("Segoe UI", 12, "bold"),
         anchor="w",
-        pady=10,
-    ).pack(side="bottom", fill="x")
+        wraplength=125,
+    ).pack(fill="x")
     tk.Label(
-        sidebar_bottom,
+        profile_text,
         textvariable=mascot_name,
         bg=SIDEBAR,
         fg=MUTED,
-        font=("Segoe UI", 9),
+        font=("Segoe UI", 10),
         anchor="w",
-    ).pack(side="bottom", fill="x")
+    ).pack(fill="x", pady=(2, 0))
+    tk.Frame(sidebar_bottom, bg="#dddfda", height=1).pack(side="bottom", fill="x")
     toolbar = tk.Frame(sidebar_bottom, bg=SIDEBAR)
     toolbar.pack(side="bottom", fill="x", pady=12)
 
     main = tk.Frame(root, bg=BG)
     main.grid(row=0, column=1, sticky="nsew")
-    header = tk.Frame(main, bg=BG, padx=28, pady=16)
+    header = tk.Frame(main, bg=BG, padx=30, pady=20)
     header.pack(fill="x")
     tk.Label(
-        header, textvariable=chat_title, bg=BG, fg=INK, font=("Segoe UI", 12, "bold")
+        header, textvariable=chat_title, bg=BG, fg=INK, font=("Segoe UI", 14, "bold")
     ).pack(side="left")
     tk.Frame(main, bg="#e6e5e1", height=1).pack(fill="x")
 
     # Reserve the composer before the chat so input stays visible at small sizes.
-    composer_area = tk.Frame(main, bg=BG, padx=22, pady=14)
+    composer_area = tk.Frame(main, bg=BG, padx=26, pady=16)
     composer_area.pack(side="bottom", fill="x")
     status = tk.StringVar(root, value="Starting agent worker…")
     tk.Label(
@@ -217,17 +350,17 @@ def build_app(root=None, handlers=None, initial_settings=None):
         textvariable=status,
         bg=BG,
         fg=MUTED,
-        font=("Segoe UI", 9),
+        font=("Segoe UI", 10),
         anchor="w",
         wraplength=430,
     ).pack(side="bottom", fill="x", pady=(8, 0))
-    composer, footer = rounded_panel(composer_area, height=154)
+    composer, footer = rounded_panel(composer_area, height=pixels(164))
     composer.pack(fill="x")
     entry = tk.Text(
         footer,
         height=2,
         wrap="word",
-        font=("Segoe UI", 12),
+        font=("Segoe UI", 14),
         bg="white",
         fg=INK,
         insertbackground=TEAL,
@@ -236,14 +369,19 @@ def build_app(root=None, handlers=None, initial_settings=None):
         padx=6,
         pady=6,
     )
-    entry.pack(fill="both", expand=True)
+    footer.grid_columnconfigure(0, weight=1)
+    footer.grid_rowconfigure(0, weight=1)
+    entry.grid(row=0, column=0, sticky="nsew")
     placeholder = tk.Label(
-        entry, text="Ask Chexsa anything…", bg="white", fg=MUTED, font=("Segoe UI", 12)
+        entry, text="Ask Chexsa anything…", bg="white", fg=MUTED, font=("Segoe UI", 14)
     )
     placeholder.place(x=6, y=6)
     placeholder.bind("<Button-1>", lambda event: entry.focus_set())
     actions = tk.Frame(footer, bg="white")
-    actions.pack(fill="x", pady=(8, 0))
+    actions.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+    tk.Frame(footer, bg="#edf0ec", height=1).grid(
+        row=1, column=0, sticky="ew", pady=(4, 0)
+    )
     mode = tk.StringVar(root, value="desktop")
     modes = ttk.Combobox(
         actions,
@@ -251,6 +389,9 @@ def build_app(root=None, handlers=None, initial_settings=None):
         values=("desktop", "browser", "gmail"),
         state="readonly",
         width=10,
+        font=("Segoe UI", 12),
+        style="Engine.TCombobox",
+        takefocus=True,
     )
     modes.pack(side="left")
     review_actions = tk.Frame(composer_area, bg=BG)
@@ -261,7 +402,7 @@ def build_app(root=None, handlers=None, initial_settings=None):
         chat_host,
         wrap="word",
         height=4,
-        font=("Segoe UI", 11),
+        font=("Segoe UI", 13),
         bg=BG,
         fg=INK,
         padx=18,
@@ -293,15 +434,17 @@ def build_app(root=None, handlers=None, initial_settings=None):
     )
 
     welcome = tk.Frame(chat_host, bg=BG)
-    welcome.place(relx=0.5, rely=0.46, anchor="center")
+    welcome.place(relx=0.5, rely=0.5, anchor="center")
     hero_icon = tk.Label(welcome, bg=BG)
     hero_icon.pack(pady=(0, 12))
-    tk.Label(
-        welcome, textvariable=greeting, bg=BG, fg=INK, font=("Segoe UI", 24, "bold")
-    ).pack()
-    tk.Label(
-        welcome, text="What can I help with?", bg=BG, fg=MUTED, font=("Segoe UI", 15)
-    ).pack(pady=(5, 22))
+    greeting_label = tk.Label(
+        welcome, textvariable=greeting, bg=BG, fg=INK, font=("Segoe UI", 30, "bold")
+    )
+    greeting_label.pack()
+    subtitle = tk.Label(
+        welcome, text="What can I help with?", bg=BG, fg=MUTED, font=("Segoe UI", 17)
+    )
+    subtitle.pack(pady=(5, 22))
     suggestions = tk.Frame(welcome, bg=BG)
     suggestions.pack()
 
@@ -329,9 +472,15 @@ def build_app(root=None, handlers=None, initial_settings=None):
         "profile_name": profile_name,
         "greeting": greeting,
         "mascot_name": mascot_name,
+        "avatar": avatar,
+        "avatar_letter": avatar_letter,
         "brand_icon": brand_icon,
         "hero_icon": hero_icon,
+        "welcome": welcome,
+        "suggestions": suggestions,
         "operation": None,
+        "compact": False,
+        "scale": scale,
     }
 
     def show_placeholder(event=None):
@@ -370,15 +519,15 @@ def build_app(root=None, handlers=None, initial_settings=None):
         )
         modes.configure(state="readonly" if available else "disabled")
         if context["busy"] or context["audio_busy"]:
-            send.pack_forget()
-            stop.pack(side="right", padx=(8, 0))
+            send.master.pack_forget()
+            stop.master.pack(side="right", padx=(8, 0))
         else:
-            stop.pack_forget()
-            send.pack(side="right", padx=(8, 0))
+            stop.master.pack_forget()
+            send.master.pack(side="right", padx=(8, 0))
         if context["last_reply"]:
-            speak_button.pack(side="right", padx=4)
+            speak_button.master.pack(side="right", padx=4)
         else:
-            speak_button.pack_forget()
+            speak_button.master.pack_forget()
         if context["review"] and mode.get() == "gmail":
             review_actions.pack(fill="x", before=composer, pady=(0, 8))
         else:
@@ -390,6 +539,17 @@ def build_app(root=None, handlers=None, initial_settings=None):
                 else "disabled"
             )
         )
+        for button in (
+            send,
+            stop,
+            settings_button,
+            connect_button,
+            microphone_button,
+            new_chat_button,
+            speak_button,
+            review_button,
+        ):
+            button.event_generate("<<RefreshStyle>>")
 
     def start_job(kind, **details):
         """Queue one operation. A busy app rejects additional requests instead of racing."""
@@ -451,7 +611,7 @@ def build_app(root=None, handlers=None, initial_settings=None):
             chat.delete("1.0", "end")
             chat.configure(state="disabled")
             chat.pack_forget()
-            welcome.place(relx=0.5, rely=0.46, anchor="center")
+            welcome.place(relx=0.5, rely=0.5, anchor="center")
             chat_title.set("New chat")
             context["last_reply"] = ""
             entry.delete("1.0", "end")
@@ -679,75 +839,87 @@ def build_app(root=None, handlers=None, initial_settings=None):
             return
         root.after(100, poll)
 
-    def button(parent, text, command, primary=False):
-        """Use one flat button style with normal keyboard and accessibility behavior."""
-        return tk.Button(
-            parent,
-            text=text,
-            command=command,
-            bg=TEAL if primary else parent.cget("bg"),
-            fg="white" if primary else INK,
-            activebackground="#226c70" if primary else "#e5e7e4",
-            activeforeground="white" if primary else INK,
-            relief="flat",
-            bd=0,
-            highlightthickness=0,
-            padx=12,
-            pady=8,
-            font=("Segoe UI", 10),
-            cursor="hand2",
-        )
-
-    send = button(actions, "↑", submit, primary=True)
-    send.configure(font=("Segoe UI", 16, "bold"), padx=13, pady=0)
-    send.pack(side="right", padx=(8, 0))
-    stop = button(actions, "Stop", stop_task, primary=True)
-    microphone_button = button(actions, "Mic", lambda: start_audio("record"))
-    microphone_button.pack(side="right", padx=4)
-    speak_button = button(actions, "Read aloud", lambda: start_audio("speak"))
-    review_button = button(
+    send = rounded_button(actions, "↑", submit, primary=True)
+    send.configure(font=("Segoe UI", 19, "bold"), padx=4, pady=0)
+    send.pack_configure(padx=pixels(10), pady=pixels(8))
+    send.master.pack(side="right", padx=(8, 0))
+    stop = rounded_button(actions, "Stop", stop_task, primary=True)
+    microphone_button = rounded_button(
+        actions, "Mic", lambda: start_audio("record"), outlined=True
+    )
+    microphone_button.master.pack(side="right", padx=4)
+    speak_button = rounded_button(actions, "Read aloud", lambda: start_audio("speak"))
+    review_button = rounded_button(
         review_actions, "Send reviewed email", lambda: submit("/send"), primary=True
     )
-    review_button.pack(side="right")
-    settings_button = button(toolbar, "Settings", settings_dialog)
-    settings_button.pack(fill="x", pady=3)
-    connect_button = button(toolbar, "Connect Gmail", connect)
-    connect_button.pack(fill="x", pady=3)
-    new_chat_button = button(new_chat_slot, "+  New chat", new_chat, primary=True)
-    new_chat_button.pack(fill="x")
+    review_button.master.pack(side="right")
+    settings_button = rounded_button(toolbar, "⚙  Settings", settings_dialog)
+    settings_button.configure(anchor="w")
+    settings_button.master.pack(fill="x", pady=3)
+    connect_button = rounded_button(toolbar, "Connect Gmail", connect)
+    connect_button.configure(anchor="w")
+    connect_button.master.pack(fill="x", pady=3)
+    new_chat_button = rounded_button(
+        new_chat_slot, "+  New chat", new_chat, primary=True
+    )
+    new_chat_button.configure(font=("Segoe UI", 12, "bold"))
+    new_chat_button.master.pack(fill="x")
+    chips = []
     for label, selected_mode, prompt in (
-        ("Check email", "gmail", "What work do I need to do from my emails?"),
-        ("Browse the web", "browser", "Search the web for "),
-        ("Create a file", "desktop", "Create a file with "),
+        ("✉  Check email", "gmail", "What work do I need to do from my emails?"),
+        ("◎  Browse the web", "browser", "Search the web for "),
+        ("▤  Create a file", "desktop", "Create a file with "),
     ):
-        chip = button(
+        chip = rounded_button(
             suggestions,
             label,
             lambda selected_mode=selected_mode, prompt=prompt: suggest(
                 selected_mode, prompt
             ),
+            outlined=True,
         )
-        chip.configure(
-            font=("Segoe UI", 9),
-            padx=8,
-            highlightthickness=1,
-            highlightbackground="#e0e1de",
-        )
-        chip.pack(side="left", padx=4)
+        chip.master.grid(row=0, column=len(chips), padx=4, pady=4)
+        chips.append(chip)
 
     def resize_sidebar(event):
-        """Keep space for chat and input on narrower windows."""
-        if event.widget is root:
-            width = 190 if event.width < 950 else 228
-            if sidebar.cget("width") != width:
-                sidebar.configure(width=width)
+        """Keep the welcome readable and inside the available space on small windows."""
+        if event.widget is not root:
+            return
+        compact = event.width < pixels(950) or event.height < pixels(680)
+        sidebar_width = pixels(188 if event.width < pixels(950) else 244)
+        if sidebar.cget("width") != sidebar_width:
+            sidebar.configure(width=sidebar_width)
+        if context.get("layout_size") == (compact, event.width < pixels(950)):
+            return
+        context["layout_size"] = (compact, event.width < pixels(950))
+        context["compact"] = compact
+        art = images[mascot_name.get()]
+        hero_icon.configure(image=art["compact" if compact else "large"])
+        greeting_label.configure(font=("Segoe UI", 24 if compact else 30, "bold"))
+        brand_label.configure(
+            font=("Segoe UI", 15 if event.width < pixels(950) else 19, "bold")
+        )
+        subtitle.pack_configure(pady=(4, 12) if compact else (5, 22))
+        hero_icon.pack_configure(pady=(0, 6) if compact else (0, 12))
+        # Keep the three cards in one row, with slightly less padding on small screens.
+        for chip in chips:
+            chip.configure(
+                font=("Segoe UI", 11 if compact else 12), pady=4 if compact else 8
+            )
 
     root.bind("<Configure>", resize_sidebar, add="+")
     apply_appearance(context, initial_settings)
     entry.bind("<Return>", on_enter)
     entry.bind("<KeyPress>", lambda event: placeholder.place_forget())
     entry.bind("<KeyRelease>", show_placeholder)
-    modes.bind("<<ComboboxSelected>>", lambda event: controls())
+
+    def choose_mode(event):
+        """Keep the chosen engine readable rather than highlighting it like typed text."""
+        modes.selection_clear()
+        entry.focus_set()
+        controls()
+
+    modes.bind("<<ComboboxSelected>>", choose_mode)
     root.protocol("WM_DELETE_WINDOW", close)
     controls()
     if warning:
