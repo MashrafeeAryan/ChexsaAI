@@ -30,7 +30,7 @@ def choose_credentials():
         root.destroy()
 
 
-def connect_gmail(client_file=None):
+def connect_gmail(client_file=None, allow_picker=True):
     """Open Google sign-in when needed and return an authorized Gmail connection.
 
     Input: a Desktop app credentials path, or None to reuse saved access.
@@ -72,7 +72,13 @@ def connect_gmail(client_file=None):
             ) from None
 
     if credentials is None or not credentials.valid:
-        selected = client_file or os.getenv("GMAIL_CLIENT_FILE") or choose_credentials()
+        selected = client_file or os.getenv("GMAIL_CLIENT_FILE")
+        if not selected and allow_picker:
+            selected = choose_credentials()
+        if not selected and not allow_picker:
+            raise RuntimeError(
+                "Use Connect Gmail to choose your Google Desktop app JSON file first."
+            )
         if not selected:
             raise RuntimeError(
                 "Gmail sign-in cancelled. See the Gmail setup in README.md."
