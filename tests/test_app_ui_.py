@@ -119,12 +119,15 @@ class AppWindowTests(unittest.TestCase):
 
             def visit(widget):
                 for child in widget.winfo_children():
-                    if child.winfo_class() == "TButton":
+                    if child.winfo_class() in ("TButton", "Button"):
                         buttons.append(child)
                     visit(child)
 
             visit(root)
             for button in buttons:
+                # Context-only controls are deliberately hidden until useful.
+                if button.cget("text") in ("Stop", "Read aloud", "Send reviewed email"):
+                    continue
                 self.assertTrue(button.winfo_ismapped(), button.cget("text"))
                 self.assertLessEqual(
                     button.winfo_rootx() + button.winfo_width(),
@@ -135,6 +138,55 @@ class AppWindowTests(unittest.TestCase):
                     button.winfo_rooty() + button.winfo_height(),
                     root.winfo_rooty() + root.winfo_height(),
                 )
+        finally:
+            context["close"]()
+            pump_until(root, lambda: context.get("closed", False))
+            context["worker"].join(timeout=3)
+
+    def test_mascots_and_suggestions_are_local(self):
+        """All mascot assets render and suggestion chips only prepare an editable request."""
+        from app_ import apply_appearance
+
+        root = tk.Tk()
+        root.withdraw()
+        calls = []
+        context = build_app(
+            root,
+            handlers={"desktop": lambda *args: calls.append(args)},
+            initial_settings={},
+        )
+        try:
+            pump_until(root, lambda: context["ready"])
+            for name in ("Foxxy", "Fluffy", "Bruhhh"):
+                apply_appearance(context, {"MASCOT": name, "DISPLAY_NAME": "Example"})
+                self.assertEqual(context["mascot_name"].get(), name)
+                self.assertEqual(context["greeting"].get(), "Hi Example.")
+            context["suggest"]("gmail", "Summarize my work emails")
+            self.assertEqual(context["mode"].get(), "gmail")
+            self.assertIn("Summarize", context["entry"].get("1.0", "end"))
+            self.assertEqual(calls, [])
+        finally:
+            context["close"]()
+            pump_until(root, lambda: context.get("closed", False))
+            context["worker"].join(timeout=3)
+
+    def test_new_chat_clears_display(self):
+        """New chat resets the visible conversation without executing another task."""
+        root = tk.Tk()
+        root.withdraw()
+        context = build_app(
+            root,
+            handlers={"desktop": lambda *args: "Example result"},
+            initial_settings={},
+        )
+        try:
+            pump_until(root, lambda: context["ready"])
+            context["submit"]("Example question")
+            pump_until(root, lambda: not context["busy"])
+            context["new_chat"]()
+            pump_until(root, lambda: not context["busy"])
+            self.assertEqual(context["chat"].get("1.0", "end").strip(), "")
+            self.assertEqual(context["last_reply"], "")
         finally:
             context["close"]()
             pump_until(root, lambda: context.get("closed", False))
