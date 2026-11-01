@@ -8,7 +8,8 @@ Gmail integration code stays together in `plugins/gmail/`. Other service integra
 
 | File | Simple purpose |
 | --- | --- |
-| `app_.py` | Shows the desktop chat window, controls, status, and settings dialog. |
+| `app_.py` | Shows the desktop chat, sidebar, mascots, controls, and settings dialog. |
+| `chexsa_assets/` | Keeps Foxxy, Fluffy, and Bruhhh artwork packaged with the app. |
 | `app_runtime_.py` | Saves encrypted settings and runs tasks and audio away from the window. |
 | `DESKTOP_APP_.md` | Explains the desktop app, development command, storage, and future updates. |
 | `cli_.py` | Shows the terminal chat and sends your request to the selected engine. |

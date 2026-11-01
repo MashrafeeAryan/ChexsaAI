@@ -32,6 +32,21 @@ Example input: **Open a website and search for a topic** in browser mode.
 Output: progress and a result from the existing browser agent; the window itself
 does not decide which page control to click.
 
+## Appearance and fresh chats
+
+The app has a sidebar, a mascot greeting, and a rounded message composer. In
+**Settings**, choose **Foxxy**, **Fluffy**, or **Bruhhh** and set your display name.
+These preferences stay local and are not sent to the model.
+
+Suggestion buttons fill an editable request and choose its mode; they do not run
+the task. **New chat** clears the current display and selected desktop/Gmail targets
+while keeping connections. The sidebar shows the current conversation only;
+there is no saved chat archive yet. Stop and email-send review appear when needed.
+
+The terminal launch commands are independent of this interface and keep their
+existing behavior. The UI uses Tk's PNG support, so terminal users do not need a
+new image library.
+
 ## Settings and files survive app updates
 
 Open **Settings** to enter an API key, API address, and model name. The key is
