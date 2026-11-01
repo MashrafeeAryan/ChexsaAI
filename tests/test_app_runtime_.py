@@ -58,3 +58,8 @@ class AppSettingsTests(unittest.TestCase):
         self.assertNotIn("MASCOT", app_runtime_.SETTING_KEYS)
         with self.assertRaises(ValueError):
             app_runtime_.validate_settings({"MASCOT": "Unknown"})
+
+    def test_old_fox_name_migrates(self):
+        """An existing Foxxy preference opens as Foxy instead of breaking settings."""
+        values = app_runtime_.validate_settings({"MASCOT": "Foxxy"})
+        self.assertEqual(values["MASCOT"], "Foxy")

@@ -68,7 +68,7 @@ def rounded_panel(parent, height=140):
     return canvas, inner
 
 
-def load_mascots(root, selected="Foxxy"):
+def load_mascots(root, selected="Foxy"):
     """Load the packaged PNGs with Tk itself; terminal users need no image library."""
     from importlib.resources import files
     from math import ceil
@@ -90,7 +90,7 @@ def load_mascots(root, selected="Foxxy"):
 def apply_appearance(context, values):
     """Update the chosen name and mascot locally, without changing model instructions."""
     name = values.get("DISPLAY_NAME", "Mashrafee") or "there"
-    mascot = values.get("MASCOT", "Foxxy")
+    mascot = values.get("MASCOT", "Foxy")
     if mascot not in context["images"]:
         context["images"].update(load_mascots(context["root"], mascot))
     images = context["images"][mascot]
@@ -137,7 +137,7 @@ def build_app(root=None, handlers=None, initial_settings=None):
     greeting = tk.StringVar(root)
     mascot_name = tk.StringVar(root)
     chat_title = tk.StringVar(root, value="New chat")
-    images = load_mascots(root, initial_settings.get("MASCOT", "Foxxy"))
+    images = load_mascots(root, initial_settings.get("MASCOT", "Foxy"))
 
     # Navigation lives beside the chat; the engine stays on its existing worker.
     root.grid_rowconfigure(0, weight=1)
@@ -565,7 +565,7 @@ def build_app(root=None, handlers=None, initial_settings=None):
             row=5, column=0, sticky="w", padx=(0, 12), pady=7
         )
         mascot_field = ttk.Combobox(frame, values=MASCOTS, state="readonly", width=46)
-        mascot_field.set(values.get("MASCOT", "Foxxy"))
+        mascot_field.set(values.get("MASCOT", "Foxy"))
         mascot_field.grid(row=5, column=1, sticky="ew", pady=7)
 
         def save():

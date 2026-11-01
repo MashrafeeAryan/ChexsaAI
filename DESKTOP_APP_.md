@@ -35,7 +35,7 @@ does not decide which page control to click.
 ## Appearance and fresh chats
 
 The app has a sidebar, a mascot greeting, and a rounded message composer. In
-**Settings**, choose **Foxxy**, **Fluffy**, or **Bruhhh** and set your display name.
+**Settings**, choose **Foxy** the fox, **Fluffy** the golden retriever, or **Bruhhh** the robot and set your display name.
 These preferences stay local and are not sent to the model.
 
 Suggestion buttons fill an editable request and choose its mode; they do not run

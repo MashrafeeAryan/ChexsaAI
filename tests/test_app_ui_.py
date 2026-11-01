@@ -157,7 +157,7 @@ class AppWindowTests(unittest.TestCase):
         )
         try:
             pump_until(root, lambda: context["ready"])
-            for name in ("Foxxy", "Fluffy", "Bruhhh"):
+            for name in ("Foxy", "Fluffy", "Bruhhh"):
                 apply_appearance(context, {"MASCOT": name, "DISPLAY_NAME": "Example"})
                 self.assertEqual(context["mascot_name"].get(), name)
                 self.assertEqual(context["greeting"].get(), "Hi Example.")

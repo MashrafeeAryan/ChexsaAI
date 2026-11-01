@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 SETTING_KEYS = ("LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL")
-MASCOTS = ("Foxxy", "Fluffy", "Bruhhh")
+MASCOTS = ("Foxy", "Fluffy", "Bruhhh")
 
 
 def settings_path():
@@ -45,9 +45,11 @@ def validate_settings(settings):
             raise ValueError("Use a short display name on one line.")
         result["DISPLAY_NAME"] = name.strip()
     if "MASCOT" in settings:
-        if settings["MASCOT"] not in MASCOTS:
-            raise ValueError("Choose Foxxy, Fluffy, or Bruhhh.")
-        result["MASCOT"] = settings["MASCOT"]
+        # Older saved profiles used Foxxy. Keep those profiles working after the rename.
+        mascot = "Foxy" if settings["MASCOT"] == "Foxxy" else settings["MASCOT"]
+        if mascot not in MASCOTS:
+            raise ValueError("Choose Foxy, Fluffy, or Bruhhh.")
+        result["MASCOT"] = mascot
 
     address = result["LLM_BASE_URL"]
     if address:
