@@ -984,6 +984,12 @@ def build_app(root=None, handlers=None, initial_settings=None):
         controls()
 
     modes.bind("<<ComboboxSelected>>", choose_mode)
+    # A readonly chooser should not highlight its label like an editable text field.
+    for event in ("<FocusIn>", "<ButtonRelease-1>"):
+        modes.bind(
+            event, lambda event: modes.after_idle(modes.selection_clear), add="+"
+        )
+    modes.bind("<FocusOut>", lambda event: modes.selection_clear(), add="+")
     root.protocol("WM_DELETE_WINDOW", close)
     controls()
     if warning:
