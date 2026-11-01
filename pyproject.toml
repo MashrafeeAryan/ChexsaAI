@@ -31,6 +31,7 @@ chexsa = "cli_:main"
 [tool.setuptools]
 py-modules = [
     "agent_",
+    "app_runtime_",
     "browser_",
     "cli_",
     "desktop_",
