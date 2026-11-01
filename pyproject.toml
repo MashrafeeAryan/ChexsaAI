@@ -28,9 +28,13 @@ gmail = ["google-api-python-client>=2,<3", "google-auth-oauthlib>=1,<2", "google
 # Both terminal modes start from the new CLI.
 chexsa = "cli_:main"
 
+[project.gui-scripts]
+chexsa-app = "app_:main"
+
 [tool.setuptools]
 py-modules = [
     "agent_",
+    "app_",
     "app_runtime_",
     "browser_",
     "cli_",
