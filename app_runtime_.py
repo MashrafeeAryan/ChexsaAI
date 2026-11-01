@@ -269,3 +269,46 @@ def run_worker(jobs, events, cancel, shutdown, initial_settings=None, handlers=N
                 }
             )
         events.put({"kind": "closed"})
+
+
+def record_message(stop):
+    """Record one command for the input box; recording alone never executes it.
+
+    Example speech: 'Hey Chexsa, open a website'. Output: 'open a website'.
+    The existing recognizer sends this recording to Google for transcription.
+    """
+    try:
+        import speech_recognition as sr
+        from voice_ import get_request, listen
+    except ImportError:
+        raise RuntimeError(
+            'Install microphone support: python -m pip install -e ".[voice]"'
+        ) from None
+
+    recognizer = sr.Recognizer()
+    recognizer.operation_timeout = 10
+    microphone = sr.Microphone()
+    with microphone as source:
+        recognizer.adjust_for_ambient_noise(source, duration=0.5)
+    if stop.is_set():
+        raise InterruptedError("Recording cancelled.")
+
+    text = listen(recognizer, microphone)
+    if stop.is_set():
+        raise InterruptedError("Recording cancelled.")
+    request = get_request(text)
+    return text if request is None else request
+
+
+def play_reply(text, stop):
+    """Read the selected reply with Windows speech on this audio thread."""
+    import pythoncom
+
+    pythoncom.CoInitialize()
+    try:
+        from voice_ import speak
+
+        if not stop.is_set():
+            speak(text, cancel=stop)
+    finally:
+        pythoncom.CoUninitialize()

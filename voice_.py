@@ -24,10 +24,20 @@ ACKNOWLEDGMENTS = (
 
 
 # Windows reads the text aloud; this waits until speaking has finished.
-def speak(text):
+def speak(text, cancel=None):
     from win32com.client import Dispatch
 
-    Dispatch("SAPI.SpVoice").Speak(text)
+    speaker = Dispatch("SAPI.SpVoice")
+    if cancel is None:
+        speaker.Speak(text)
+        return
+
+    # Async speech lets the app stop playback without freezing its window.
+    speaker.Speak(text, 1)
+    while speaker.Status.RunningState == 2:
+        if cancel.wait(0.05):
+            speaker.Speak("", 3)  # Purge queued speech and stop the current reply.
+            break
 
 
 # Pick a short response without asking an AI model to generate one.

@@ -4,6 +4,8 @@ from threading import Event
 from time import monotonic, sleep
 import tkinter as tk
 import unittest
+import gc
+from unittest.mock import patch
 
 from app_ import build_app
 from app_runtime_ import check_cancelled
@@ -22,6 +24,10 @@ def pump_until(root, condition):
 class AppWindowTests(unittest.TestCase):
     """Use real widgets without opening personal apps or calling a provider."""
 
+    def tearDown(self):
+        """Release old Tk reference cycles on the UI thread before another worker starts."""
+        gc.collect()
+
     def test_chat_and_clean_shutdown(self):
         """Sending text displays its fake result and leaves the window responsive."""
         root = tk.Tk()
@@ -38,9 +44,9 @@ class AppWindowTests(unittest.TestCase):
             pump_until(root, lambda: not context["busy"])
             self.assertIn("Verified: Example task", context["chat"].get("1.0", "end"))
         finally:
-            context["shutdown"].set()
+            context["close"]()
+            pump_until(root, lambda: context.get("closed", False))
             context["worker"].join(timeout=3)
-            root.destroy()
         self.assertFalse(context["worker"].is_alive())
 
     def test_stop_and_next_request(self):
@@ -68,6 +74,28 @@ class AppWindowTests(unittest.TestCase):
             pump_until(root, lambda: not context["busy"])
             self.assertIn("Done", context["chat"].get("1.0", "end"))
         finally:
-            context["shutdown"].set()
+            context["close"]()
+            pump_until(root, lambda: context.get("closed", False))
             context["worker"].join(timeout=3)
-            root.destroy()
+
+    def test_microphone_fills_input_without_execution(self):
+        """Recorded text goes into the editor for review; it does not auto-run a task."""
+        calls = []
+        root = tk.Tk()
+        root.withdraw()
+        context = build_app(
+            root,
+            handlers={"desktop": lambda *args: calls.append(args)},
+            initial_settings={},
+        )
+        try:
+            pump_until(root, lambda: context["ready"])
+            with patch("app_.record_message", return_value="open a website"):
+                context["start_audio"]("record")
+                pump_until(root, lambda: not context["audio_busy"])
+            self.assertIn("open a website", context["entry"].get("1.0", "end"))
+            self.assertEqual(calls, [])
+        finally:
+            context["close"]()
+            pump_until(root, lambda: context.get("closed", False))
+            context["worker"].join(timeout=3)
