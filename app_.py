@@ -63,6 +63,7 @@ def build_app(root=None, handlers=None, initial_settings=None):
     chat = scrolledtext.ScrolledText(
         outer,
         wrap="word",
+        height=8,  # Leave room for input and buttons at the minimum window size.
         font=("Segoe UI", 11),
         padx=14,
         pady=12,

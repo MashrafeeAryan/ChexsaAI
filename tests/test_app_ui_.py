@@ -99,3 +99,38 @@ class AppWindowTests(unittest.TestCase):
             context["close"]()
             pump_until(root, lambda: context.get("closed", False))
             context["worker"].join(timeout=3)
+
+    def test_controls_fit_small_window(self):
+        """The message editor and task buttons remain visible at the minimum size."""
+        root = tk.Tk()
+        context = build_app(
+            root, handlers={"desktop": lambda *args: "Done"}, initial_settings={}
+        )
+        try:
+            root.geometry("720x560")
+            pump_until(root, lambda: context["ready"])
+            root.update()
+            editor = context["entry"]
+            self.assertLess(
+                editor.winfo_rooty() + editor.winfo_height(),
+                root.winfo_rooty() + root.winfo_height(),
+            )
+            buttons = []
+
+            def visit(widget):
+                for child in widget.winfo_children():
+                    if child.winfo_class() == "TButton":
+                        buttons.append(child)
+                    visit(child)
+
+            visit(root)
+            for button in buttons:
+                self.assertTrue(button.winfo_ismapped())
+                self.assertLessEqual(
+                    button.winfo_rooty() + button.winfo_height(),
+                    root.winfo_rooty() + root.winfo_height(),
+                )
+        finally:
+            context["close"]()
+            pump_until(root, lambda: context.get("closed", False))
+            context["worker"].join(timeout=3)
