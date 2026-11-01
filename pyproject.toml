@@ -48,7 +48,9 @@ py-modules = [
 
 # Include service folders when installing Chexsa.
 [tool.setuptools.packages.find]
-include = ["plugins", "plugins.*"]
+include = ["plugins", "plugins.*", "chexsa_assets"]
 
 [tool.setuptools.package-data]
 "plugins.gmail" = ["*.md"]
+
+"chexsa_assets" = ["*.png"]
