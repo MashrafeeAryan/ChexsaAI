@@ -60,3 +60,44 @@ class AppWorkerTests(unittest.TestCase):
         finally:
             shutdown.set()
             worker.join(timeout=3)
+
+    def test_new_chat_forgets_targets_but_keeps_login(self):
+        """Reset drops draft approval and history without reconnecting the Gmail account."""
+        jobs, events = Queue(), Queue()
+        cancel, shutdown = Event(), Event()
+        connection = object()
+
+        def handler(text, state):
+            if text == "seed":
+                state.update(
+                    service=connection,
+                    selected_draft="draft1",
+                    pending_send={"id": "draft1"},
+                    history=["old"],
+                    messages={"mail1"},
+                )
+                return "Seeded"
+            self.assertIs(state["service"], connection)
+            self.assertNotIn("pending_send", state)
+            self.assertNotIn("selected_draft", state)
+            self.assertNotIn("history", state)
+            self.assertNotIn("messages", state)
+            return "Fresh"
+
+        worker = Thread(
+            target=run_worker,
+            args=(jobs, events, cancel, shutdown),
+            kwargs={"handlers": {"gmail": handler}},
+        )
+        worker.start()
+        try:
+            self.assertEqual(events.get(timeout=3)["kind"], "ready")
+            for kind, text in (("task", "seed"), ("reset", ""), ("task", "check")):
+                jobs.put({"kind": kind, "mode": "gmail", "text": text})
+                self.assertEqual(events.get(timeout=3)["kind"], "started")
+                result = events.get(timeout=3)
+                self.assertEqual(result["kind"], "result")
+            self.assertEqual(result["text"], "Fresh")
+        finally:
+            shutdown.set()
+            worker.join(timeout=3)

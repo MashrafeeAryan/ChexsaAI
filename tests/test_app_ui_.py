@@ -191,3 +191,33 @@ class AppWindowTests(unittest.TestCase):
             context["close"]()
             pump_until(root, lambda: context.get("closed", False))
             context["worker"].join(timeout=3)
+
+    def test_gmail_review_uses_existing_confirmation(self):
+        """The Send reviewed email button passes the existing /send command to Gmail."""
+        calls = []
+
+        def gmail(text, state):
+            calls.append(text)
+            if text == "review":
+                state["pending_send"] = {"id": "fixture-draft"}
+                return "Fixture draft ready for review"
+            state.pop("pending_send", None)
+            return "Fixture confirmation handled"
+
+        root = tk.Tk()
+        root.withdraw()
+        context = build_app(root, handlers={"gmail": gmail}, initial_settings={})
+        try:
+            pump_until(root, lambda: context["ready"])
+            context["mode"].set("gmail")
+            context["submit"]("review")
+            pump_until(root, lambda: not context["busy"])
+            self.assertEqual(context["review_button"].cget("state"), "normal")
+            context["review_button"].invoke()
+            pump_until(root, lambda: not context["busy"])
+            self.assertEqual(calls, ["review", "/send"])
+            self.assertEqual(context["review_button"].cget("state"), "disabled")
+        finally:
+            context["close"]()
+            pump_until(root, lambda: context.get("closed", False))
+            context["worker"].join(timeout=3)
