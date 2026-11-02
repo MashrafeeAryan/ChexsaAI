@@ -31,7 +31,7 @@ class BrowserActionInputTests(unittest.TestCase):
 
     def test_wait_rejects_unbounded_or_unknown_conditions(self):
         """The model cannot request endless polling or inspect an invented target."""
-        for timeout in (0, -1, 6, True, float("inf"), float("nan"), "3"):
+        for timeout in (0, -1, 6, 10**1000, True, float("inf"), float("nan"), "3"):
             with self.subTest(timeout=timeout), self.assertRaises(ValueError):
                 validate_wait(
                     {"action": "wait_for", "text": "Ready", "timeout": timeout}, {1}

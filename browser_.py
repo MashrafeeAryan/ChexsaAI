@@ -141,8 +141,12 @@ def read_page(page):
 
             # Walk up the page structure to show where duplicate controls belong.
             context = []
+            # Track real parents locally; identical names can belong to different forms.
+            ancestors = []
             parent = by_id.get(node.get("parentId"))
             while parent:
+                if parent.get("backendDOMNodeId"):
+                    ancestors.append(parent["backendDOMNodeId"])
                 parent_role = parent.get("role", {}).get("value", "").lower()
                 if parent_role in (
                     "dialog",
@@ -182,6 +186,7 @@ def read_page(page):
                 "role": role,
                 "name": name,
                 "context": context,
+                "ancestors": ancestors,
                 "value": node.get("value", {}).get("value", ""),
                 "states": states,
             }
@@ -552,7 +557,7 @@ def run_action_group(page, actions, observation, check_cancel=None):
             after = current["controls"].get(node)
             if after is None or before is None:
                 return False
-            for key in ("role", "name", "context", "value"):
+            for key in ("role", "name", "context", "ancestors", "value"):
                 if before[key] != after[key]:
                     return False
             # Focus naturally moves while typing. Other state changes need a new decision.

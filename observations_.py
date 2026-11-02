@@ -40,8 +40,6 @@ def validate_wait(action, shown_ids):
 
     Example: {"action": "wait_for", "text": "Results ready", "timeout": 3}.
     """
-    from math import isfinite
-
     if not isinstance(action, dict) or action.get("action") != "wait_for":
         raise ValueError("Give a browser wait condition.")
     keys = set(action) - {"timeout"}
@@ -54,18 +52,14 @@ def validate_wait(action, shown_ids):
             raise ValueError("Give a short piece of page text to wait for.")
     elif keys == {"action", "backend_node_id", "state"}:
         node = action["backend_node_id"]
-        if type(node) is not int or node not in shown_ids:
+        if type(node) is not int or node <= 0 or node not in shown_ids:
             raise ValueError("Wait for a node from the current reading.")
         if action["state"] not in ("enabled", "disabled", "checked", "unchecked"):
             raise ValueError("Choose enabled, disabled, checked, or unchecked.")
     else:
         raise ValueError("Wait for text or one known control's state.")
     timeout = action.get("timeout", 3)
-    if (
-        type(timeout) not in (int, float)
-        or not isfinite(timeout)
-        or not 0 < timeout <= 5
-    ):
+    if type(timeout) not in (int, float) or not 0 < timeout <= 5:
         raise ValueError(
             "Browser waits must be greater than zero and at most five seconds."
         )

@@ -89,10 +89,13 @@ def choose_actions(view, case):
     return actions
 
 
-def run_case(page, runtime, name, grouped=False, tokenizer=None):
+def run_case(page, runtime, name, grouped=False, tokenizer=None, delay=0):
     """Run one fixture through the real prompt and executor with scripted model answers."""
     case = CASES[name]
-    page.goto(FIXTURE.resolve().as_uri())
+    # The same URL keeps path lengths from biasing the old-versus-new token counts.
+    page.goto("about:blank")
+    page.set_content(FIXTURE.read_text(encoding="utf-8"))
+    page.evaluate("delay => window.delay = delay", delay)
     payloads, replies = [], []
     planned = []
     request = f'Fill {case["fields"]} in {name}, then click {case["button"]}.'
@@ -105,6 +108,8 @@ def run_case(page, runtime, name, grouped=False, tokenizer=None):
             planned.extend(choose_actions(payload["page"], case))
         if grouped and not replies:
             action = {"action": "batch", "actions": planned}
+        elif grouped and delay and len(replies) == 1:
+            action = {"action": "wait_for", "text": case["evidence"], "timeout": 2}
         elif not grouped and len(replies) < len(planned):
             action = planned[len(replies)]
         else:
@@ -132,6 +137,9 @@ def run_case(page, runtime, name, grouped=False, tokenizer=None):
         result = agent_.run_agent(request, {"playwright": runtime, "page": page})
     elapsed = perf_counter() - started
     assert result == "Fixture verified"
+    assert len(replies) == (
+        3 if grouped and delay else 2 if grouped else len(planned) + 1
+    )
     assert page.evaluate("window.saved") == case["saved"]
     assert page.evaluate("window.submissions") == 1
     assert page.evaluate("window.wrongClicks") == 0
@@ -168,9 +176,15 @@ def check_action_groups(page):
         "value",
         "dialog",
         "navigate",
+        "reparent",
     ):
         page.goto(FIXTURE.resolve().as_uri())
         page.evaluate("mode => window.fixtureMode = mode", mode)
+        if mode == "reparent":
+            # Same names do not mean the same parent; moving a field must stop the group.
+            page.evaluate(
+                "document.body.insertAdjacentHTML('beforeend', '<form id=otherProfile aria-label=Profile></form>')"
+            )
         before = browser_.read_page(page)
         actions = choose_actions(before, case)
         result = browser_.run_action_group(page, actions, before)
@@ -202,6 +216,58 @@ def check_action_groups(page):
         assert "old" in str(error)
     assert page.locator("#name").input_value() == ""
 
+    # A replacement after observation must be rejected before even the first field changes.
+    before = browser_.read_page(page)
+    actions = choose_actions(before, case)
+    page.evaluate(
+        "const target = document.querySelector('#email'); target.replaceWith(target.cloneNode(true));"
+    )
+    result = browser_.run_action_group(page, actions, before)
+    assert not result["completed"] and result["stopped"]
+    assert page.locator("#name").input_value() == ""
+
+    page.goto(FIXTURE.resolve().as_uri())
+    page.evaluate("document.querySelector('#email').readOnly = true")
+    before = browser_.read_page(page)
+    result = browser_.run_action_group(page, choose_actions(before, case), before)
+    assert not result["completed"] and result["stopped"]
+    assert page.locator("#name").input_value() == ""
+
+    page.goto(FIXTURE.resolve().as_uri())
+    before = browser_.read_page(page)
+
+    def cancel_after_first_field():
+        """Simulate Stop between grouped actions, after one field was filled."""
+        if page.locator("#name").input_value():
+            raise InterruptedError("Fixture cancelled after first field")
+
+    try:
+        browser_.run_action_group(
+            page, choose_actions(before, case), before, cancel_after_first_field
+        )
+        raise AssertionError("Mid-group cancellation was ignored")
+    except InterruptedError:
+        pass
+    assert (
+        page.locator("#email").input_value() == ""
+        and page.evaluate("window.submissions") == 0
+    )
+
+    # The same typing tool also supports message editors built with contenteditable.
+    page.goto(FIXTURE.resolve().as_uri())
+    page.evaluate("""() => {
+        const editor = document.createElement('div');
+        editor.id = 'notes'; editor.contentEditable = 'true';
+        editor.setAttribute('role', 'textbox'); editor.setAttribute('aria-label', 'Notes');
+        document.querySelector('#notes').replaceWith(editor);
+    }""")
+    before = browser_.read_page(page)
+    actions = choose_actions(before, case)[:-1]
+    result = browser_.run_action_group(page, actions, before)
+    assert len(result["completed"]) == 3 and not result["stopped"], result
+    assert page.locator("#notes").inner_text() == case["fields"]["Notes"]
+
+    page.goto(FIXTURE.resolve().as_uri())
     before = browser_.read_page(page)
     with patch.object(
         browser_, "click_node", side_effect=RuntimeError("uncertain click")
@@ -346,6 +412,11 @@ def main():
             if not args.single_only:
                 check_action_groups(page)
                 check_local_waits(page)
+                delayed = run_case(page, runtime, "filters", grouped=True, delay=400)
+                assert delayed["model_calls"] == 3
+                print(
+                    "PASS: delayed search/filter outcome uses one local wait decision."
+                )
         finally:
             context.close()
             browser_._observations.clear()

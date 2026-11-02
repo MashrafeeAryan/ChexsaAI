@@ -52,6 +52,7 @@
     if (window.fixtureMode === 'disable') next.disabled = true;
     if (window.fixtureMode === 'value') next.value = 'external@example.test';
     if (window.fixtureMode === 'reorder') profile.append(next.parentElement);
+    if (window.fixtureMode === 'reparent') document.querySelector('#otherProfile').append(next.parentElement);
     if (window.fixtureMode === 'dialog') {
       const dialog = document.createElement('dialog');
       dialog.innerHTML = '<button>Choose a suggestion</button>';
