@@ -28,3 +28,6 @@ jobs:
       - name: Run isolated Chrome fixture without API calls
         timeout-minutes: 5
         run: python tests/browser_changes_integration_.py
+      - name: Check guarded browser workflows without API calls
+        timeout-minutes: 5
+        run: python tests/browser_workflows_integration_.py

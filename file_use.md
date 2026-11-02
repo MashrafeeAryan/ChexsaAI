@@ -14,9 +14,9 @@ Gmail integration code stays together in `plugins/gmail/`. Other service integra
 | `DESKTOP_APP_.md` | Explains the desktop app, development command, storage, and future updates. |
 | `cli_.py` | Shows the terminal chat and sends your request to the selected engine. |
 | `agent_.py` | Holds the browser task together: ask, act, read again, repeat. |
-| `browser_.py` | Opens or connects to Chrome, reads controls, clicks, and types. |
+| `browser_.py` | Opens Chrome, reads exact controls, runs checked actions/groups, and waits locally. |
 | `llm_.py` | Sends the browser request to the model and checks its JSON answer. |
-| `observations_.py` | Finds page changes and chooses a smaller page view for the model. |
+| `observations_.py` | Chooses smaller page context, checks group/wait inputs, and avoids repeating supplied text. |
 | `desktop_agent_.py` | Gives the model desktop tools and checks progress on its task. |
 | `files_.py` | Creates text, code, or Word (.docx) files, saves them, and checks the contents. |
 | `desktop_.py` | Finds Windows apps, reads controls, clicks, types, and sends shortcuts. |
@@ -55,6 +55,9 @@ Gmail integration code stays together in `plugins/gmail/`. Other service integra
 | `tests/test_app_audio_.py` | Checks microphone parsing and stopped speech with fake audio. |
 | `tests/test_voice_.py` | Checks wake phrases, spoken replies, agent selection, and cleanup with fake audio. |
 | `tests/browser_changes_integration_.py` | Runs the new browser loop on a large local page in isolated Chrome. |
+| `tests/test_browser_actions_.py` | Rejects invalid action groups and unbounded or unknown wait conditions. |
+| `tests/browser_workflows_integration_.py` | Checks browser workflows and compares single/grouped actions with fake model replies. |
+| `tests/fixtures/browser_workflows_.html` | Provides disposable forms, duplicate controls, and delayed updates for Chrome checks. |
 | `tests/desktop_actions_integration_.py` | Manually tests real disposable Windows controls and a temporary Word document. |
 
 `.venv/`, `.chexsa/`, `__pycache__/`, `build/`, `dist/`, and `*.egg-info/` are local

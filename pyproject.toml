@@ -18,6 +18,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Only needed for optional offline fixture token counts, never normal app use.
+benchmark = ["tokenizers>=0.22,<1"]
+
 # Install microphone support only when trying the voice prototype.
 voice = ["SpeechRecognition[audio]>=3.14,<4"]
 

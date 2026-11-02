@@ -111,3 +111,40 @@ This reduced model-context tokens by **58.69%**.
 | Browser fixture | 1,493 | 17,827 | 16,334 | 91.63% |
 
 This reduced model-context tokens by **91.63%**.
+
+## Browser workflow improvements — November 2, 2026
+
+20 runs per workflow in isolated Chrome, using scripted model replies and the
+GPT-OSS tokenizer. Counts include system/request/history text and action/reply
+text, excluding chat framing and hidden reasoning. No model API calls were made.
+Before: engine `72db9b0`. After: checked groups, shorter instructions, and compact history.
+
+| Workflow | Model calls before → after | Input text tokens before → after | Output text tokens before → after | Total text tokens before → after |
+| :--- | ---: | ---: | ---: | ---: |
+| Three-field profile and save | 5 → 2 | 3,707.8 → 1,501.2 | 94.4 → 105.2 | 3,802.2 → 1,606.4 |
+| Search and location filters | 4 → 2 | 2,767.4 → 1,416.0 | 69.0 → 79.4 | 2,836.4 → 1,495.4 |
+| Profile with a supplied 100-word note | 5 → 2 | 4,466.5 → 1,752.7 | 201.6 → 213.4 | 4,668.1 → 1,966.1 |
+
+Total text tokens fell by **57.8%**, **47.3%**, and **57.9%**, respectively.
+Model decisions fell by **60%**, **50%**, and **60%**.
+
+| Workflow | Before: median local seconds | After: single actions | After: grouped actions | Verified grouped runs |
+| :--- | ---: | ---: | ---: | ---: |
+| Three-field profile and save | 0.5578 | 0.3225 | 0.3435 | 20/20 |
+| Search and location filters | 0.3559 | 0.2184 | 0.2575 | 20/20 |
+| Profile with a supplied 100-word note | 0.5393 | 0.2920 | 0.3227 | 20/20 |
+
+Times exclude model inference and network waiting. Groups add local checks and
+were slower than current single actions locally; fewer model calls are expected
+to reduce real API waiting, but that live speedup has not been measured.
+
+All 60 grouped runs saved the exact expected values, with **zero wrong-target
+actions and zero duplicate submissions**. A separate delayed-filter check used
+three decisions: group, local wait, and evidence-based reply. Replaced nodes,
+changed parents, disabled controls, cancellation, and uncertain actions stopped
+remaining work. Scripted replies do not measure live model reliability or
+performance against other agents.
+
+Tokenizer: `openai/gpt-oss-120b`, revision
+`b5c939de8f754692c1647ca79fbf85e8c1e70f8a`. Repeat commands are in
+[ARCHITECTURE.md](ARCHITECTURE.md#browser-fixture-checks).
