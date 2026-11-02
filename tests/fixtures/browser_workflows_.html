@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Browser workflow fixtures</title>
+<style>body { font: 16px sans-serif; } label { display: block; margin: 12px; }</style>
+
+<main aria-label="Workspace">
+  <button onclick="window.wrongClicks += 1">Save</button>
+  <p>This Save button belongs to another part of the page.</p>
+</main>
+
+<form aria-label="Profile" id="profile">
+  <label>Name <input id="name" autocomplete="off"></label>
+  <label>Email <input id="email" type="email" autocomplete="off"></label>
+  <label>Notes <textarea id="notes"></textarea></label>
+  <button>Save</button>
+</form>
+
+<form aria-label="Filters" id="filters">
+  <label>Search <input id="search" autocomplete="off"></label>
+  <label>Location <input id="location" autocomplete="off"></label>
+  <button>Apply filters</button>
+</form>
+<p role="status" id="status">Waiting</p>
+
+<script>
+  // Tests can change the next field while an action is in progress.
+  window.fixtureMode = 'normal';
+  window.wrongClicks = 0;
+  window.submissions = 0;
+  window.saved = null;
+  window.delay = 0;
+
+  profile.addEventListener('submit', event => {
+    event.preventDefault();
+    window.submissions += 1;
+    window.saved = Object.fromEntries(['name', 'email', 'notes'].map(id => [id, document.getElementById(id).value]));
+    document.querySelector('#status').textContent = 'Profile saved';
+  });
+  filters.addEventListener('submit', event => {
+    event.preventDefault();
+    window.submissions += 1;
+    window.saved = Object.fromEntries(['search', 'location'].map(id => [id, document.getElementById(id).value]));
+    setTimeout(() => {
+      document.querySelector('#status').textContent = 'Matching records ready';
+    }, window.delay);
+  });
+  document.querySelector('#name').addEventListener('input', () => {
+    const next = document.querySelector('#email');
+    if (window.fixtureMode === 'replace') next.replaceWith(next.cloneNode(true));
+    if (window.fixtureMode === 'rename') next.setAttribute('aria-label', 'Billing email');
+    if (window.fixtureMode === 'disable') next.disabled = true;
+    if (window.fixtureMode === 'value') next.value = 'external@example.test';
+    if (window.fixtureMode === 'reorder') profile.append(next.parentElement);
+    if (window.fixtureMode === 'dialog') {
+      const dialog = document.createElement('dialog');
+      dialog.innerHTML = '<button>Choose a suggestion</button>';
+      document.body.append(dialog);
+      dialog.showModal();
+    }
+    if (window.fixtureMode === 'navigate') location.href = 'about:blank#changed';
+  });
+</script>
+</html>
