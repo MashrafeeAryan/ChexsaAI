@@ -187,6 +187,84 @@ def check_action_groups(page):
     )
 
 
+def check_local_waits(page):
+    """Check delayed text, state changes, timeouts, replaced targets, and cancellation."""
+    page.goto(FIXTURE.resolve().as_uri())
+    before = browser_.read_page(page)
+    page.evaluate(
+        "setTimeout(() => document.querySelector('#status').textContent = 'Delayed result ready', 150)"
+    )
+    result = browser_.wait_for_page(
+        page,
+        {"action": "wait_for", "text": "Delayed result ready", "timeout": 1},
+        before,
+    )
+    assert result["matched"] and not result["reason"]
+
+    page.evaluate("document.querySelector('#email').disabled = true")
+    before = browser_.read_page(page)
+    email = next(
+        node
+        for node, control in before["controls"].items()
+        if control["name"] == "Email"
+    )
+    page.evaluate(
+        "setTimeout(() => document.querySelector('#email').disabled = false, 150)"
+    )
+    result = browser_.wait_for_page(
+        page,
+        {
+            "action": "wait_for",
+            "backend_node_id": email,
+            "state": "enabled",
+            "timeout": 1,
+        },
+        before,
+    )
+    assert result["matched"] and not result["reason"]
+
+    before = result["observation"]
+    page.evaluate(
+        "setTimeout(() => {const node = document.querySelector('#email'); node.replaceWith(node.cloneNode(true));}, 100)"
+    )
+    result = browser_.wait_for_page(
+        page,
+        {
+            "action": "wait_for",
+            "backend_node_id": email,
+            "state": "disabled",
+            "timeout": 1,
+        },
+        before,
+    )
+    assert not result["matched"] and "disappeared" in result["reason"]
+
+    result = browser_.wait_for_page(
+        page,
+        {"action": "wait_for", "text": "Never appears", "timeout": 0.15},
+        result["observation"],
+    )
+    assert not result["matched"] and "Timed out" in result["reason"]
+
+    def cancel():
+        """Pretend Stop was pressed; waiting must end without another action."""
+        raise InterruptedError("Fixture cancelled")
+
+    try:
+        browser_.wait_for_page(
+            page,
+            {"action": "wait_for", "text": "Never appears"},
+            result["observation"],
+            cancel,
+        )
+        raise AssertionError("Cancellation was ignored")
+    except InterruptedError:
+        pass
+    print(
+        "PASS: local delayed-text/state waits, timeout, replaced target, cancellation."
+    )
+
+
 def main():
     """Launch an isolated Chrome profile and record the current single-action baseline."""
     with (
@@ -201,6 +279,7 @@ def main():
             for name in CASES:
                 print(json.dumps(run_case(page, runtime, name)))
             check_action_groups(page)
+            check_local_waits(page)
         finally:
             context.close()
             browser_._observations.clear()

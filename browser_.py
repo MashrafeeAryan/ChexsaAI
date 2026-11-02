@@ -7,7 +7,7 @@ from weakref import WeakKeyDictionary
 
 from playwright.sync_api import Error, sync_playwright
 
-from observations_ import validate_action_group
+from observations_ import validate_action_group, validate_wait
 
 # Remember which Chrome nodes belong to the latest page observation.
 _observations = WeakKeyDictionary()
@@ -613,6 +613,68 @@ def run_action_group(page, actions, observation, check_cancel=None):
             break
 
     return result
+
+
+def wait_for_page(page, action, observation, check_cancel=None):
+    """Check a short-lived condition locally instead of asking the AI to keep checking.
+
+    Return the latest reading and whether the condition matched. A timeout is not success.
+    Polling stops after at most five seconds, apart from an in-flight Chrome response.
+    """
+    from time import monotonic
+
+    validate_wait(action, observation["controls"])
+    if _observations.get(page, {}).get("observation") is not observation:
+        raise RuntimeError("This reading is old or already used. Read the page again.")
+    deadline = monotonic() + action.get("timeout", 3)
+    current = observation
+
+    while True:
+        if check_cancel:
+            check_cancel()
+        reason = None
+        matched = False
+        if any(
+            current[key] != observation[key]
+            for key in ("page_id", "document_id", "url")
+        ):
+            reason = "The page changed while waiting. Review the fresh reading."
+        elif "text" in action:
+            # Names and ordinary page text are enough; do not expose private field values.
+            text = (
+                current["content"]
+                + "\n"
+                + "\n".join(control["name"] for control in current["controls"].values())
+            )
+            matched = action["text"].casefold() in text.casefold()
+        else:
+            control = current["controls"].get(action["backend_node_id"])
+            if control is None:
+                reason = "The waiting target disappeared. Review the fresh reading."
+            elif action["state"] in ("enabled", "disabled"):
+                matched = bool(control["states"].get("disabled")) == (
+                    action["state"] == "disabled"
+                )
+            else:
+                checked = control["states"].get("checked")
+                matched = (
+                    checked in (True, "true")
+                    if action["state"] == "checked"
+                    else checked in (False, "false")
+                )
+
+        if matched or reason:
+            return {"matched": matched, "reason": reason, "observation": current}
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return {
+                "matched": False,
+                "reason": "Timed out waiting for the condition.",
+                "observation": current,
+            }
+        # Playwright's wait pumps browser events; a long time.sleep would not.
+        page.wait_for_timeout(min(100, remaining * 1000))
+        current = read_page(page)
 
 
 # Release Playwright; Chrome launched by this file closes too.
