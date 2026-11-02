@@ -74,7 +74,7 @@ def choose_actions(view, case):
     return actions
 
 
-def run_case(page, runtime, name):
+def run_case(page, runtime, name, grouped=False, tokenizer=None):
     """Run one fixture through the real prompt and executor with scripted model answers."""
     case = CASES[name]
     page.goto(FIXTURE.resolve().as_uri())
@@ -88,7 +88,9 @@ def run_case(page, runtime, name):
         payload = json.loads(kwargs["messages"][-1]["content"])
         if not planned:
             planned.extend(choose_actions(payload["page"], case))
-        if len(replies) < len(planned):
+        if grouped and not replies:
+            action = {"action": "batch", "actions": planned}
+        elif not grouped and len(replies) < len(planned):
             action = planned[len(replies)]
         else:
             assert case["evidence"] in page.locator("#status").inner_text()
@@ -118,14 +120,25 @@ def run_case(page, runtime, name):
     assert page.evaluate("window.saved") == case["saved"]
     assert page.evaluate("window.submissions") == 1
     assert page.evaluate("window.wrongClicks") == 0
-    return {
+    metrics = {
         "case": name,
+        "mode": "grouped" if grouped else "single",
         "model_calls": len(replies),
         "input_characters": sum(
             len(message["content"]) for messages in payloads for message in messages
         ),
         "local_seconds": round(elapsed, 4),
     }
+    if tokenizer is not None:
+        metrics["input_text_tokens"] = sum(
+            len(tokenizer.encode(message["content"]).ids)
+            for messages in payloads
+            for message in messages
+        )
+        metrics["output_text_tokens"] = sum(
+            len(tokenizer.encode(json.dumps(action)).ids) for action in replies
+        )
+    return metrics
 
 
 def check_action_groups(page):
@@ -266,7 +279,34 @@ def check_local_waits(page):
 
 
 def main():
-    """Launch an isolated Chrome profile and record the current single-action baseline."""
+    """Check workflows and optionally count text tokens using a local tokenizer JSON."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--single-only",
+        action="store_true",
+        help="Run just single actions, including when checking an archived baseline.",
+    )
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Repeat each workflow to check stable behavior.",
+    )
+    parser.add_argument(
+        "--tokenizer",
+        type=Path,
+        help="Optional local tokenizer.json; no model API is called.",
+    )
+    args = parser.parse_args()
+    if not 1 <= args.repeat <= 30:
+        parser.error("Choose between 1 and 30 repeats.")
+    tokenizer = None
+    if args.tokenizer:
+        from tokenizers import Tokenizer
+
+        tokenizer = Tokenizer.from_file(str(args.tokenizer))
     with (
         TemporaryDirectory(prefix="chexsa-workflows-") as profile,
         sync_playwright() as runtime,
@@ -276,10 +316,21 @@ def main():
         )
         try:
             page = context.new_page()
-            for name in CASES:
-                print(json.dumps(run_case(page, runtime, name)))
-            check_action_groups(page)
-            check_local_waits(page)
+            for iteration in range(args.repeat):
+                for name in CASES:
+                    for grouped in ((False,) if args.single_only else (False, True)):
+                        print(
+                            json.dumps(
+                                {
+                                    "run": iteration + 1,
+                                    **run_case(page, runtime, name, grouped, tokenizer),
+                                }
+                            ),
+                            flush=True,
+                        )
+            if not args.single_only:
+                check_action_groups(page)
+                check_local_waits(page)
         finally:
             context.close()
             browser_._observations.clear()

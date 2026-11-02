@@ -1,6 +1,13 @@
 """Keep asking what to do next until the request ends or the agent must stop."""
 
-from browser_ import click_node, open_browser, read_page, type_node
+from browser_ import (
+    click_node,
+    open_browser,
+    read_page,
+    type_node,
+    run_action_group,
+    wait_for_page,
+)
 from llm_ import get_reply
 from app_runtime_ import check_cancelled
 
@@ -36,6 +43,8 @@ def run_agent(message, browser):
                 browser["page"] = browser["page"].context.new_page()
             page = browser["page"]
 
+        next_observation = None
+        group_error = None
         # Any action error leaves this function immediately. Uncertain actions are not retried.
         if action["action"] == "observe":
             result = "Browser connected; current page will be read."
@@ -50,14 +59,38 @@ def run_agent(message, browser):
         elif action["action"] == "type":
             type_node(page, action["backend_node_id"], action["text"])
             result = "Text entered and the field value verified."
+        elif action["action"] == "batch":
+            # The browser rechecks targets between actions without consulting the model.
+            group = run_action_group(
+                page, action["actions"], observation, lambda: check_cancelled(browser)
+            )
+            next_observation = group["observation"]
+            result = {
+                "completed": len(group["completed"]),
+                "remaining": group["remaining"],
+                "stopped": group["stopped"],
+            }
+            group_error = group["error"]
+        elif action["action"] == "wait_for":
+            waiting = wait_for_page(
+                page, action, observation, lambda: check_cancelled(browser)
+            )
+            next_observation = waiting["observation"]
+            result = {"matched": waiting["matched"], "reason": waiting["reason"]}
         else:
             raise RuntimeError("Unsupported agent action. Nothing was run.")
 
         history.append({"action": action.copy(), "result": result})
+        if group_error:
+            raise RuntimeError(
+                f"Stopped after {result['completed']} actions were sent or verified. {group_error} Do not repeat the group automatically."
+            )
         last_action, last_observation = action.copy(), observation
         # Observe after every action; the next decision gets current nodes and page state.
         check_cancelled(browser)
         previous = observation
-        observation = read_page(page)
+        observation = (
+            next_observation if next_observation is not None else read_page(page)
+        )
 
     return "Stopped after 10 model decisions. The request may be unfinished; please check the page."
