@@ -3,6 +3,34 @@
 import re
 
 
+def validate_action_group(actions, shown_ids):
+    """Check the whole group before anything runs.
+
+    Example: two type actions and one final click are allowed.
+    A click in the middle is rejected because it could change the next target.
+    """
+    if not isinstance(actions, list) or not 1 <= len(actions) <= 5:
+        raise ValueError("Give between one and five browser actions.")
+
+    used = set()
+    for index, action in enumerate(actions):
+        if not isinstance(action, dict):
+            raise ValueError("Each browser action must be an object.")
+        kind = action.get("action")
+        keys = {"action", "backend_node_id", "text"} if kind == "type" else {"action", "backend_node_id"}
+        if kind not in ("type", "click") or set(action) != keys:
+            raise ValueError("Groups support typing and one final click only.")
+        node = action["backend_node_id"]
+        if type(node) is not int or node <= 0 or node not in shown_ids or node in used:
+            raise ValueError("Use different node IDs from the current reading.")
+        if kind == "type" and not isinstance(action["text"], str):
+            raise ValueError("Text must be a string.")
+        if kind == "click" and index != len(actions) - 1:
+            raise ValueError("A click must be the last action in a group.")
+        used.add(node)
+    return actions
+
+
 
 # Find added, removed, and changed nodes; a new document starts a fresh view.
 def get_changes(previous, current):

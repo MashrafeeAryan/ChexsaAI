@@ -7,12 +7,27 @@ from weakref import WeakKeyDictionary
 
 from playwright.sync_api import Error, sync_playwright
 
+from observations_ import validate_action_group
+
 # Remember which Chrome nodes belong to the latest page observation.
 _observations = WeakKeyDictionary()
 _CONTROL_ROLES = {
-    "button", "link", "textbox", "searchbox", "combobox", "checkbox", "radio",
-    "switch", "spinbutton", "slider", "tab", "menuitem", "menuitemcheckbox",
-    "menuitemradio", "option", "treeitem",
+    "button",
+    "link",
+    "textbox",
+    "searchbox",
+    "combobox",
+    "checkbox",
+    "radio",
+    "switch",
+    "spinbutton",
+    "slider",
+    "tab",
+    "menuitem",
+    "menuitemcheckbox",
+    "menuitemradio",
+    "option",
+    "treeitem",
 }
 
 
@@ -84,7 +99,9 @@ def read_page(page):
     session = page.context.new_cdp_session(page)
 
     try:
-        document = session.send("DOM.getDocument", {"depth": 0})["root"]["backendNodeId"]
+        document = session.send("DOM.getDocument", {"depth": 0})["root"][
+            "backendNodeId"
+        ]
         nodes = session.send("Accessibility.getFullAXTree")["nodes"]
         by_id = {node["nodeId"]: node for node in nodes}
         targets, lines, text_lines = set(), [], []
@@ -101,8 +118,13 @@ def read_page(page):
             if role == "statictext" and name.strip():
                 # Chrome also puts field values in text children; keep those values local.
                 ancestor = by_id.get(node.get("parentId"))
-                while ancestor and ancestor.get("role", {}).get("value", "").lower() not in (
-                    "textbox", "searchbox", "combobox", "spinbutton",
+                while ancestor and ancestor.get("role", {}).get(
+                    "value", ""
+                ).lower() not in (
+                    "textbox",
+                    "searchbox",
+                    "combobox",
+                    "spinbutton",
                 ):
                     ancestor = by_id.get(ancestor.get("parentId"))
                 if ancestor is None:
@@ -122,9 +144,18 @@ def read_page(page):
             parent = by_id.get(node.get("parentId"))
             while parent:
                 parent_role = parent.get("role", {}).get("value", "").lower()
-                if parent_role in ("dialog", "alertdialog", "main", "form", "navigation", "region"):
+                if parent_role in (
+                    "dialog",
+                    "alertdialog",
+                    "main",
+                    "form",
+                    "navigation",
+                    "region",
+                ):
                     parent_name = parent.get("name", {}).get("value", "")
-                    context.append(f"{parent_role} {json.dumps(parent_name, ensure_ascii=False)}")
+                    context.append(
+                        f"{parent_role} {json.dumps(parent_name, ensure_ascii=False)}"
+                    )
                 parent = by_id.get(parent.get("parentId"))
 
             if context:
@@ -135,9 +166,15 @@ def read_page(page):
             states = {
                 prop["name"]: prop.get("value", {}).get("value")
                 for prop in node.get("properties", [])
-                if prop["name"] in (
-                    "disabled", "readonly", "checked", "selected",
-                    "expanded", "pressed", "focused",
+                if prop["name"]
+                in (
+                    "disabled",
+                    "readonly",
+                    "checked",
+                    "selected",
+                    "expanded",
+                    "pressed",
+                    "focused",
                 )
             }
             controls[target] = {
@@ -168,6 +205,7 @@ def read_page(page):
             "document": document,
             "nodes": targets,
             "tree": nodes,
+            "observation": result,
         }
         return result
 
@@ -187,7 +225,9 @@ def resolve_node(page, backend_node_id):
         or not observation
         or backend_node_id not in observation["nodes"]
     ):
-        raise RuntimeError("This node was not observed in this tab. Read the page again.")
+        raise RuntimeError(
+            "This node was not observed in this tab. Read the page again."
+        )
 
     if page.is_closed():
         raise RuntimeError("This tab is closed. Read an open tab again.")
@@ -195,21 +235,28 @@ def resolve_node(page, backend_node_id):
     session = observation["session"]
 
     try:
-        document = session.send("DOM.getDocument", {"depth": 0})["root"]["backendNodeId"]
+        document = session.send("DOM.getDocument", {"depth": 0})["root"][
+            "backendNodeId"
+        ]
         if document != observation["document"]:
-            raise RuntimeError("The page changed. Read it again before using this node.")
+            raise RuntimeError(
+                "The page changed. Read it again before using this node."
+            )
 
         # A removed node can still have an ID, so check that it remains on the page.
-        node = session.send(
-            "DOM.resolveNode", {"backendNodeId": backend_node_id}
-        )["object"]["objectId"]
+        node = session.send("DOM.resolveNode", {"backendNodeId": backend_node_id})[
+            "object"
+        ]["objectId"]
 
         try:
-            connected = session.send("Runtime.callFunctionOn", {
-                "objectId": node,
-                "functionDeclaration": "function() { return this.isConnected; }",
-                "returnByValue": True,
-            })["result"].get("value")
+            connected = session.send(
+                "Runtime.callFunctionOn",
+                {
+                    "objectId": node,
+                    "functionDeclaration": "function() { return this.isConnected; }",
+                    "returnByValue": True,
+                },
+            )["result"].get("value")
             if not connected:
                 raise RuntimeError("The element was removed. Read the page again.")
         finally:
@@ -218,7 +265,9 @@ def resolve_node(page, backend_node_id):
         return session, backend_node_id
 
     except Error:
-        raise RuntimeError("This element is no longer available. Read the page again.") from None
+        raise RuntimeError(
+            "This element is no longer available. Read the page again."
+        ) from None
 
 
 # Click an observed Chrome node through CDP; this does not move the Windows cursor.
@@ -229,7 +278,9 @@ def click_node(page, backend_node_id):
 
     try:
         session.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": target})
-        node = session.send("DOM.resolveNode", {"backendNodeId": target})["object"]["objectId"]
+        node = session.send("DOM.resolveNode", {"backendNodeId": target})["object"][
+            "objectId"
+        ]
 
         # Ask the actual element for a visible point, and check what covers that point.
         check_point = {
@@ -275,7 +326,9 @@ def click_node(page, backend_node_id):
                 abs(point["x"] - previous["x"]) > 1
                 or abs(point["y"] - previous["y"]) > 1
             ):
-                raise RuntimeError("The target moved. Read the page again before clicking.")
+                raise RuntimeError(
+                    "The target moved. Read the page again before clicking."
+                )
 
             arguments = {"type": event, "x": point["x"], "y": point["y"]}
             if event == "mousePressed":
@@ -285,19 +338,25 @@ def click_node(page, backend_node_id):
             session.send("Input.dispatchMouseEvent", arguments)
             previous = point
 
-        session.send("Input.dispatchMouseEvent", {
-            "type": "mouseReleased",
-            "x": point["x"],
-            "y": point["y"],
-            "button": "left",
-            "clickCount": 1,
-        })
+        session.send(
+            "Input.dispatchMouseEvent",
+            {
+                "type": "mouseReleased",
+                "x": point["x"],
+                "y": point["y"],
+                "button": "left",
+                "clickCount": 1,
+            },
+        )
 
     except Error:
         if pressed:
-            raise RuntimeError("The click outcome is uncertain. Read the page before retrying.") from None
-        raise RuntimeError("Could not click this element. Read the page again.") from None
-
+            raise RuntimeError(
+                "The click outcome is uncertain. Read the page before retrying."
+            ) from None
+        raise RuntimeError(
+            "Could not click this element. Read the page again."
+        ) from None
 
     finally:
         if node is not None:
@@ -326,11 +385,15 @@ def type_node(page, backend_node_id, text):
 
     try:
         session.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": target})
-        node = session.send("DOM.resolveNode", {"backendNodeId": target})["object"]["objectId"]
-        response = session.send("Runtime.callFunctionOn", {
-            "objectId": node,
-            "returnByValue": True,
-            "functionDeclaration": """function() {
+        node = session.send("DOM.resolveNode", {"backendNodeId": target})["object"][
+            "objectId"
+        ]
+        response = session.send(
+            "Runtime.callFunctionOn",
+            {
+                "objectId": node,
+                "returnByValue": True,
+                "functionDeclaration": """function() {
                 if (!this.isConnected) return "The text field was removed.";
                 const plainInput = this.tagName === 'INPUT' &&
                     ['text', 'search', 'email', 'url', 'tel', 'password'].includes(this.type);
@@ -359,9 +422,14 @@ def type_node(page, backend_node_id, text):
                 }
                 return null;
             }""",
-        })
-        if response.get("exceptionDetails") or "value" not in response.get("result", {}):
-            raise RuntimeError("Could not prepare this text field. Read the page again.")
+            },
+        )
+        if response.get("exceptionDetails") or "value" not in response.get(
+            "result", {}
+        ):
+            raise RuntimeError(
+                "Could not prepare this text field. Read the page again."
+            )
 
         error = response["result"]["value"]
         if error:
@@ -373,32 +441,49 @@ def type_node(page, backend_node_id, text):
         else:
             # Backspace clears selected text when the requested value is empty.
             for event in ("rawKeyDown", "keyUp"):
-                session.send("Input.dispatchKeyEvent", {
-                    "type": event, "key": "Backspace", "code": "Backspace",
-                    "windowsVirtualKeyCode": 8,
-                })
+                session.send(
+                    "Input.dispatchKeyEvent",
+                    {
+                        "type": event,
+                        "key": "Backspace",
+                        "code": "Backspace",
+                        "windowsVirtualKeyCode": 8,
+                    },
+                )
 
-        response = session.send("Runtime.callFunctionOn", {
-            "objectId": node,
-            "returnByValue": True,
-            "functionDeclaration": """function() {
+        response = session.send(
+            "Runtime.callFunctionOn",
+            {
+                "objectId": node,
+                "returnByValue": True,
+                "functionDeclaration": """function() {
                 if (!this.isConnected) return null;
                 if (!this.isContentEditable) return this.value;
                 // Chrome leaves a placeholder line break in an emptied editable area.
                 if (this.childNodes.length === 1 && this.firstChild.nodeName === 'BR') return '';
                 return this.innerText;
             }""",
-        })
+            },
+        )
 
         # Read back this exact node. A changed or missing value is not success.
         expected = text.replace("\r\n", "\n").replace("\r", "\n")
-        if response.get("exceptionDetails") or response.get("result", {}).get("value") != expected:
-            raise RuntimeError("Text entry could not be verified. Read the page before retrying.")
+        if (
+            response.get("exceptionDetails")
+            or response.get("result", {}).get("value") != expected
+        ):
+            raise RuntimeError(
+                "Text entry could not be verified. Read the page before retrying."
+            )
 
     except Error:
         if attempted:
-            raise RuntimeError("Text entry is uncertain. Read the page before retrying.") from None
-        raise RuntimeError("Could not type into this field. Read the page again.") from None
+            raise RuntimeError(
+                "Text entry is uncertain. Read the page before retrying."
+            ) from None
+        raise RuntimeError(
+            "Could not type into this field. Read the page again."
+        ) from None
     finally:
         if node is not None:
             try:
@@ -412,6 +497,122 @@ def type_node(page, backend_node_id, text):
                 session.detach()
             except Error:
                 pass
+
+
+def run_action_group(page, actions, observation, check_cancel=None):
+    """Execute a checked group without asking the model between its actions.
+
+    Input: observed type actions, with an optional click at the end.
+    Output: completed actions, a stop/error reason, and a fresh local observation.
+    A completed click means input was sent; the page must still prove its outcome.
+    """
+    validate_action_group(actions, observation["controls"])
+    if _observations.get(page, {}).get("observation") is not observation:
+        raise RuntimeError("This reading is old or already used. Read the page again.")
+
+    if check_cancel:
+        check_cancel()
+    expected = {
+        action["backend_node_id"]: observation["controls"][action["backend_node_id"]]
+        for action in actions
+    }
+    current = read_page(page)
+    result = {
+        "completed": [],
+        "remaining": len(actions),
+        "stopped": None,
+        "error": None,
+        "observation": current,
+    }
+
+    for action in actions:
+        control = expected[action["backend_node_id"]]
+        if control["states"].get("disabled") or (
+            action["action"] == "type"
+            and (
+                control["states"].get("readonly")
+                or control["role"] not in ("textbox", "searchbox", "combobox")
+            )
+        ):
+            result["stopped"] = (
+                "A planned control cannot perform this action. No actions were sent."
+            )
+            return result
+
+    def assumptions_hold():
+        """Stop on navigation, new controls, or changes to any planned target."""
+        if any(
+            current[key] != observation[key]
+            for key in ("page_id", "document_id", "url")
+        ):
+            return False
+        if current["controls"].keys() != observation["controls"].keys():
+            return False
+        for node, before in expected.items():
+            after = current["controls"].get(node)
+            if after is None or before is None:
+                return False
+            for key in ("role", "name", "context", "value"):
+                if before[key] != after[key]:
+                    return False
+            # Focus naturally moves while typing. Other state changes need a new decision.
+            if {
+                key: value
+                for key, value in before["states"].items()
+                if key != "focused"
+            } != {
+                key: value for key, value in after["states"].items() if key != "focused"
+            }:
+                return False
+        return True
+
+    for action in actions:
+        if check_cancel:
+            check_cancel()
+        if not assumptions_hold():
+            result["stopped"] = (
+                "The page or planned controls changed. Choose again from the fresh reading."
+            )
+            break
+
+        node = action["backend_node_id"]
+        # Check every remaining target's state before the first write too.
+        if any(
+            control["states"].get("disabled")
+            for control in expected.values()
+            if control
+        ):
+            result["stopped"] = (
+                "A planned control is disabled. No further actions were sent."
+            )
+            break
+        try:
+            if action["action"] == "type":
+                type_node(page, node, action["text"])
+            else:
+                click_node(page, node)
+            result["completed"].append(action.copy())
+            result["remaining"] -= 1
+            current = read_page(page)
+            result["observation"] = current
+            if action["action"] == "type":
+                entered = current["controls"].get(node)
+                text = action["text"].replace("\r\n", "\n").replace("\r", "\n")
+                if entered is None or entered["value"] != text:
+                    result["stopped"] = (
+                        "The entered value changed before the next action. Read the page again."
+                    )
+                    break
+                expected[node] = entered
+        except (RuntimeError, Error) as error:
+            # Do not retry or ask the model to repeat an action with an uncertain outcome.
+            result["error"] = str(error)
+            result["stopped"] = (
+                "The action outcome is uncertain. Investigate before trying again."
+            )
+            break
+
+    return result
 
 
 # Release Playwright; Chrome launched by this file closes too.

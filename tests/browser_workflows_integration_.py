@@ -128,6 +128,65 @@ def run_case(page, runtime, name):
     }
 
 
+def check_action_groups(page):
+    """Exercise real node guards when a page changes between grouped actions."""
+    case = CASES["profile"]
+    for mode in (
+        "normal",
+        "reorder",
+        "replace",
+        "rename",
+        "disable",
+        "value",
+        "dialog",
+        "navigate",
+    ):
+        page.goto(FIXTURE.resolve().as_uri())
+        page.evaluate("mode => window.fixtureMode = mode", mode)
+        before = browser_.read_page(page)
+        actions = choose_actions(before, case)
+        result = browser_.run_action_group(page, actions, before)
+        if mode in ("normal", "reorder"):
+            assert len(result["completed"]) == 4, result
+            assert result["remaining"] == 0 and not result["error"]
+            assert page.evaluate("window.submissions") == 1
+            assert page.evaluate("window.saved") == case["saved"]
+        elif mode == "navigate":
+            # Navigation may interrupt the first field's readback. Never call it verified.
+            assert len(result["completed"]) <= 1, result
+            assert result["remaining"] >= 3 and result["stopped"]
+        else:
+            assert len(result["completed"]) == 1, result
+            assert result["remaining"] == 3 and result["stopped"]
+            if mode != "navigate":
+                assert page.evaluate("window.submissions") == 0
+        if mode != "navigate":
+            assert page.evaluate("window.wrongClicks") == 0
+
+    page.goto(FIXTURE.resolve().as_uri())
+    before = browser_.read_page(page)
+    actions = choose_actions(before, case)
+    browser_.read_page(page)
+    try:
+        browser_.run_action_group(page, actions, before)
+        raise AssertionError("An old observation was accepted")
+    except RuntimeError as error:
+        assert "old" in str(error)
+    assert page.locator("#name").input_value() == ""
+
+    before = browser_.read_page(page)
+    with patch.object(
+        browser_, "click_node", side_effect=RuntimeError("uncertain click")
+    ) as click:
+        result = browser_.run_action_group(page, choose_actions(before, case), before)
+        assert result["error"] == "uncertain click"
+        assert len(result["completed"]) == 3 and result["remaining"] == 1
+        assert click.call_count == 1 and page.evaluate("window.submissions") == 0
+    print(
+        "PASS: duplicate buttons, reordered/replaced/changed nodes, navigation, modal, stale reading, uncertain action."
+    )
+
+
 def main():
     """Launch an isolated Chrome profile and record the current single-action baseline."""
     with (
@@ -141,6 +200,7 @@ def main():
             page = context.new_page()
             for name in CASES:
                 print(json.dumps(run_case(page, runtime, name)))
+            check_action_groups(page)
         finally:
             context.close()
             browser_._observations.clear()
