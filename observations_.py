@@ -17,7 +17,11 @@ def validate_action_group(actions, shown_ids):
         if not isinstance(action, dict):
             raise ValueError("Each browser action must be an object.")
         kind = action.get("action")
-        keys = {"action", "backend_node_id", "text"} if kind == "type" else {"action", "backend_node_id"}
+        keys = (
+            {"action", "backend_node_id", "text"}
+            if kind == "type"
+            else {"action", "backend_node_id"}
+        )
         if kind not in ("type", "click") or set(action) != keys:
             raise ValueError("Groups support typing and one final click only.")
         node = action["backend_node_id"]
@@ -42,7 +46,11 @@ def validate_wait(action, shown_ids):
         raise ValueError("Give a browser wait condition.")
     keys = set(action) - {"timeout"}
     if keys == {"action", "text"}:
-        if not isinstance(action["text"], str) or not action["text"].strip() or len(action["text"]) > 500:
+        if (
+            not isinstance(action["text"], str)
+            or not action["text"].strip()
+            or len(action["text"]) > 500
+        ):
             raise ValueError("Give a short piece of page text to wait for.")
     elif keys == {"action", "backend_node_id", "state"}:
         node = action["backend_node_id"]
@@ -53,8 +61,14 @@ def validate_wait(action, shown_ids):
     else:
         raise ValueError("Wait for text or one known control's state.")
     timeout = action.get("timeout", 3)
-    if type(timeout) not in (int, float) or not isfinite(timeout) or not 0 < timeout <= 5:
-        raise ValueError("Browser waits must be greater than zero and at most five seconds.")
+    if (
+        type(timeout) not in (int, float)
+        or not isfinite(timeout)
+        or not 0 < timeout <= 5
+    ):
+        raise ValueError(
+            "Browser waits must be greater than zero and at most five seconds."
+        )
     return action
 
 
@@ -112,13 +126,18 @@ def compact_history(request, history):
     Those are character offsets into the original request, which is still sent in full.
     Generated text that is not in the request is preserved. The local history is unchanged.
     """
+
     def summarize(action):
         """Copy an action description and replace only an exact repeated text span."""
         summary = action.copy()
         if action.get("action") == "batch":
             summary["actions"] = [summarize(item) for item in action["actions"]]
         text = action.get("text")
-        if action.get("action") == "type" and isinstance(text, str) and len(text) >= 160:
+        if (
+            action.get("action") == "type"
+            and isinstance(text, str)
+            and len(text) >= 160
+        ):
             start = request.find(text)
             if start >= 0:
                 summary.pop("text")
@@ -126,6 +145,7 @@ def compact_history(request, history):
         return summary
 
     return [{**entry, "action": summarize(entry["action"])} for entry in history]
+
 
 
 # Search the complete local control list; offset lets the AI request the next page.
