@@ -43,6 +43,21 @@ CASES = {
     },
 }
 
+# A longer supplied value checks whether completed text is unnecessarily resent.
+CASES["long_note"] = {
+    **CASES["profile"],
+    "fields": {
+        **CASES["profile"]["fields"],
+        "Notes": "Community projects help people share knowledge and support each other. "
+        * 10,
+    },
+    "saved": {
+        **CASES["profile"]["saved"],
+        "notes": "Community projects help people share knowledge and support each other. "
+        * 10,
+    },
+}
+
 
 def choose_actions(view, case):
     """Read fixture IDs from the actual model view, including duplicate-button context."""

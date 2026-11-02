@@ -9,7 +9,12 @@ from urllib.parse import urlsplit
 from dotenv import load_dotenv
 from openai import APIError, OpenAI, RateLimitError
 
-from observations_ import page_context, validate_action_group, validate_wait
+from observations_ import (
+    compact_history,
+    page_context,
+    validate_action_group,
+    validate_wait,
+)
 
 # Find .env beside this file, even if you start Python from another folder.
 load_dotenv(Path(__file__).with_name(".env"))
@@ -55,7 +60,15 @@ def get_reply(message, observation=None, history=None, previous=None):
         )
 
     # Keep the original request and past results so the AI knows what remains.
-    user_message = {"request": message, "previous_actions": history or []}
+    user_message = {
+        "request": message,
+        "previous_actions": compact_history(message, history or []),
+    }
+    if user_message["previous_actions"] != (history or []):
+        user_message["history_note"] = (
+            "text_from_request=[start,end] refers to character offsets in request, end excluded. "
+            "These are history summaries, not executable actions."
+        )
     visible_targets = set()
     if observation is not None:
         # Build the smaller page view locally; do not resend the old full page.

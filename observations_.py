@@ -105,6 +105,29 @@ def describe_control(control):
     return line
 
 
+def compact_history(request, history):
+    """Reference long text already present in the request instead of sending it twice.
+
+    Example: a history entry can use text_from_request=[20, 140].
+    Those are character offsets into the original request, which is still sent in full.
+    Generated text that is not in the request is preserved. The local history is unchanged.
+    """
+    def summarize(action):
+        """Copy an action description and replace only an exact repeated text span."""
+        summary = action.copy()
+        if action.get("action") == "batch":
+            summary["actions"] = [summarize(item) for item in action["actions"]]
+        text = action.get("text")
+        if action.get("action") == "type" and isinstance(text, str) and len(text) >= 160:
+            start = request.find(text)
+            if start >= 0:
+                summary.pop("text")
+                summary["text_from_request"] = [start, start + len(text)]
+        return summary
+
+    return [{**entry, "action": summarize(entry["action"])} for entry in history]
+
+
 # Search the complete local control list; offset lets the AI request the next page.
 def find_elements(observation, query, offset=0):
     matches = [

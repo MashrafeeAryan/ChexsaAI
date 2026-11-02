@@ -311,6 +311,35 @@ class AgentLoopTests(unittest.TestCase):
 
 
 class AgentModelPayloadTests(unittest.TestCase):
+    def test_long_request_text_is_referenced_without_losing_generated_text(self):
+        """Repeated text stays recoverable from the request; new content stays in history."""
+        from observations_ import compact_history
+
+        supplied = "Example information for the requested document. " * 6
+        generated = "New generated content that was not supplied. " * 6
+        request = "Enter these notes: " + supplied
+        history = [
+            {
+                "action": {
+                    "action": "batch",
+                    "actions": [
+                        {"action": "type", "backend_node_id": 1, "text": supplied},
+                        {"action": "type", "backend_node_id": 2, "text": generated},
+                    ],
+                },
+                "result": {"completed": 1, "remaining": 1, "stopped": "Changed"},
+            }
+        ]
+        original = deepcopy(history)
+        compact = compact_history(request, history)
+        first, second = compact[0]["action"]["actions"]
+        start, end = first["text_from_request"]
+        self.assertEqual(request[start:end], supplied)
+        self.assertEqual(second["text"], generated)
+        self.assertEqual(compact[0]["result"], history[0]["result"])
+        self.assertEqual(history, original)
+        self.assertLess(len(json.dumps(compact)), len(json.dumps(history)))
+
     def test_group_and_wait_only_accept_targets_shown_to_the_model(self):
         """Every grouped target is checked before the executor can write to any field."""
         observation = {
