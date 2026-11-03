@@ -398,7 +398,10 @@ def type_node(page, backend_node_id, text):
             {
                 "objectId": node,
                 "returnByValue": True,
-                "functionDeclaration": """function() {
+                "arguments": [
+                    {"value": text.replace("\r\n", "\n").replace("\r", "\n")}
+                ],
+                "functionDeclaration": """function(text) {
                 if (!this.isConnected) return "The text field was removed.";
                 const plainInput = this.tagName === 'INPUT' &&
                     ['text', 'search', 'email', 'url', 'tel', 'password'].includes(this.type);
@@ -410,6 +413,11 @@ def type_node(page, backend_node_id, text):
                 const r = this.getBoundingClientRect();
                 if (!r.width || !r.height || getComputedStyle(this).visibility !== 'visible')
                     return "This text field is not visible.";
+                // Accessibility values can be masked. Compare the real value locally.
+                const current = this.isContentEditable
+                    ? (this.childNodes.length === 1 && this.firstChild.nodeName === 'BR' ? '' : this.innerText)
+                    : this.value;
+                if (current === text) return true;
                 this.focus({preventScroll: true});
                 let active = this.ownerDocument.activeElement;
                 while (active && active.shadowRoot && active.shadowRoot.activeElement)
@@ -437,6 +445,8 @@ def type_node(page, backend_node_id, text):
             )
 
         error = response["result"]["value"]
+        if error is True:
+            return  # The exact editable field already holds the requested text.
         if error:
             raise RuntimeError(error + " Read the page again.")
 
@@ -595,19 +605,13 @@ def run_action_group(page, actions, observation, check_cancel=None, on_progress=
                 "A planned control is disabled. No further actions were sent."
             )
             break
-        # A resumed plan may include a field already holding the requested value.
-        # Compare this exact current node locally instead of firing another input event.
-        unchanged = action["action"] == "type" and current["controls"][node][
-            "value"
-        ] == (action["text"].replace("\r\n", "\n").replace("\r", "\n"))
         # Save intent before input, so interruption cannot make a sent action disappear.
-        result["attempting"] = None if unchanged else action.copy()
+        result["attempting"] = action.copy()
         if on_progress:
             on_progress(result)
         try:
             if action["action"] == "type":
-                if not unchanged:
-                    type_node(page, node, action["text"])
+                type_node(page, node, action["text"])
             else:
                 click_node(page, node)
             result["completed"].append(action.copy())

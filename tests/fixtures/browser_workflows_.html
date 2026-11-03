@@ -35,7 +35,9 @@
     event.preventDefault();
     window.submissions += 1;
     window.saved = Object.fromEntries(['name', 'email', 'notes'].map(id => [id, document.getElementById(id).value]));
-    document.querySelector('#status').textContent = 'Profile saved';
+    const showSaved = () => { document.querySelector('#status').textContent = 'Profile saved'; };
+    if (window.delay) setTimeout(showSaved, window.delay);
+    else showSaved();
   });
   filters.addEventListener('submit', event => {
     event.preventDefault();

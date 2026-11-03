@@ -334,9 +334,11 @@ def check_unchanged_fields(page):
         page.get_by_role("textbox", name=name, exact=True).fill(text)
     before = browser_.read_page(page)
     actions = choose_actions(before, CASES["profile"])
-    with patch.object(browser_, "type_node", wraps=browser_.type_node) as typing:
-        result = browser_.run_action_group(page, actions, before)
-    typing.assert_not_called()
+    page.evaluate(
+        "window.fieldWrites = 0; document.addEventListener('input', () => window.fieldWrites++);"
+    )
+    result = browser_.run_action_group(page, actions, before)
+    assert page.evaluate("window.fieldWrites") == 0
     assert result["remaining"] == 0 and not result["error"]
     assert page.evaluate("window.saved") == CASES["profile"]["saved"]
     assert page.evaluate("window.submissions") == 1
@@ -344,6 +346,25 @@ def check_unchanged_fields(page):
     print(
         "PASS: exact current fields already holding requested text are not rewritten."
     )
+
+
+def check_masked_value(page):
+    """Read real password text locally; an accessibility mask is not its value."""
+    page.goto("about:blank")
+    page.set_content(
+        '<label>Secret <input type="password" value="fixture-secret"></label>'
+    )
+    before = browser_.read_page(page)
+    node = next(iter(before["controls"]))
+    browser_.type_node(page, node, "••••")
+    assert page.locator("input").input_value() == "••••"
+    before = browser_.read_page(page)
+    page.evaluate(
+        "window.fieldWrites = 0; document.addEventListener('input', () => window.fieldWrites++);"
+    )
+    browser_.type_node(page, node, "••••")
+    assert page.evaluate("window.fieldWrites") == 0
+    print("PASS: masked accessibility text is never used to skip a real field write.")
 
 
 def check_local_waits(page):
@@ -424,6 +445,166 @@ def check_local_waits(page):
     )
 
 
+def run_recovery_case(page, runtime, mode, tokenizer=None, legacy=False, replay=False):
+    """Count the interrupted attempt too, then recover on fresh observed targets.
+
+    Before: reissue the original request because the old engine lost its history.
+    After: /continue retains the verified prefix; no stored action is replayed.
+    """
+    from threading import Event
+
+    case = CASES["long_note"]
+    page.goto("about:blank")
+    page.set_content(FIXTURE.read_text(encoding="utf-8"))
+    page.evaluate("mode => window.fixtureMode = mode", mode)
+    if mode == "delayed":
+        page.evaluate("window.delay = 400")
+    page.evaluate(
+        "window.fieldWrites = 0; document.addEventListener('input', () => window.fieldWrites++);"
+    )
+    cancelled = Event()
+    state = {"playwright": runtime, "page": page, "_cancel": cancelled}
+    request = f'Fill {case["fields"]} in Profile, then click Save.'
+    payloads, replies, writes = [], [], []
+    first = True
+    original_type = browser_.type_node
+
+    def type_and_stop(tab, node, text):
+        """Press Stop only after the first real field write has been checked."""
+        original_type(tab, node, text)
+        writes.append(node)
+        if len(writes) == 1:
+            cancelled.set()
+
+    def choose(**kwargs):
+        """Use current model-visible IDs, never the interrupted plan's IDs."""
+        nonlocal first
+        payloads.append(kwargs["messages"])
+        payload = json.loads(kwargs["messages"][-1]["content"])
+        if "Profile saved" in page.locator("#status").inner_text():
+            action = {"action": "reply", "text": "Recovery verified"}
+        elif page.evaluate("window.submissions"):
+            action = {"action": "wait_for", "text": "Profile saved", "timeout": 2}
+        else:
+            actions = choose_actions(payload["page"], case)
+            if not first and not legacy and not replay:
+                assert payload["request"] == request
+                assert payload["previous_actions"][0]["result"]["completed"] == 1
+                actions = actions[1:]
+            action = {"action": "batch", "actions": actions}
+        first = False
+        replies.append(action)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(message=SimpleNamespace(content=json.dumps(action)))
+            ]
+        )
+
+    environment = {
+        "LLM_API_KEY": "fixture",
+        "LLM_BASE_URL": "https://example.invalid/v1",
+        "LLM_MODEL": "fixture",
+    }
+    started = perf_counter()
+    with (
+        patch.dict(os.environ, environment, clear=True),
+        patch.object(llm_, "_client", None),
+        patch.object(llm_, "OpenAI") as client,
+        patch.object(browser_, "type_node", side_effect=type_and_stop),
+    ):
+        client.return_value.chat.completions.create.side_effect = choose
+        try:
+            agent_.run_agent(request, state)
+            raise AssertionError("Fixture Stop was ignored")
+        except InterruptedError:
+            pass
+        assert len(writes) == 1 and page.evaluate("window.submissions") == 0
+        # Keep the replaced node, but stop replacing it on every future input.
+        page.evaluate("window.fixtureMode = 'normal'")
+        cancelled.clear()
+        result = agent_.run_agent(request if legacy else "/continue", state)
+    elapsed = perf_counter() - started
+    assert result == "Recovery verified"
+    assert page.evaluate("window.saved") == case["saved"]
+    assert page.evaluate("window.submissions") == 1
+    assert page.evaluate("window.wrongClicks") == 0
+    field_writes = page.evaluate("window.fieldWrites")
+    assert field_writes == (4 if legacy else 3), (field_writes, writes)
+    metrics = {
+        "case": mode,
+        "mode": "restart" if legacy else "continue",
+        "model_calls": len(replies),
+        "field_writes": field_writes,
+        "local_seconds": round(elapsed, 4),
+        "success": True,
+    }
+    if tokenizer is not None:
+        metrics["input_text_tokens"] = sum(
+            len(tokenizer.encode(message["content"]).ids)
+            for messages in payloads
+            for message in messages
+        )
+        metrics["output_text_tokens"] = sum(
+            len(tokenizer.encode(json.dumps(action)).ids) for action in replies
+        )
+    return metrics
+
+
+def check_uncertain_recovery(page, runtime):
+    """A real fixture submission followed by a read error must never be sent twice."""
+    case = CASES["profile"]
+    page.goto("about:blank")
+    page.set_content(FIXTURE.read_text(encoding="utf-8"))
+    state = {"playwright": runtime, "page": page}
+    calls = 0
+    original_click = browser_.click_node
+
+    def click_then_fail(tab, node):
+        """Send the actual fixture click, then pretend the outcome was lost."""
+        original_click(tab, node)
+        raise RuntimeError("Fixture lost the submission result")
+
+    def choose(**kwargs):
+        """Deliberately request a duplicate click during inspection-only recovery."""
+        nonlocal calls
+        calls += 1
+        payload = json.loads(kwargs["messages"][-1]["content"])
+        actions = choose_actions(payload["page"], case)
+        action = {"action": "batch", "actions": actions} if calls == 1 else actions[-1]
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(message=SimpleNamespace(content=json.dumps(action)))
+            ]
+        )
+
+    environment = {
+        "LLM_API_KEY": "fixture",
+        "LLM_BASE_URL": "https://example.invalid/v1",
+        "LLM_MODEL": "fixture",
+    }
+    with (
+        patch.dict(os.environ, environment, clear=True),
+        patch.object(llm_, "_client", None),
+        patch.object(llm_, "OpenAI") as client,
+        patch.object(browser_, "click_node", side_effect=click_then_fail) as clicking,
+    ):
+        client.return_value.chat.completions.create.side_effect = choose
+        try:
+            agent_.run_agent("Fill the profile and save once", state)
+            raise AssertionError("Uncertain input was reported as success")
+        except RuntimeError:
+            pass
+        assert state["_browser_task"]["review_only"]
+        assert "no new input" in agent_.run_agent("/continue", state)
+        clicking.assert_called_once()
+    assert page.evaluate("window.submissions") == 1
+    assert page.evaluate("window.wrongClicks") == 0
+    assert calls == 2
+    print(
+        "PASS: uncertain real fixture submission is not repeated or falsely reported as finished."
+    )
+
+
 def main():
     """Check workflows and optionally count text tokens using a local tokenizer JSON."""
     import argparse
@@ -445,7 +626,19 @@ def main():
         type=Path,
         help="Optional local tokenizer.json; no model API is called.",
     )
+    parser.add_argument(
+        "--recovery-only",
+        action="store_true",
+        help="Measure interrupted workflows, including the failed first attempt.",
+    )
+    parser.add_argument(
+        "--legacy-recovery",
+        action="store_true",
+        help="For an archived baseline only: reissue the lost original request.",
+    )
     args = parser.parse_args()
+    if args.legacy_recovery and not args.recovery_only:
+        parser.error("Use --legacy-recovery only with --recovery-only.")
     if not 1 <= args.repeat <= 30:
         parser.error("Choose between 1 and 30 repeats.")
     tokenizer = None
@@ -462,6 +655,28 @@ def main():
         )
         try:
             page = context.new_page()
+            if args.recovery_only:
+                for iteration in range(args.repeat):
+                    for mode in ("normal", "replace", "delayed"):
+                        print(
+                            json.dumps(
+                                {
+                                    "run": iteration + 1,
+                                    **run_recovery_case(
+                                        page,
+                                        runtime,
+                                        mode,
+                                        tokenizer,
+                                        args.legacy_recovery,
+                                    ),
+                                }
+                            ),
+                            flush=True,
+                        )
+                if not args.legacy_recovery:
+                    run_recovery_case(page, runtime, "normal", replay=True)
+                    check_uncertain_recovery(page, runtime)
+                return
             for iteration in range(args.repeat):
                 for name in CASES:
                     for grouped in ((False,) if args.single_only else (False, True)):
@@ -478,6 +693,11 @@ def main():
                 check_action_groups(page)
                 check_group_progress(page)
                 check_unchanged_fields(page)
+                check_masked_value(page)
+                for mode in ("normal", "replace", "delayed"):
+                    run_recovery_case(page, runtime, mode)
+                run_recovery_case(page, runtime, "normal", replay=True)
+                check_uncertain_recovery(page, runtime)
                 check_local_waits(page)
                 delayed = run_case(page, runtime, "filters", grouped=True, delay=400)
                 assert delayed["model_calls"] == 3
