@@ -281,6 +281,52 @@ def check_action_groups(page):
     )
 
 
+def check_group_progress(page):
+    """Keep completed work on Stop and remember input whose result is unknown."""
+    from copy import deepcopy
+
+    page.goto(FIXTURE.resolve().as_uri())
+    before = browser_.read_page(page)
+    actions = choose_actions(before, CASES["profile"])
+    progress = []
+
+    def remember(result):
+        """Save only action progress; Playwright objects remain on this thread."""
+        progress.append(
+            deepcopy(
+                {key: result[key] for key in ("completed", "remaining", "attempting")}
+            )
+        )
+
+    def stop_after_first():
+        """Simulate cancellation after the first field has been verified."""
+        if progress and len(progress[-1]["completed"]) == 1:
+            raise InterruptedError("Fixture Stop")
+
+    try:
+        browser_.run_action_group(page, actions, before, stop_after_first, remember)
+        raise AssertionError("Cancellation was ignored")
+    except InterruptedError:
+        pass
+    assert progress[-1]["completed"] == actions[:1]
+    assert progress[-1]["remaining"] == 3
+    assert progress[-1]["attempting"] is None
+    assert any(item["attempting"] == actions[0] for item in progress)
+    assert page.evaluate("window.submissions") == 0
+
+    before = browser_.read_page(page)
+    progress.clear()
+    with patch.object(
+        browser_, "click_node", side_effect=RuntimeError("Uncertain click")
+    ):
+        result = browser_.run_action_group(
+            page, [actions[-1]], before, on_progress=remember
+        )
+    assert result["error"] and progress[-1]["attempting"] == actions[-1]
+    assert progress[-1]["completed"] == []
+    print("PASS: interrupted groups retain completed work and uncertain input intent.")
+
+
 def check_local_waits(page):
     """Check delayed text, state changes, timeouts, replaced targets, and cancellation."""
     page.goto(FIXTURE.resolve().as_uri())
@@ -411,6 +457,7 @@ def main():
                         )
             if not args.single_only:
                 check_action_groups(page)
+                check_group_progress(page)
                 check_local_waits(page)
                 delayed = run_case(page, runtime, "filters", grouped=True, delay=400)
                 assert delayed["model_calls"] == 3

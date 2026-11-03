@@ -504,12 +504,13 @@ def type_node(page, backend_node_id, text):
                 pass
 
 
-def run_action_group(page, actions, observation, check_cancel=None):
+def run_action_group(page, actions, observation, check_cancel=None, on_progress=None):
     """Execute a checked group without asking the model between its actions.
 
     Input: observed type actions, with an optional click at the end.
     Output: completed actions, a stop/error reason, and a fresh local observation.
     A completed click means input was sent; the page must still prove its outcome.
+    on_progress can save partial work before input and after each local check.
     """
     validate_action_group(actions, observation["controls"])
     if _observations.get(page, {}).get("observation") is not observation:
@@ -528,7 +529,10 @@ def run_action_group(page, actions, observation, check_cancel=None):
         "stopped": None,
         "error": None,
         "observation": current,
+        "attempting": None,
     }
+    if on_progress:
+        on_progress(result)
 
     for action in actions:
         control = expected[action["backend_node_id"]]
@@ -591,6 +595,10 @@ def run_action_group(page, actions, observation, check_cancel=None):
                 "A planned control is disabled. No further actions were sent."
             )
             break
+        # Save intent before input, so interruption cannot make a sent action disappear.
+        result["attempting"] = action.copy()
+        if on_progress:
+            on_progress(result)
         try:
             if action["action"] == "type":
                 type_node(page, node, action["text"])
@@ -609,6 +617,7 @@ def run_action_group(page, actions, observation, check_cancel=None):
                     )
                     break
                 expected[node] = entered
+            result["attempting"] = None
         except (RuntimeError, Error) as error:
             # Do not retry or ask the model to repeat an action with an uncertain outcome.
             result["error"] = str(error)
@@ -616,7 +625,13 @@ def run_action_group(page, actions, observation, check_cancel=None):
                 "The action outcome is uncertain. Investigate before trying again."
             )
             break
+        finally:
+            # This also runs on Ctrl+C and Stop, without swallowing cancellation.
+            if on_progress:
+                on_progress(result)
 
+    if on_progress:
+        on_progress(result)
     return result
 
 
