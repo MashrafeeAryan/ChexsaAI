@@ -48,6 +48,24 @@ before reporting that the user's task succeeded. Groups are deliberately
 conservative: even unrelated added or removed controls can require another model
 decision. Autocomplete choices and dependent fields should be handled separately.
 
+## Continuing a browser request
+
+- Enter **`/continue`** (or `/resume`) after Stop, an API error, or the decision limit.
+- The current browser session keeps the original request, completed steps, and input intent in memory.
+- Chexsa reads the page again. The old snapshot is used only to calculate changes; it never supplies executable targets.
+- Completed fields remain progress. The model chooses unfinished work using current IDs.
+- If an editable field already contains the requested text, Python checks its real DOM value and skips another input event.
+- Unsent supplied values are omitted from model history. Unsent generated text stays available for recovery.
+- Uncertain input, a sent click followed by interruption, or a changed document makes recovery **inspection only**. It can read, search, and wait; it cannot send more input.
+- Closing the saved tab cannot silently open a replacement during recovery. Start a new request to use another tab.
+- A different request starts a new task. An identical request with an uncertain previous outcome is redirected to inspection first.
+- Closing Chexsa clears this checkpoint. This is session recovery, not disk persistence or automatic replay.
+
+Example: a group fills Name, then Stop is pressed. `/continue` keeps Name as
+completed, reads the current form, and asks for the unfinished Email/Notes/Save
+steps. If Save may already have been sent, continuation inspects its outcome
+instead of sending Save again.
+
 ## Browser fixture checks
 
 ```powershell
@@ -63,7 +81,9 @@ updates, cancellation, and uncertain actions.
 
 For optional offline token counts, install `.[benchmark]` and pass
 `--tokenizer C:\path\to\tokenizer.json` to the workflow check. `--repeat 20`
-repeats each scenario. Counts cover serialized system/request/history text and
+repeats each scenario. Add `--recovery-only` to measure interrupted workflows,
+including the failed first attempt. `--legacy-recovery` is only for an archived
+pre-recovery engine, where the original request had to be reissued. Counts cover serialized system/request/history text and
 scripted action/reply text; they are not provider-reported total API usage.
 
 ## Future work
@@ -75,4 +95,4 @@ scripted action/reply text; they are not provider-reported total API usage.
 - **More browser tools:** add tabs, scrolling, uploads, and other actions.
 - **Screenshots:** let the model use page images when needed.
 - **Better result checks:** confirm that the whole task succeeded.
-- **Saved progress:** continue an interrupted task safely.
+- **Saved progress across restarts:** reconcile a task after closing the app.

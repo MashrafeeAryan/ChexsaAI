@@ -148,3 +148,36 @@ performance against other agents.
 Tokenizer: `openai/gpt-oss-120b`, revision
 `b5c939de8f754692c1647ca79fbf85e8c1e70f8a`. Repeat commands are in
 [ARCHITECTURE.md](ARCHITECTURE.md#browser-fixture-checks).
+
+## Browser continuation — November 3, 2026
+
+20 runs per workflow, using scripted replies and the same GPT-OSS tokenizer as above.
+Counts include the cancelled first attempt. Before (`a24e99b`), the original request
+was reissued because progress was lost; after, `/continue` uses the checkpoint.
+These are local text counts, not provider-reported API usage.
+
+| Interrupted workflow | Input text tokens before -> after | Output text tokens before -> after | Total text tokens before -> after | Model calls before -> after |
+| :--- | ---: | ---: | ---: | ---: |
+| Stop after the first field | 2,595.25 -> 2,589.55 | 412.20 -> 390.55 | 3,007.45 -> 2,980.10 | 3 -> 3 |
+| Stop with a replaced next field | 2,595.25 -> 2,589.75 | 412.20 -> 390.55 | 3,007.45 -> 2,980.30 | 3 -> 3 |
+| Stop, then delayed confirmation | 3,507.10 -> 3,547.60 | 432.20 -> 410.55 | 3,939.30 -> 3,958.15 | 4 -> 4 |
+
+Total text tokens decreased by **0.91%** and **0.90%** in the first two cases,
+and increased by **0.48%** with delayed confirmation. Model-call savings: **0%**.
+Token usage was effectively unchanged; this is a recovery improvement.
+
+| Interrupted workflow | Input events before -> after | Verified runs before / after | Median local seconds before -> after |
+| :--- | ---: | ---: | ---: |
+| Stop after the first field | 4 -> 3 | 20/20 / 20/20 | 0.7997 -> 0.8249 |
+| Stop with a replaced next field | 4 -> 3 | 20/20 / 20/20 | 0.6655 -> 0.8297 |
+| Stop, then delayed confirmation | 4 -> 3 | 20/20 / 20/20 | 1.1597 -> 1.2891 |
+
+Field input events decreased by **25%** in all three workflows. Both versions
+finished all 60 runs with exact saved values, zero wrong-target actions, and
+zero duplicate submissions. A separate uncertain-submit check sent the fixture
+submission once, then blocked a model-requested repeat during inspection.
+
+Local times exclude model inference, network waiting, and token counting.
+No speedup was demonstrated; these were separate captures on the same laptop.
+No live API calls or personal accounts were used. Scripted replies do not test
+live model reliability. Recovery remains in memory and is cleared on app exit.
