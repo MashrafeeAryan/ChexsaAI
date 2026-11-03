@@ -309,6 +309,77 @@ class AgentLoopTests(unittest.TestCase):
         self.assertEqual(self.tools["read_page"].call_count, 1)
         self.assertEqual(self.tools["get_reply"].call_args.args[1], after)
 
+    def test_continue_keeps_partial_progress_but_reads_new_targets(self):
+        """Stop keeps the request and result; continuation gets a fresh node ID."""
+        actions = [
+            {"action": "type", "backend_node_id": 12, "text": "Hello"},
+            {"action": "click", "backend_node_id": 18},
+        ]
+        browser = {"playwright": self.connection, "page": self.page}
+        self.tools["get_reply"].return_value = {"action": "batch", "actions": actions}
+
+        def interrupted(page, planned, observation, cancel, remember):
+            """Simulate Stop after one verified field, without sending the click."""
+            remember(
+                {
+                    "completed": actions[:1],
+                    "remaining": 1,
+                    "stopped": None,
+                    "attempting": None,
+                }
+            )
+            raise InterruptedError("Stop")
+
+        self.tools["run_action_group"].side_effect = interrupted
+        with self.assertRaises(InterruptedError):
+            agent_.run_agent("Fill and save Hello", browser)
+        self.assertEqual(browser["_browser_task"]["status"], "paused")
+        self.assertEqual(
+            browser["_browser_task"]["history"][0]["result"]["completed"], 1
+        )
+        fresh = dict(self.observation, elements='[42] button "Continue"')
+        self.tools["read_page"].return_value = fresh
+        self.tools["get_reply"].side_effect = [
+            {"action": "click", "backend_node_id": 42},
+            {"action": "reply", "text": "Finished"},
+        ]
+        self.assertEqual(agent_.run_agent("continue", browser), "Finished")
+        decision = self.tools["get_reply"].call_args_list[-2].args
+        self.assertEqual(decision[0], "Fill and save Hello")
+        self.assertIs(decision[1], fresh)
+        self.assertIsNone(decision[3])
+        self.tools["type_node"].assert_not_called()
+        self.tools["click_node"].assert_called_once_with(self.page, 42)
+        self.assertEqual(browser["_browser_task"]["status"], "finished")
+
+    def test_new_request_does_not_inherit_old_progress(self):
+        """A different request starts clean; continuation needs an unfinished task."""
+        browser = {}
+        self.assertIn("No unfinished", agent_.run_agent("/resume", browser))
+        self.tools["get_reply"].assert_not_called()
+        self.tools["get_reply"].return_value = {"action": "reply", "text": "Hello"}
+        agent_.run_agent("Hi", browser)
+        old = browser["_browser_task"]
+        self.assertIn("No unfinished", agent_.run_agent("/continue", browser))
+        agent_.run_agent("Another question", browser)
+        self.assertIsNot(browser["_browser_task"], old)
+        self.assertEqual(self.tools["get_reply"].call_args.args[2], [])
+
+    def test_api_failure_keeps_verified_progress_for_continue(self):
+        """An API error cannot erase fields already verified locally."""
+        browser = {"playwright": self.connection, "page": self.page}
+        self.tools["get_reply"].side_effect = [
+            {"action": "type", "backend_node_id": 12, "text": "Hello"},
+            RuntimeError("API unavailable"),
+        ]
+        with self.assertRaisesRegex(RuntimeError, "API unavailable"):
+            agent_.run_agent("Fill subject", browser)
+        self.assertEqual(len(browser["_browser_task"]["history"]), 1)
+        self.assertIsNone(browser["_browser_task"]["in_flight"])
+        self.tools["get_reply"].side_effect = [{"action": "reply", "text": "Verified"}]
+        self.assertEqual(agent_.run_agent("resume", browser), "Verified")
+        self.tools["type_node"].assert_called_once()
+
 
 class AgentModelPayloadTests(unittest.TestCase):
     def test_long_request_text_is_referenced_without_losing_generated_text(self):
