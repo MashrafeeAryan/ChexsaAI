@@ -327,6 +327,25 @@ def check_group_progress(page):
     print("PASS: interrupted groups retain completed work and uncertain input intent.")
 
 
+def check_unchanged_fields(page):
+    """An already-correct field needs no input event, even in a repeated plan."""
+    page.goto(FIXTURE.resolve().as_uri())
+    for name, text in CASES["profile"]["fields"].items():
+        page.get_by_role("textbox", name=name, exact=True).fill(text)
+    before = browser_.read_page(page)
+    actions = choose_actions(before, CASES["profile"])
+    with patch.object(browser_, "type_node", wraps=browser_.type_node) as typing:
+        result = browser_.run_action_group(page, actions, before)
+    typing.assert_not_called()
+    assert result["remaining"] == 0 and not result["error"]
+    assert page.evaluate("window.saved") == CASES["profile"]["saved"]
+    assert page.evaluate("window.submissions") == 1
+    assert page.evaluate("window.wrongClicks") == 0
+    print(
+        "PASS: exact current fields already holding requested text are not rewritten."
+    )
+
+
 def check_local_waits(page):
     """Check delayed text, state changes, timeouts, replaced targets, and cancellation."""
     page.goto(FIXTURE.resolve().as_uri())
@@ -458,6 +477,7 @@ def main():
             if not args.single_only:
                 check_action_groups(page)
                 check_group_progress(page)
+                check_unchanged_fields(page)
                 check_local_waits(page)
                 delayed = run_case(page, runtime, "filters", grouped=True, delay=400)
                 assert delayed["model_calls"] == 3

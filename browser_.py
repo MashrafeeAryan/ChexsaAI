@@ -595,13 +595,19 @@ def run_action_group(page, actions, observation, check_cancel=None, on_progress=
                 "A planned control is disabled. No further actions were sent."
             )
             break
+        # A resumed plan may include a field already holding the requested value.
+        # Compare this exact current node locally instead of firing another input event.
+        unchanged = action["action"] == "type" and current["controls"][node][
+            "value"
+        ] == (action["text"].replace("\r\n", "\n").replace("\r", "\n"))
         # Save intent before input, so interruption cannot make a sent action disappear.
-        result["attempting"] = action.copy()
+        result["attempting"] = None if unchanged else action.copy()
         if on_progress:
             on_progress(result)
         try:
             if action["action"] == "type":
-                type_node(page, node, action["text"])
+                if not unchanged:
+                    type_node(page, node, action["text"])
             else:
                 click_node(page, node)
             result["completed"].append(action.copy())
