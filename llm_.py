@@ -64,7 +64,15 @@ def get_reply(message, observation=None, history=None, previous=None):
         "request": message,
         "previous_actions": compact_history(message, history or []),
     }
-    if user_message["previous_actions"] != (history or []):
+    # Explain text offsets only when the compact history actually contains them.
+    history_actions = []
+    for entry in user_message["previous_actions"]:
+        action = entry["action"]
+        history_actions.extend(
+            action["actions"] if action.get("action") == "batch" else [action]
+        )
+        history_actions.extend(entry.get("remaining_generated", []))
+    if any("text_from_request" in action for action in history_actions):
         user_message["history_note"] = (
             "text_from_request=[start,end] refers to character offsets in request, end excluded. "
             "These are history summaries, not executable actions."
@@ -77,7 +85,7 @@ def get_reply(message, observation=None, history=None, previous=None):
         for item in history or []
     ):
         user_message["history_note"] = user_message.get("history_note", "") + (
-            " Partial groups show completed actions only. Unsent supplied values remain in request; remaining_generated is an unsent plan."
+            " Group history lists completed actions; remaining_generated is unsent."
         )
     visible_targets = set()
     if observation is not None:

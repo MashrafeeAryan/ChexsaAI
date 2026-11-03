@@ -123,12 +123,13 @@ class AgentLoopTests(unittest.TestCase):
             "action": "click",
             "backend_node_id": 18,
         }
-        result = agent_.run_agent(
-            "Continue", {"playwright": self.connection, "page": self.page}
-        )
+        browser = {"playwright": self.connection, "page": self.page}
+        result = agent_.run_agent("Continue", browser)
+        self.assertTrue(browser["_browser_task"]["review_only"])
+        self.assertIn("no new input", agent_.run_agent("/continue", browser))
         self.assertIn("without a page change", result)
         self.tools["click_node"].assert_called_once()
-        self.assertEqual(self.tools["get_reply"].call_count, 2)
+        self.assertEqual(self.tools["get_reply"].call_count, 3)
 
     def test_same_control_can_be_clicked_again_after_page_progress(self):
         "Checks that clicking again is allowed when the page has made progress."
@@ -347,7 +348,9 @@ class AgentLoopTests(unittest.TestCase):
         decision = self.tools["get_reply"].call_args_list[-2].args
         self.assertEqual(decision[0], "Fill and save Hello")
         self.assertIs(decision[1], fresh)
-        self.assertIsNone(decision[3])
+        self.assertIs(
+            decision[3], self.observation
+        )  # Comparison only, not executable targets.
         self.tools["type_node"].assert_not_called()
         self.tools["click_node"].assert_called_once_with(self.page, 42)
         self.assertEqual(browser["_browser_task"]["status"], "finished")
@@ -507,6 +510,49 @@ class AgentModelPayloadTests(unittest.TestCase):
         self.assertNotIn("remaining_generated", compact[0])
         self.assertEqual(history, original)
         self.assertLess(len(json.dumps(compact)), len(json.dumps(history)))
+
+    def test_partial_history_does_not_explain_offsets_when_none_are_used(self):
+        """A short completed value does not need the long text-offset instruction."""
+        history = [
+            {
+                "action": {
+                    "action": "batch",
+                    "actions": [
+                        {"action": "type", "backend_node_id": 12, "text": "Hello"},
+                        {"action": "click", "backend_node_id": 18},
+                    ],
+                },
+                "result": {"completed": 1, "remaining": 1, "stopped": "Changed"},
+            }
+        ]
+        environment = {
+            "LLM_API_KEY": "fixture",
+            "LLM_BASE_URL": "https://example.invalid/v1",
+            "LLM_MODEL": "fixture",
+        }
+        with (
+            patch.dict(os.environ, environment, clear=True),
+            patch.object(llm_, "_client", None),
+            patch.object(llm_, "OpenAI") as client,
+        ):
+            client.return_value.chat.completions.create.return_value = SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content='{"action":"reply","text":"Paused"}'
+                        )
+                    )
+                ]
+            )
+            llm_.get_reply("Type Hello and save", history=history)
+            payload = json.loads(
+                client.return_value.chat.completions.create.call_args.kwargs[
+                    "messages"
+                ][-1]["content"]
+            )
+        self.assertIn("completed actions", payload["history_note"])
+        self.assertNotIn("character offsets", payload["history_note"])
+        self.assertEqual(len(payload["previous_actions"][0]["action"]["actions"]), 1)
 
     def test_group_and_wait_only_accept_targets_shown_to_the_model(self):
         """Every grouped target is checked before the executor can write to any field."""

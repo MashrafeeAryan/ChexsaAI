@@ -57,27 +57,29 @@ def run_agent(message, browser):
     except (Exception, KeyboardInterrupt):
         # Keep progress, but let the CLI or app display the original error or Stop.
         task["status"] = "paused"
-        # A sent click can have effects even when reading its result was interrupted.
-        task["review_only"] = (
-            task.get("review_only", False)
-            or task["in_flight"] is not None
-            or any(
-                entry["action"]["action"] == "click"
-                or (
-                    entry["action"]["action"] == "batch"
-                    and any(
-                        item["action"] == "click"
-                        for item in entry["action"]["actions"][
-                            : entry["result"].get("completed", 0)
-                        ]
-                    )
-                )
-                for entry in task["history"]
-                if isinstance(entry["result"], dict)
-                or entry["action"]["action"] == "click"
-            )
-        )
         raise
+    finally:
+        # Limits and repeated-action stops must protect sent clicks too.
+        if task["status"] == "paused":
+            task["review_only"] = (
+                task.get("review_only", False)
+                or task["in_flight"] is not None
+                or any(
+                    entry["action"]["action"] == "click"
+                    or (
+                        entry["action"]["action"] == "batch"
+                        and any(
+                            item["action"] == "click"
+                            for item in entry["action"]["actions"][
+                                : entry["result"].get("completed", 0)
+                            ]
+                        )
+                    )
+                    for entry in task["history"]
+                    if isinstance(entry["result"], dict)
+                    or entry["action"]["action"] == "click"
+                )
+            )
 
 
 def _run_browser_task(task, browser, resuming=False):
@@ -92,7 +94,8 @@ def _run_browser_task(task, browser, resuming=False):
         if observation
         else None
     )
-    if resuming and task.get("scope") != scope:
+    same_document = task.get("scope") == scope
+    if resuming and not same_document:
         task["review_only"] = True
         history.append(
             {
@@ -103,7 +106,9 @@ def _run_browser_task(task, browser, resuming=False):
     task["scope"] = scope
     last_action = None
     last_observation = None
-    previous = None
+    # Old snapshots are comparison data only. All action IDs come from the new reading.
+    previous = task.get("_observation") if resuming and same_document else None
+    task["_observation"] = observation
 
     # Each turn can make one model call. This fixed limit prevents endless API calls.
     for step in range(10):
@@ -166,6 +171,8 @@ def _run_browser_task(task, browser, resuming=False):
                     "stopped": progress["stopped"],
                 }
                 task["in_flight"] = progress["attempting"]
+                if progress.get("observation") is not None:
+                    task["_observation"] = progress["observation"]
 
             # The browser rechecks targets between actions without consulting the model.
             group = run_action_group(
@@ -205,6 +212,7 @@ def _run_browser_task(task, browser, resuming=False):
             next_observation if next_observation is not None else read_page(page)
         )
         task["in_flight"] = None
+        task["_observation"] = observation
         task["scope"] = tuple(
             observation.get(key) for key in ("page_id", "document_id", "url")
         )
