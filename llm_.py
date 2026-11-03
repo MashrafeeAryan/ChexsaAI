@@ -69,6 +69,16 @@ def get_reply(message, observation=None, history=None, previous=None):
             "text_from_request=[start,end] refers to character offsets in request, end excluded. "
             "These are history summaries, not executable actions."
         )
+    if any(
+        item["action"].get("action") == "batch"
+        and isinstance(item["result"], dict)
+        and type(item["result"].get("completed")) is int
+        and item["result"]["completed"] < len(item["action"]["actions"])
+        for item in history or []
+    ):
+        user_message["history_note"] = user_message.get("history_note", "") + (
+            " Partial groups show completed actions only. Unsent supplied values remain in request; remaining_generated is an unsent plan."
+        )
     visible_targets = set()
     if observation is not None:
         # Build the smaller page view locally; do not resend the old full page.

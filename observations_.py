@@ -118,7 +118,9 @@ def compact_history(request, history):
 
     Example: a history entry can use text_from_request=[20, 140].
     Those are character offsets into the original request, which is still sent in full.
-    Generated text that is not in the request is preserved. The local history is unchanged.
+    Partial groups describe completed actions only. Unsent generated text is kept
+    in remaining_generated; supplied values are still in the request.
+    The local history is unchanged.
     """
 
     def summarize(action):
@@ -138,7 +140,25 @@ def compact_history(request, history):
                 summary["text_from_request"] = [start, start + len(text)]
         return summary
 
-    return [{**entry, "action": summarize(entry["action"])} for entry in history]
+    compact = []
+    for entry in history:
+        summary = {**entry, "action": summarize(entry["action"])}
+        action, result = entry["action"], entry["result"]
+        if action.get("action") == "batch" and isinstance(result, dict):
+            completed = result.get("completed")
+            if type(completed) is int and 0 <= completed < len(action["actions"]):
+                # Unsent supplied values are still in the request; they are not progress.
+                summary["action"]["actions"] = summary["action"]["actions"][:completed]
+                generated = [
+                    summarize(item)
+                    for item in action["actions"][completed:]
+                    if item.get("action") == "type" and item["text"] not in request
+                ]
+                # New generated text may exist only in the plan, so keep it for recovery.
+                if generated:
+                    summary["remaining_generated"] = generated
+        compact.append(summary)
+    return compact
 
 
 

@@ -475,11 +475,36 @@ class AgentModelPayloadTests(unittest.TestCase):
         ]
         original = deepcopy(history)
         compact = compact_history(request, history)
-        first, second = compact[0]["action"]["actions"]
+        first = compact[0]["action"]["actions"][0]
+        second = compact[0]["remaining_generated"][0]
         start, end = first["text_from_request"]
         self.assertEqual(request[start:end], supplied)
         self.assertEqual(second["text"], generated)
         self.assertEqual(compact[0]["result"], history[0]["result"])
+        self.assertEqual(history, original)
+        self.assertLess(len(json.dumps(compact)), len(json.dumps(history)))
+
+    def test_partial_history_omits_unsent_supplied_values_without_claiming_success(
+        self,
+    ):
+        """Only the completed prefix is progress; local plans and errors stay intact."""
+        from observations_ import compact_history
+
+        actions = [
+            {"action": "type", "backend_node_id": number, "text": "Supplied value"}
+            for number in range(1, 5)
+        ] + [{"action": "click", "backend_node_id": 5}]
+        history = [
+            {
+                "action": {"action": "batch", "actions": actions},
+                "result": {"completed": 1, "remaining": 4, "stopped": "Target changed"},
+            }
+        ]
+        original = deepcopy(history)
+        compact = compact_history("Use Supplied value in all fields", history)
+        self.assertEqual(compact[0]["action"]["actions"], actions[:1])
+        self.assertEqual(compact[0]["result"], history[0]["result"])
+        self.assertNotIn("remaining_generated", compact[0])
         self.assertEqual(history, original)
         self.assertLess(len(json.dumps(compact)), len(json.dumps(history)))
 
