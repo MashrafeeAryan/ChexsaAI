@@ -31,9 +31,16 @@ def run_agent(message, browser):
         task = saved
         if task is None or task["status"] == "finished":
             return "No unfinished browser request to continue. Give a new request."
-        if task["in_flight"] is not None:
-            return "Previous input has an uncertain outcome. Check the page before starting another request."
+        if task.get("review_only"):
+            task["history"].append(
+                {
+                    "action": {"action": "observe"},
+                    "result": "Recovery is inspection only: previous input may have been sent. Use fresh evidence; do not send new input.",
+                }
+            )
     else:
+        if saved and saved.get("review_only") and message == saved["request"]:
+            return "The previous attempt may already have changed the page. Enter /continue to inspect its result before repeating it."
         task = {
             "request": message,
             "history": [],
@@ -42,22 +49,58 @@ def run_agent(message, browser):
         }
         browser["_browser_task"] = task
 
+    if resuming and (browser.get("page") is None or browser["page"].is_closed()):
+        return "The saved browser tab is closed. Start a new request; old targets will not be reused."
     task["status"] = "running"
     try:
-        return _run_browser_task(task, browser)
+        return _run_browser_task(task, browser, resuming)
     except (Exception, KeyboardInterrupt):
         # Keep progress, but let the CLI or app display the original error or Stop.
         task["status"] = "paused"
+        # A sent click can have effects even when reading its result was interrupted.
+        task["review_only"] = (
+            task.get("review_only", False)
+            or task["in_flight"] is not None
+            or any(
+                entry["action"]["action"] == "click"
+                or (
+                    entry["action"]["action"] == "batch"
+                    and any(
+                        item["action"] == "click"
+                        for item in entry["action"]["actions"][
+                            : entry["result"].get("completed", 0)
+                        ]
+                    )
+                )
+                for entry in task["history"]
+                if isinstance(entry["result"], dict)
+                or entry["action"]["action"] == "click"
+            )
+        )
         raise
 
 
-def _run_browser_task(task, browser):
+def _run_browser_task(task, browser, resuming=False):
     """Use saved results for planning, while getting all executable IDs afresh."""
     message, history = task["request"], task["history"]
     # The CLI keeps this dictionary so later requests can reuse the same Chrome tab.
     check_cancelled(browser)
     page = browser.get("page")
     observation = read_page(page) if page is not None and not page.is_closed() else None
+    scope = (
+        tuple(observation.get(key) for key in ("page_id", "document_id", "url"))
+        if observation
+        else None
+    )
+    if resuming and task.get("scope") != scope:
+        task["review_only"] = True
+        history.append(
+            {
+                "action": {"action": "observe"},
+                "result": "The saved page/document changed. Earlier progress is historical; inspect only and ask for a new request before sending input.",
+            }
+        )
+    task["scope"] = scope
     last_action = None
     last_observation = None
     previous = None
@@ -72,6 +115,13 @@ def _run_browser_task(task, browser):
             # A reply ends the run: an answer, missing information, or a final report.
             task["status"] = "finished"
             return action["text"]
+        if task.get("review_only") and action["action"] not in (
+            "find_elements",
+            "wait_for",
+            "observe",
+        ):
+            task["status"] = "paused"
+            return "The previous input outcome is uncertain. Inspection only: no new input was sent. Check the page before starting another request."
         if action == last_action and observation == last_observation:
             task["status"] = "paused"
             return "Stopped because the AI repeated an action without a page change. Please check the page."
@@ -143,6 +193,7 @@ def _run_browser_task(task, browser):
 
         entry["result"] = result
         if group_error:
+            task["review_only"] = True
             raise RuntimeError(
                 f"Stopped after {result['completed']} actions were sent or verified. {group_error} Do not repeat the group automatically."
             )
@@ -154,6 +205,9 @@ def _run_browser_task(task, browser):
             next_observation if next_observation is not None else read_page(page)
         )
         task["in_flight"] = None
+        task["scope"] = tuple(
+            observation.get(key) for key in ("page_id", "document_id", "url")
+        )
 
     task["status"] = "paused"
     return "Stopped after 10 model decisions. The request may be unfinished; please check the page."

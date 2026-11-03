@@ -380,6 +380,78 @@ class AgentLoopTests(unittest.TestCase):
         self.assertEqual(agent_.run_agent("resume", browser), "Verified")
         self.tools["type_node"].assert_called_once()
 
+    def test_uncertain_resume_allows_inspection_but_rejects_new_input(self):
+        """Even a model that asks to click again cannot repeat uncertain input."""
+        browser = {"playwright": self.connection, "page": self.page}
+        self.tools["get_reply"].return_value = {
+            "action": "click",
+            "backend_node_id": 18,
+        }
+        self.tools["click_node"].side_effect = RuntimeError("Uncertain click")
+        with self.assertRaisesRegex(RuntimeError, "Uncertain"):
+            agent_.run_agent("Save once", browser)
+        self.assertTrue(browser["_browser_task"]["review_only"])
+        calls = self.tools["get_reply"].call_count
+        self.assertIn("/continue", agent_.run_agent("Save once", browser))
+        self.assertEqual(self.tools["get_reply"].call_count, calls)
+        self.tools["get_reply"].side_effect = [
+            {"action": "wait_for", "text": "Saved"},
+            {"action": "click", "backend_node_id": 18},
+        ]
+        self.tools["wait_for_page"].return_value = {
+            "matched": False,
+            "reason": "Timeout",
+            "observation": self.observation,
+        }
+        self.assertIn("no new input", agent_.run_agent("/continue", browser))
+        self.tools["click_node"].assert_called_once()
+        self.tools["wait_for_page"].assert_called_once()
+        self.assertEqual(self.tools["read_page"].call_count, 2)
+
+    def test_cancelled_read_after_sent_click_keeps_inspection_only(self):
+        """A successful input call is not evidence that submission failed."""
+        browser = {"playwright": self.connection, "page": self.page}
+        self.tools["get_reply"].return_value = {
+            "action": "click",
+            "backend_node_id": 18,
+        }
+        self.tools["read_page"].side_effect = [self.observation, KeyboardInterrupt()]
+        with self.assertRaises(KeyboardInterrupt):
+            agent_.run_agent("Save", browser)
+        self.assertTrue(browser["_browser_task"]["review_only"])
+        self.tools["read_page"].side_effect = None
+        self.tools["get_reply"].return_value = {
+            "action": "reply",
+            "text": "Saved evidence reviewed",
+        }
+        self.assertEqual(
+            agent_.run_agent("/continue", browser), "Saved evidence reviewed"
+        )
+        self.tools["click_node"].assert_called_once()
+
+    def test_continue_cannot_open_a_replacement_tab_or_write_a_changed_document(self):
+        """Old progress cannot authorize writes into a new page or replacement tab."""
+        browser = {"playwright": self.connection, "page": self.page}
+        self.tools["get_reply"].side_effect = RuntimeError("API unavailable")
+        with self.assertRaises(RuntimeError):
+            agent_.run_agent("Fill subject", browser)
+        self.page.is_closed.return_value = True
+        self.assertIn("tab is closed", agent_.run_agent("/continue", browser))
+        self.tools["open_browser"].assert_not_called()
+        self.page.context.new_page.assert_not_called()
+        self.page.is_closed.return_value = False
+        self.tools["read_page"].return_value = dict(
+            self.observation, url="https://example.test/another"
+        )
+        self.tools["get_reply"].side_effect = None
+        self.tools["get_reply"].return_value = {
+            "action": "type",
+            "backend_node_id": 12,
+            "text": "Hello",
+        }
+        self.assertIn("no new input", agent_.run_agent("/continue", browser))
+        self.tools["type_node"].assert_not_called()
+
 
 class AgentModelPayloadTests(unittest.TestCase):
     def test_long_request_text_is_referenced_without_losing_generated_text(self):
