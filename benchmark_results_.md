@@ -181,3 +181,27 @@ Local times exclude model inference, network waiting, and token counting.
 No speedup was demonstrated; these were separate captures on the same laptop.
 No live API calls or personal accounts were used. Scripted replies do not test
 live model reliability. Recovery remains in memory and is cleared on app exit.
+
+## Windows working view — November 4, 2026
+
+Scripted replies with a simulated 181-control window and a real temporary text
+file. Counts include model message text, serialized tool definitions, and
+scripted tool-call text using the GPT-OSS tokenizer above. They exclude provider
+framing and reasoning tokens. The full-view baseline uses the same controller.
+
+| Workflow | Full input + output | Compact input + output | Model calls | Extra searches | Total text-token reduction |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| Direct file, no open window | 1,020 + 50 | 1,020 + 50 | 1 to 1 | 0 | 0% |
+| Confirm changes, target omitted | 5,712 + 38 | 4,281 + 60 | 2 to 3 | 1 | 24.5% |
+| Create a file and click Apply | 8,746 + 88 | 4,674 + 88 | 3 to 3 | 0 | 46.1% |
+
+Both views passed the file and simulated click checks. The compact view used
+an extra decision when Apply was absent. A separate native Windows fixture
+checked text entry and target handling. These runs did not measure live model
+success, end-to-end latency, or a matched Windows MCP comparison.
+
+Run the offline comparison with the optional benchmark dependency and the local tokenizer:
+
+```powershell
+python tests/desktop_context_benchmark_.py --tokenizer C:\path\to\tokenizer.json
+```
