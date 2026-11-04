@@ -1,5 +1,6 @@
 """Open Windows apps and read their visible controls."""
 
+from collections import Counter
 import json  # Keeps names readable when they contain quotes or line breaks.
 from pathlib import Path  # Gets filenames and checks whether a file exists.
 
@@ -91,6 +92,10 @@ def read_window(window):
     title = window.window_text()
     controls, lines = {}, []  # Real objects for Python; descriptions for the AI.
     unavailable = 0
+    try:
+        focused = tuple(IUIA().iuia.GetFocusedElement().GetRuntimeId())
+    except (AttributeError, COMError, OSError, TypeError):
+        focused = None  # Some apps cannot report focus through Windows.
 
     # descendants() includes nested controls. Example printed objects:
     # [<uia_controls.ButtonWrapper - 'Save', Button, 123456>,
@@ -118,6 +123,8 @@ def read_window(window):
             if not node_id:
                 unavailable += 1
                 continue
+            if node_id in controls:
+                continue
 
             # Example description for the AI: [42, 1001] Button "Save" | disabled
             line = f"{json.dumps(node_id)} {info.control_type} {json.dumps(info.name or '', ensure_ascii=False)}"
@@ -137,6 +144,28 @@ def read_window(window):
         except (COMError, OSError):
             unavailable += 1  # A control may disappear while the window is being read.
 
+    # Give same-name controls enough context to tell them apart.
+    labels = Counter(line.partition("] ")[2].removesuffix(" | disabled") for line in lines)
+    for index, (node_id, line) in enumerate(zip(controls, lines)):
+        label = line.partition("] ")[2].removesuffix(" | disabled")
+        if labels[label] < 2:
+            continue
+
+        context = ""
+        try:
+            parent = controls[node_id].parent()
+            for _ in range(3):
+                if parent is None:
+                    break
+                name = parent.window_text()
+                if isinstance(name, str) and name.strip():
+                    context = " | in " + json.dumps(name[:80], ensure_ascii=False)
+                    break
+                parent = parent.parent()
+        except (AttributeError, COMError, OSError):
+            pass  # Still flag the duplicate when its parent cannot be read.
+        lines[index] += f"{context} | {labels[label]} with this label"
+
     # The agent sends the title, descriptions, and count; objects stay local.
     observation = {
         "title": title,
@@ -145,6 +174,7 @@ def read_window(window):
         "unavailable_controls": unavailable,
         "window": window,
         "window_id": window_id,
+        "focused": focused,
     }
 
     # Register this as the latest reading for this window.

@@ -289,8 +289,71 @@ def test_direct_word_document():
 
 
 # Let unittest run these functions without adding application or test classes.
+def test_busy_window_keeps_changes_and_can_find_hidden_duplicates():
+    """Find both Save buttons without sending the whole window or reusing old IDs."""
+    clutter = [f'[{i}] Edit "Field {i}"' for i in range(1, 81)]
+    buttons = ['[91] Button "Save" | in "Draft"', '[92] Button "Save" | in "Copy"']
+    previous = {"title": "Editor", "window_id": (1,), "elements": "\n".join(clutter + buttons)}
+    current = {**previous, "elements": previous["elements"] + '\n[93] Edit "File name"', "focused": (93,)}
+    view = agent._window_view(current, previous, "Write a note")
+    assert view["elements"].splitlines()[0] == '[93] Edit "File name"'
+    assert view["view"]["added_or_changed"] == 1
+    assert "[92]" not in view["elements"]
+
+    found = agent._window_view(current, previous, "Write a note", {"query": "Save", "offset": 0})
+    assert found["elements"].splitlines() == buttons
+    assert found["view"]["matches"] == 2
+    assert found["view"]["next_offset"] is None
+    page = agent._window_view(current, previous, "Write a note", {"query": "", "offset": 30})
+    assert page["elements"].splitlines()[0] == clutter[30]
+    assert page["view"]["next_offset"] == 60
+
+
+def test_compact_view_rejects_ids_it_did_not_show():
+    """An omitted or replaced control must be found before the model can use it."""
+    client = Mock()
+    lines = [f'[{i}] Edit "Field {i}"' for i in range(1, 81)]
+    observation = {"title": "Editor", "elements": "\n".join(lines), "unavailable_controls": 0}
+    view = agent._window_view(observation, None, "Fill a field")
+    with patch.dict(os.environ, {"LLM_MODEL": "fake"}), patch.object(agent, "_client", client):
+        for name, arguments in (
+            ("click_control", {"node_id": [80]}),
+            ("find_controls", {"query": "", "offset": True}),
+            ("find_controls", {"query": "", "offset": -1}),
+        ):
+            client.chat.completions.create.return_value = _response(name, arguments)
+            with unittest.TestCase().assertRaises(RuntimeError):
+                agent.get_desktop_action("Fill a field", view)
+        client.chat.completions.create.return_value = _response("click_control", {"node_id": [80]})
+        found = agent._window_view(observation, None, "Fill a field", {"query": "Field 80", "offset": 0})
+        assert agent.get_desktop_action("Fill a field", found)["arguments"]["node_id"] == [80]
+
+
+def test_desktop_search_executes_on_the_full_fresh_reading():
+    """Search exposes a replacement ID and the executor receives the real snapshot."""
+    lines = [f'[{i}] Edit "Field {i}"' for i in range(1, 81)]
+    before = {"title": "Editor", "elements": "\n".join(lines + ['[91] Button "Save"'])}
+    after = {**before, "elements": "\n".join(lines + ['[92] Button "Save"'])}
+    with ExitStack() as stack:
+        tools = _tools(stack)
+        tools["_observe"].side_effect = [before, after, after]
+        def choose(request, view, history):
+            if not history:
+                return {"tool": "find_controls", "arguments": {"query": "Save", "offset": 0}}
+            if len(history) == 1:
+                assert view["elements"] == '[92] Button "Save"'
+                return {"tool": "click_control", "arguments": {"node_id": [92]}}
+            return {"tool": "reply", "arguments": {"text": "Done", "done": True}}
+        tools["get_desktop_action"].side_effect = choose
+        assert agent.run_desktop_agent("Save the form", {"window": object()}) == "Done"
+        tools["click_control"].assert_called_once_with(after, [92])
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
+        test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
+        test_compact_view_rejects_ids_it_did_not_show,
+        test_desktop_search_executes_on_the_full_fresh_reading,
         test_native_tool_payload_and_validation, test_complete_desktop_flow,
         test_word_count_before_input, test_unverified_completion_is_refused,
         test_failures_and_limits, test_cli_modes_and_exit,

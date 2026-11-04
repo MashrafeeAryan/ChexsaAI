@@ -60,6 +60,14 @@ def _tool(name, description, properties):
 # Windows IDs must be nonempty lists of whole numbers, such as [42, 1001].
 _ID = {"type": "array", "items": {"type": "integer"}, "minItems": 1}
 
+_WINDOW_LIMIT = 30
+_SEARCH_TOOL = _tool(
+    "find_controls",
+    "Search this window for a control name or type. Use an empty query to browse. "
+    "Start at offset 0 and use next_offset to see more.",
+    {"query": {"type": "string"}, "offset": {"type": "integer", "minimum": 0}},
+)
+
 # STEP 1: Define the tools the AI is allowed to choose.
 # This menu describes tools to the AI; it does not run them.
 _TOOLS = [
@@ -160,6 +168,60 @@ Example model outpu
 """
 
 
+def _window_view(observation, previous, request, search=None):
+    """Show a small part of a busy window. The real controls stay in the full reading."""
+    if observation is None:
+        return None
+    lines = observation["elements"].splitlines()
+    if len(lines) <= _WINDOW_LIMIT and search is None:
+        return observation
+
+    old_lines = set()
+    same_window = previous is not None and (
+        previous.get("window_id"), previous["title"]
+    ) == (observation.get("window_id"), observation["title"])
+    if same_window:
+        old_lines = set(previous["elements"].splitlines())
+
+    if search is None:
+        words = set(re.findall(r"\w{3,}", request.casefold()))
+        focused = observation.get("focused")
+        focus_prefix = json.dumps(focused) + " " if focused else None
+
+        def priority(line):
+            """Keep focus, recent changes, and controls that match the request first."""
+            description = line.partition("] ")[2]
+            return (
+                bool(focus_prefix and line.startswith(focus_prefix)),
+                same_window and line not in old_lines,
+                len(words.intersection(re.findall(r"\w{3,}", description.casefold()))),
+                description.startswith(("Edit ", "Document ", "Button ")),
+            )
+
+        candidates = sorted(lines, key=priority, reverse=True)
+        offset = 0
+    else:
+        query = search["query"].strip().casefold()
+        candidates = [line for line in lines if query in line.partition("] ")[2].casefold()]
+        offset = search["offset"]
+
+    selected = candidates[offset:offset + _WINDOW_LIMIT]
+    view = {
+        **observation,
+        "elements": "\n".join(selected),
+        "view": {
+            "omitted": len(lines) - len(selected),
+            "added_or_changed": sum(line not in old_lines for line in lines) if same_window else None,
+            "removed_or_changed": len(old_lines.difference(lines)) if same_window else None,
+        },
+    }
+    if search is not None:
+        view["view"]["matches"] = len(candidates)
+        end = offset + len(selected)
+        view["view"]["next_offset"] = end if end < len(candidates) else None
+    return view
+
+
 # Ask for one native tool call, then check its arguments before executing anything.
 def get_desktop_action(request, observation=None, history=None):
     global _client
@@ -190,11 +252,21 @@ def get_desktop_action(request, observation=None, history=None):
             for key in ("title", "elements", "unavailable_controls")
         }
 
+    tools = _TOOLS
+    search_tip = ""
+    if observation is not None and "view" in observation:
+        payload["window"]["view"] = observation["view"]
+        tools = [*_TOOLS, _SEARCH_TOOL]
+        search_tip = (
+            "Use find_controls if a target is missing or unclear. "
+            "Compare context for duplicate labels. If still ambiguous, ask the user. "
+        )
+
     # STEP 1: Send the goal, tools, current reading, and past results to the AI.
     try:
         response = _client.chat.completions.create(
             model=os.environ["LLM_MODEL"],
-            tools=_TOOLS,
+            tools=tools,
             tool_choice="required",  # Ask for a tool choice, not a plain-text answer.
             parallel_tool_calls=False,  # Execute one decision before asking for another.
             max_completion_tokens=2048,
@@ -211,6 +283,7 @@ def get_desktop_action(request, observation=None, history=None):
                         "To create a Word document file, choose a .docx filename. Only use the app tools when the user asks to work inside the app. "
                         "Keep any filename or path the user supplied. If none is supplied, choose a descriptive filename with an extension matching the requested content. "
                         "Use only Windows IDs shown in the current reading. Read again after every action. "
+                        f"{search_tip}"
                         "To write a new document, create a blank document first; do not overwrite a user's existing document. "
                         "Use observed controls or standard shortcuts such as Ctrl+N. Do not use terminals or run shell commands. "
                         "Generate the requested writing yourself and pass it to type_text. It REPLACES the entire chosen field/document. "
@@ -246,7 +319,7 @@ def get_desktop_action(request, observation=None, history=None):
     schema = next(
         (
             tool["function"]["parameters"]
-            for tool in _TOOLS
+            for tool in tools
             if tool["function"]["name"] == name
         ),
         None,
@@ -274,6 +347,8 @@ def get_desktop_action(request, observation=None, history=None):
             valid = isinstance(value, str)
         elif kind == "boolean":
             valid = type(value) is bool
+        elif kind == "integer":
+            valid = type(value) is int and value >= 0
         else:
             valid = isinstance(value, list)
 
@@ -292,6 +367,13 @@ def get_desktop_action(request, observation=None, history=None):
         value for value in arguments.values() if isinstance(value, str)
     ).strip():
         raise RuntimeError("The model returned an empty app name or reply.")
+
+    if name in ("click_control", "type_text"):
+        prefix = json.dumps(arguments["node_id"]) + " "
+        if observation is None or not any(
+            line.startswith(prefix) for line in observation["elements"].splitlines()
+        ):
+            raise RuntimeError("That control was not shown in the current view. Search for it first.")
 
     return {"tool": name, "arguments": arguments}
 
@@ -375,12 +457,16 @@ def run_desktop_agent(request, state):
     ) and re.search(r"\b(create|write|save|make|generate)\b", request, re.I)
 
     last = None
+    previous = None
+    search = None
 
     # STEP 6: Repeat the cycle, allowing at most 10 model decisions.
     for step in range(10):  # Fixed limit; the CLI does not need timeout or step settings.
         check_cancelled(state)
         state["model_calls"] = step + 1
-        action = get_desktop_action(request, observation, history)
+        view = _window_view(observation, previous, request, search)
+        action = get_desktop_action(request, view, history)
+        search = None
         check_cancelled(state)
         name, arguments = action["tool"], action["arguments"]
 
@@ -450,6 +536,11 @@ def run_desktop_agent(request, state):
         elif observation is None:
             raise RuntimeError("Open an app before using desktop controls.")
 
+        elif name == "find_controls":
+            # Search the next fresh reading so IDs never come from an old window.
+            search = arguments
+            result = "Search results are in the current view."
+
         elif name == "observe":
             result = "Window refreshed without sending input."
 
@@ -496,7 +587,7 @@ def run_desktop_agent(request, state):
         # File saves need no window; desktop actions need a fresh reading.
         if name != "write_file":
             check_cancelled(state)
-            observation = _observe(state)
+            previous, observation = observation, _observe(state)
 
     # STEP 6: Stop if the decision limit is reached without finishing.
     raise RuntimeError("Stopped after 10 model decisions. The task may be unfinished.")
