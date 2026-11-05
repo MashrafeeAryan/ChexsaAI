@@ -55,6 +55,7 @@ Gmail integration code stays together in `plugins/gmail/`. Other service integra
 | `tests/test_app_audio_.py` | Checks microphone parsing and stopped speech with fake audio. |
 | `tests/test_voice_.py` | Checks wake phrases, spoken replies, agent selection, and cleanup with fake audio. |
 | `tests/browser_changes_integration_.py` | Runs the new browser loop on a large local page in isolated Chrome. |
+| `tests/browser_context_benchmark_.py` | Compares smaller browser views and optional MCP snapshots without live model calls. |
 | `tests/test_browser_actions_.py` | Rejects invalid action groups and unbounded or unknown wait conditions. |
 | `tests/browser_workflows_integration_.py` | Checks browser groups, interruptions, recovery, and token counts with fake model replies. |
 | `tests/fixtures/browser_workflows_.html` | Provides disposable forms, duplicate controls, and delayed updates for Chrome checks. |

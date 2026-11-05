@@ -205,3 +205,81 @@ Run the offline comparison with the optional benchmark dependency and the local 
 ```powershell
 python tests/desktop_context_benchmark_.py --tokenizer C:\path\to\tokenizer.json
 ```
+
+## Smaller browser view experiment — November 5, 2026
+
+The existing 40-control default is retained. An isolated benchmark policy tried
+eight controls, retained same-name alternatives from the original view, and used
+existing local search to expand to up to 40 matches. Five repeats across two
+control-order/name variants produced 70 runs per policy. The second variant was
+withheld during policy definition; scripted variants do not establish live model
+generalization. All model replies were scripted and no API quota was used.
+
+Both policies completed **60/60 normal runs** and safely stopped **10/10 replaced-node
+runs**. Counting the guarded stops as unfinished gives **60/70 completed** for each
+policy. There were **zero wrong-target events, duplicate submissions, and false
+completion replies** in the fixtures. Costs include those unfinished attempts.
+
+| Case | Current input / output tokens | Small input / output tokens | Calls current -> small | Searches / expansions current -> small | Total text-token reduction |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| simple | 1,830.4 / 47.6 | 1,830.4 / 47.6 | 3 -> 3 | 0 -> 0 | 0.00% |
+| crowded | 6,885.2 / 85.6 | 3,990.6 / 85.6 | 5 -> 5 | 2 -> 2 | 41.52% |
+| unchanged | 2,763.4 / 47.6 | 3,931.6 / 85.6 | 3 -> 5 | 0 -> 2 | -42.91% |
+| omitted | 2,771.2 / 47.8 | 4,530.9 / 81.8 | 3 -> 5 | 0 -> 2 | -63.63% |
+| duplicate | 2,833.0 / 48.0 | 3,978.0 / 86.0 | 3 -> 5 | 0 -> 2 | -41.06% |
+| dialog | 2,789.0 / 48.0 | 3,085.0 / 67.0 | 3 -> 4 | 0 -> 1 | -11.10% |
+| replaced | 1,865.0 / 36.0 | 3,114.0 / 74.0 | 2 -> 4 | 0 -> 2 | -67.70% |
+
+The smaller view used **13.08% more total text tokens** across all runs.
+Negative reductions in the table mean increased token use. Search/expansion
+counts refer to the same find_elements calls and should not be added together.
+All retry counts were zero. Counts use the GPT-OSS tokenizer recorded above,
+covering system/request/history text and scripted action/reply text.
+Provider framing and hidden reasoning are excluded.
+
+| Case | Median local seconds, current -> small |
+| :--- | ---: |
+| simple | 0.1505 -> 0.1547 |
+| crowded | 0.3167 -> 0.2894 |
+| unchanged | 0.1603 -> 0.2053 |
+| omitted | 0.1681 -> 0.2308 |
+| duplicate | 0.1581 -> 0.2253 |
+| dialog | 0.1557 -> 0.1837 |
+| replaced | 0.1051 -> 0.1633 |
+
+Times cover the local scripted agent loop and browser operations. They exclude
+live model inference/network time, fixture reset, and token counting. Policy
+order alternated between repeats. These measurements do not demonstrate a
+live-agent speedup or establish success-rate equivalence on general websites.
+
+### Playwright MCP observation reference
+
+Playwright MCP **0.0.84** was run headlessly with Chrome and `--isolated`, using a
+temporary localhost server with the same fixture HTML and a fresh browser context.
+The server reported Playwright version `1.65.0-alpha-2026-10-30`. The initial attempt
+to set content via browser_run_code failed because that tool was unavailable;
+fixture setup then used browser_navigate. All 14 initial snapshots were captured.
+
+| Fixture | Initial MCP snapshot text tokens, two variants |
+| :--- | ---: |
+| simple | 130–133 |
+| crowded | 1170–1170 |
+| unchanged | 360–360 |
+| omitted | 360–360 |
+| duplicate | 385–385 |
+| dialog | 358–358 |
+| replaced | 359–359 |
+
+The MCP tools/list JSON contained **5,417 locally counted text tokens**. Snapshot
+counts include the textual tool response. These observation counts are separate
+from full task costs. An end-to-end MCP agent comparison was not run because a
+matched model/tool-call driver was not implemented in this experiment. No claim
+of outperforming Playwright MCP follows from these results.
+
+Run the experiment with the optional benchmark dependency and a local tokenizer.
+
+```powershell
+python tests/browser_context_benchmark_.py --repeat 5 --tokenizer C:\path\to\tokenizer.json
+# Optional snapshot reference using an installed Playwright MCP cli.js
+python tests/browser_context_benchmark_.py --mcp-cli C:\path\to\mcp\cli.js --tokenizer C:\path\to\tokenizer.json
+```
