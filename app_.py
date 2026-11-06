@@ -7,6 +7,9 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 from app_runtime_ import (
     MASCOTS,
+    chats_path,
+    load_chats,
+    save_chat,
     load_settings,
     play_reply,
     record_message,
@@ -255,7 +258,7 @@ def append_message(chat, speaker, text):
     chat.configure(state="disabled")
 
 
-def build_app(root=None, handlers=None, initial_settings=None):
+def build_app(root=None, handlers=None, initial_settings=None, history_path=None):
     """Build the window and start one background worker.
 
     Input: optional Tk window and fake engines for tests.
@@ -281,6 +284,18 @@ def build_app(root=None, handlers=None, initial_settings=None):
         except RuntimeError as error:
             initial_settings = {}
             warning = str(error)
+
+    # Fake engines keep chats in memory unless a test supplies its own temporary path.
+    history_path = history_path or (chats_path() if handlers is None else None)
+    saved_chats = []
+    if history_path is not None:
+        try:
+            saved_chats = load_chats(history_path)
+        except Exception:
+            warning = (
+                "Saved chats could not be read. New messages will not replace them."
+            )
+            history_path = None
 
     style = ttk.Style(root)
     # Windows' default dropdown was tiny and bright blue next to the chat.
@@ -508,6 +523,9 @@ def build_app(root=None, handlers=None, initial_settings=None):
     cancel, shutdown = Event(), Event()
     context = {
         "root": root,
+        "saved_chats": {item["id"]: item for item in saved_chats},
+        "active_chat": None,
+        "history_path": history_path,
         "jobs": jobs,
         "events": events,
         "cancel": cancel,
@@ -539,6 +557,35 @@ def build_app(root=None, handlers=None, initial_settings=None):
         "compact": False,
         "scale": scale,
     }
+
+    def remember(speaker, text):
+        """Save display messages only. These messages never replay tool calls."""
+        from uuid import uuid4
+
+        if context["active_chat"] is None:
+            context["active_chat"] = uuid4().hex
+            context["saved_chats"][context["active_chat"]] = {
+                "id": context["active_chat"],
+                "title": chat_title.get(),
+                "mode": mode.get(),
+                "messages": [],
+            }
+        item = context["saved_chats"][context["active_chat"]]
+        item["mode"] = mode.get()
+        item["messages"].append({"speaker": speaker, "text": text})
+        persist_chat(item)
+
+    def persist_chat(item):
+        """A disk error warns the user without breaking an already running task."""
+        if context["history_path"] is not None:
+            try:
+                save_chat(item, context["history_path"])
+            except Exception:
+                messagebox.showwarning(
+                    "Chat not saved",
+                    "This conversation is still visible, but could not be saved on this laptop.",
+                    parent=root,
+                )
 
     def show_placeholder(event=None):
         """Show a hint only when the real message editor is empty."""
@@ -659,6 +706,7 @@ def build_app(root=None, handlers=None, initial_settings=None):
             if chat_title.get() == "New chat":
                 chat_title.set(value[:28] + ("…" if len(value) > 28 else ""))
             append_message(chat, "You · " + mode.get(), value)
+            remember("You · " + mode.get(), value)
             entry.delete("1.0", "end")
 
     def new_chat():
@@ -670,6 +718,7 @@ def build_app(root=None, handlers=None, initial_settings=None):
             chat.pack_forget()
             welcome.place(relx=0.5, rely=0.5, anchor="center")
             chat_title.set("New chat")
+            context["active_chat"] = None
             context["last_reply"] = ""
             entry.delete("1.0", "end")
 
@@ -841,6 +890,7 @@ def build_app(root=None, handlers=None, initial_settings=None):
                         welcome.place_forget()
                         chat.pack(fill="both", expand=True)
                         append_message(chat, "Chexsa", event["text"])
+                        remember("Chexsa", event["text"])
                         context["last_reply"] = event["text"]
                     if event.get("operation") == "settings" and kind == "result":
                         try:
