@@ -104,6 +104,93 @@ def save_settings(settings):
     return values
 
 
+def chats_path():
+    """Keep saved chats under this Windows user, outside the installed app."""
+    return settings_path().parent / "chats.sqlite3"
+
+
+def _chat_database(path):
+    """Open the local chat store. Only encrypted chat contents go into its rows."""
+    import sqlite3
+
+    path = Path(path) if path is not None else chats_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(path, timeout=2)
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS chats (id TEXT PRIMARY KEY, saved REAL, data BLOB)"
+    )
+    return connection
+
+
+def save_chat(chat, path=None):
+    """Save one conversation, never live app objects or approval state.
+
+    Input: {'id': 'abc', 'title': 'A task', 'mode': 'desktop', 'messages': [...]}.
+    Output: no value; the encrypted conversation is saved on this laptop.
+    """
+    from contextlib import closing
+    from time import time
+    import win32crypt
+
+    # Copy only display data. Old Windows IDs and Gmail send approvals cannot return.
+    values = {key: chat[key] for key in ("id", "title", "mode", "messages")}
+    data = win32crypt.CryptProtectData(
+        json.dumps(values, ensure_ascii=False).encode("utf-8"),
+        "Chexsa chat",
+        None,
+        None,
+        None,
+        0,
+    )
+    with closing(_chat_database(path)) as connection, connection:
+        connection.execute(
+            "INSERT OR REPLACE INTO chats VALUES (?, ?, ?)",
+            (values["id"], time(), data),
+        )
+
+
+def load_chats(path=None):
+    """Read newest chats first. A damaged record raises an error instead of being erased."""
+    from contextlib import closing
+    import win32crypt
+
+    with closing(_chat_database(path)) as connection:
+        rows = connection.execute(
+            "SELECT data FROM chats ORDER BY saved DESC"
+        ).fetchall()
+
+    chats = []
+    for (data,) in rows:
+        raw = win32crypt.CryptUnprotectData(data, None, None, None, 0)[1]
+        chat = json.loads(raw)
+        if (
+            not isinstance(chat, dict)
+            or not all(
+                isinstance(chat.get(key), str) for key in ("id", "title", "mode")
+            )
+            or chat["mode"] not in ("desktop", "browser", "gmail")
+            or not isinstance(chat.get("messages"), list)
+            or any(
+                not isinstance(message, dict)
+                or not all(
+                    isinstance(message.get(key), str) for key in ("speaker", "text")
+                )
+                for message in chat["messages"]
+            )
+        ):
+            raise ValueError("A saved chat could not be read.")
+        chats.append(chat)
+    return chats
+
+
+def delete_chat(chat_id, path=None):
+    """Remove one saved conversation; files created by its tasks are left alone."""
+    from contextlib import closing
+
+    with closing(_chat_database(path)) as connection, connection:
+        connection.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
+
+
 def check_cancelled(state):
     """Stop at a safe boundary when the app's Stop button has been pressed.
 
