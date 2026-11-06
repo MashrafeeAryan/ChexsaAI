@@ -370,11 +370,17 @@ def run_worker(jobs, events, cancel, shutdown, initial_settings=None, handlers=N
             except InterruptedError as error:
                 events.put({"kind": "cancelled", "text": str(error), "mode": mode})
             except (RuntimeError, ValueError) as error:
-                events.put({"kind": "error", "text": str(error), "mode": mode})
+                events.put(
+                    {
+                        "kind": "cancelled" if cancel.is_set() else "error",
+                        "text": str(error),
+                        "mode": mode,
+                    }
+                )
             except Exception:
                 events.put(
                     {
-                        "kind": "error",
+                        "kind": "cancelled" if cancel.is_set() else "error",
                         "text": "The request failed. Check settings, account access, and the selected app.",
                         "mode": mode,
                     }

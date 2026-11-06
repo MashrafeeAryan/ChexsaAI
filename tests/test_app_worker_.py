@@ -131,3 +131,29 @@ class AppWorkerTests(unittest.TestCase):
         finally:
             shutdown.set()
             worker.join(timeout=3)
+
+    def test_stop_during_handler_error_is_still_cancellation(self):
+        """A stopped task keeps its uncertain-outcome warning instead of looking completed."""
+        jobs, events = Queue(), Queue()
+        cancel, shutdown = Event(), Event()
+
+        def handler(text, state):
+            cancel.set()
+            raise RuntimeError("Input outcome uncertain. Inspect before repeating.")
+
+        worker = Thread(
+            target=run_worker,
+            args=(jobs, events, cancel, shutdown),
+            kwargs={"handlers": {"desktop": handler}},
+        )
+        worker.start()
+        try:
+            self.assertEqual(events.get(timeout=3)["kind"], "ready")
+            jobs.put({"kind": "task", "mode": "desktop", "text": "fixture"})
+            self.assertEqual(events.get(timeout=3)["kind"], "started")
+            result = events.get(timeout=3)
+            self.assertEqual(result["kind"], "cancelled")
+            self.assertIn("uncertain", result["text"])
+        finally:
+            shutdown.set()
+            worker.join(timeout=3)

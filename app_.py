@@ -351,7 +351,7 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
     ).pack(fill="x", pady=(0, 12))
     tk.Label(
         sidebar,
-        text="Saved on this laptop",
+        text="Saved locally",
         bg=SIDEBAR,
         fg=MUTED,
         font=("Segoe UI", 12),
@@ -766,7 +766,11 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         stop.configure(
             state=(
                 "normal"
-                if (context["busy"] or context["audio_busy"]) and not context["closing"]
+                if (
+                    (context["busy"] and not cancel.is_set())
+                    or (context["audio_busy"] and not context["audio_cancel"].is_set())
+                )
+                and not context["closing"]
                 else "disabled"
             )
         )
@@ -896,6 +900,8 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
                 "stopping",
                 "Stopping audio after the current recording or transcription…",
             )
+
+        controls()
 
     def start_audio(kind):
         """Use the microphone or speaker without blocking the window or running a task."""
@@ -1041,7 +1047,9 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
                     context["ready"] = True
                     show_status("ready", "Ready — choose a mode and ask a task")
                 elif kind == "started":
-                    show_status("working", "Working — " + event["mode"])
+                    # Stop may be pressed before this queued message reaches Tk.
+                    if not cancel.is_set() and not context["closing"]:
+                        show_status("working", "Working — " + event["mode"])
                 elif kind in ("result", "error", "cancelled", "fatal"):
                     context["busy"] = False
                     context["review"] = event.get("review", False)
@@ -1250,6 +1258,7 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         remove_chat=remove_chat,
         suggest=suggest,
         send_button=send,
+        stop_button=stop,
         review_button=review_button,
     )
     worker.start()

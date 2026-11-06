@@ -313,3 +313,45 @@ class AppWindowTests(unittest.TestCase):
             context["close"]()
             pump_until(root, lambda: context.get("closed", False))
             context["worker"].join(timeout=3)
+
+    def test_stop_keeps_its_state_until_worker_finishes(self):
+        """A late Started event cannot undo Stop or allow another request to run."""
+        entered, release = Event(), Event()
+        calls = []
+
+        def handler(text, state):
+            calls.append(text)
+            if text == "wait":
+                entered.set()
+                release.wait(timeout=5)
+                check_cancelled(state)
+            return "Fixture done"
+
+        root = tk.Tk()
+        root.withdraw()
+        context = build_app(root, handlers={"desktop": handler}, initial_settings={})
+        try:
+            pump_until(root, lambda: context["ready"])
+            context["submit"]("wait")
+            self.assertTrue(entered.wait(timeout=3))
+            # The worker's Started event is still queued when Stop is pressed.
+            context["stop"]()
+            pump_until(root, lambda: context["events"].empty())
+            self.assertEqual(context["phase"], "stopping")
+            self.assertEqual(context["stop_button"].cget("state"), "disabled")
+            context["submit"]("must not run")
+            context["new_chat"]()
+            self.assertTrue(context["busy"])
+            release.set()
+            pump_until(root, lambda: not context["busy"])
+            self.assertEqual(context["phase"], "stopped")
+            self.assertEqual(calls, ["wait"])
+            context["submit"]("next")
+            pump_until(root, lambda: not context["busy"])
+            self.assertEqual(calls, ["wait", "next"])
+            self.assertEqual(context["phase"], "finished")
+        finally:
+            release.set()
+            context["close"]()
+            pump_until(root, lambda: context.get("closed", False))
+            context["worker"].join(timeout=3)
