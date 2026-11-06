@@ -43,6 +43,8 @@ class AppWindowTests(unittest.TestCase):
             context["submit"]()
             pump_until(root, lambda: not context["busy"])
             self.assertIn("Verified: Example task", context["chat"].get("1.0", "end"))
+            self.assertEqual(context["phase"], "finished")
+            self.assertIn("review the result", context["status"].get())
         finally:
             context["close"]()
             pump_until(root, lambda: context.get("closed", False))
@@ -272,6 +274,7 @@ class AppWindowTests(unittest.TestCase):
             context["submit"]("review")
             pump_until(root, lambda: not context["busy"])
             self.assertEqual(context["review_button"].cget("state"), "normal")
+            self.assertEqual(context["phase"], "review")
             context["review_button"].invoke()
             pump_until(root, lambda: not context["busy"])
             self.assertEqual(calls, ["review", "/send"])

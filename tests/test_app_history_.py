@@ -118,3 +118,17 @@ class SavedChatTests(unittest.TestCase):
             [item["title"] for item in load_chats(self.path)], ["Second task"]
         )
         self.assertEqual(self.calls, ["First task", "Second task"])
+
+    def test_failed_request_shows_error_and_keeps_its_message(self):
+        """An error is displayed and saved; the app still accepts another request."""
+        context = self.open_window()
+        context["events"].put(
+            {"kind": "error", "mode": "desktop", "text": "Fixture failure"}
+        )
+        pump_until(context["root"], lambda: context["phase"] == "error")
+        self.assertIn(
+            "Fixture failure", load_chats(self.path)[0]["messages"][-1]["text"]
+        )
+        context["submit"]("Try a different task")
+        pump_until(context["root"], lambda: not context["busy"])
+        self.assertEqual(context["phase"], "finished")

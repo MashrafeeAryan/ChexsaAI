@@ -426,7 +426,7 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
     composer_area = tk.Frame(main, bg=BG, padx=26, pady=16)
     composer_area.pack(side="bottom", fill="x")
     status = tk.StringVar(root, value="Starting agent worker…")
-    tk.Label(
+    status_label = tk.Label(
         composer_area,
         textvariable=status,
         bg=BG,
@@ -434,7 +434,8 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         font=("Segoe UI", 10),
         anchor="w",
         wraplength=430,
-    ).pack(side="bottom", fill="x", pady=(8, 0))
+    )
+    status_label.pack(side="bottom", fill="x", pady=(8, 0))
     composer, footer = rounded_panel(composer_area, height=pixels(164))
     composer.pack(fill="x")
     entry = tk.Text(
@@ -551,6 +552,7 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         "shutdown": shutdown,
         "ready": False,
         "busy": False,
+        "phase": "starting",
         "closing": False,
         "review": False,
         "audio_busy": False,
@@ -576,6 +578,22 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         "compact": False,
         "scale": scale,
     }
+
+    def show_status(phase, text):
+        """Show what the app is doing. A finished reply is not proof of task success."""
+        context["phase"] = phase
+        status.set(text)
+        status_label.configure(
+            fg={
+                "working": TEAL,
+                "listening": TEAL,
+                "finished": TEAL,
+                "review": "#8d6523",
+                "paused": "#8d6523",
+                "stopping": "#8d6523",
+                "error": "#a83e36",
+            }.get(phase, MUTED)
+        )
 
     def remember(speaker, text):
         """Save display messages only. These messages never replay tool calls."""
@@ -801,7 +819,7 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         cancel.clear()
         context["busy"] = True
         context["review"] = False
-        status.set("Working — " + mode.get())
+        show_status("working", "Working — " + mode.get())
         controls()
         context["operation"] = kind
         jobs.put({"kind": kind, "mode": mode.get(), **details})
@@ -871,10 +889,13 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         """Request cancellation. Already-sent clicks, files, or emails are not undone."""
         if context["busy"]:
             cancel.set()
-            status.set("Stopping after the current operation…")
+            show_status("stopping", "Stopping after the current operation…")
         if context["audio_busy"]:
             context["audio_cancel"].set()
-            status.set("Stopping audio after the current recording or transcription…")
+            show_status(
+                "stopping",
+                "Stopping audio after the current recording or transcription…",
+            )
 
     def start_audio(kind):
         """Use the microphone or speaker without blocking the window or running a task."""
@@ -887,10 +908,13 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
             return
         context["audio_busy"] = True
         context["audio_cancel"].clear()
-        status.set(
-            "Listening — say one command, then review the input"
-            if kind == "record"
-            else "Reading the last reply — Stop cancels speech"
+        show_status(
+            "listening" if kind == "record" else "speaking",
+            (
+                "Listening — say one command, then review the input"
+                if kind == "record"
+                else "Reading the last reply — Stop cancels speech"
+            ),
         )
         controls()
 
@@ -1004,7 +1028,7 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         shutdown.set()
         cancel.set()
         context["audio_cancel"].set()
-        status.set("Closing after the current operation…")
+        show_status("closing", "Closing after the current operation…")
         controls()
 
     def poll():
@@ -1015,9 +1039,9 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
                 kind = event["kind"]
                 if kind == "ready":
                     context["ready"] = True
-                    status.set("Ready — choose a mode and ask a task")
+                    show_status("ready", "Ready — choose a mode and ask a task")
                 elif kind == "started":
-                    status.set("Working — " + event["mode"])
+                    show_status("working", "Working — " + event["mode"])
                 elif kind in ("result", "error", "cancelled", "fatal"):
                     context["busy"] = False
                     context["review"] = event.get("review", False)
@@ -1036,14 +1060,29 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
                                 "Settings",
                                 "Settings were saved, but appearance could not refresh. Reopen Settings to check them.",
                             )
-                    status.set(
-                        {
-                            "result": "Ready",
-                            "error": "Request failed — check the message",
-                            "cancelled": "Stopped",
-                            "fatal": "Worker could not start — restart after checking installation",
-                        }[kind]
-                    )
+                    if kind == "result":
+                        if event.get("review"):
+                            show_status(
+                                "review",
+                                "Needs review — check the email before sending",
+                            )
+                        elif event.get("paused"):
+                            show_status(
+                                "paused", "Paused — check the result before continuing"
+                            )
+                        elif event.get("operation") == "task":
+                            show_status("finished", "Reply ready — review the result")
+                        else:
+                            show_status("ready", "Ready")
+                    else:
+                        show_status(
+                            "stopped" if kind == "cancelled" else "error",
+                            {
+                                "error": "Request failed — check the message",
+                                "cancelled": "Stopped",
+                                "fatal": "Worker could not start — restart after checking installation",
+                            }[kind],
+                        )
                     if kind == "fatal":
                         context["ready"] = False
                 elif kind == "closed":
@@ -1052,20 +1091,23 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
                     context["audio_busy"] = False
                     if kind == "audio_error":
                         append_message(chat, "Audio", event["text"])
-                        status.set("Audio stopped — check the message")
+                        show_status("error", "Audio stopped — check the message")
                     elif context["audio_cancel"].is_set():
-                        status.set("Audio stopped")
+                        show_status("stopped", "Audio stopped")
                     elif event["operation"] == "record":
                         if event["text"]:
                             prefix = " " if entry.get("1.0", "end").strip() else ""
                             entry.insert("end", prefix + event["text"])
-                            status.set(
-                                "Review the recorded text, then choose Send request"
+                            show_status(
+                                "ready",
+                                "Review the recorded text, then choose Send request",
                             )
                         else:
-                            status.set("No command heard — try the microphone again")
+                            show_status(
+                                "ready", "No command heard — try the microphone again"
+                            )
                     else:
-                        status.set("Ready")
+                        show_status("ready", "Ready")
                 controls()
         except Empty:
             pass

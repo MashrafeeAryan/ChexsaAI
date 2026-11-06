@@ -360,6 +360,9 @@ def run_worker(jobs, events, cancel, shutdown, initial_settings=None, handlers=N
                         + text,
                         "mode": mode,
                         "operation": job["kind"],
+                        "paused": mode == "browser"
+                        and job["kind"] == "task"
+                        and state.get("_browser_task", {}).get("status") == "paused",
                         "review": bool(state.get("pending_send"))
                         and not cancel.is_set(),
                     }
