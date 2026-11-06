@@ -351,17 +351,22 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
     tk.Label(
         sidebar, text="Today", bg=SIDEBAR, fg=MUTED, font=("Segoe UI", 12), anchor="w"
     ).pack(fill="x", pady=(0, 8))
-    tk.Label(
+    # Saved chats are display history, not saved automation sessions.
+    history_box = tk.Listbox(
         sidebar,
-        textvariable=chat_title,
-        bg="#e6e5e1",
+        height=5,
+        bg=SIDEBAR,
         fg=INK,
+        selectbackground="#dde8e3",
+        selectforeground=INK,
         font=("Segoe UI", 12),
-        anchor="w",
-        padx=10,
-        pady=12,
-        wraplength=170,
-    ).pack(fill="x")
+        relief="flat",
+        highlightthickness=0,
+        exportselection=False,
+        activestyle="none",
+    )
+    history_box.pack(fill="both", expand=True, pady=(0, 10))
+    # Mouse wheel and arrow keys scroll this list without stealing the chat selection.
 
     sidebar_bottom = tk.Frame(sidebar, bg=SIDEBAR)
     sidebar_bottom.pack(side="bottom", fill="x")
@@ -525,6 +530,8 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         "root": root,
         "saved_chats": {item["id"]: item for item in saved_chats},
         "active_chat": None,
+        "chat_order": [item["id"] for item in saved_chats],
+        "history_box": history_box,
         "history_path": history_path,
         "jobs": jobs,
         "events": events,
@@ -574,6 +581,52 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         item["mode"] = mode.get()
         item["messages"].append({"speaker": speaker, "text": text})
         persist_chat(item)
+        if item["id"] in context["chat_order"]:
+            context["chat_order"].remove(item["id"])
+        context["chat_order"].insert(0, item["id"])
+        refresh_history()
+
+    def refresh_history():
+        """Show saved titles while keeping the current conversation highlighted."""
+        history_box.delete(0, "end")
+        for index, chat_id in enumerate(context["chat_order"]):
+            history_box.insert("end", context["saved_chats"][chat_id]["title"])
+            if chat_id == context["active_chat"]:
+                history_box.selection_set(index)
+                history_box.see(index)
+
+    def open_chat(chat_id):
+        """Reopen messages only; fresh tasks must observe the app again.
+
+        Input: a saved chat ID. Effect: display its messages without running any tools.
+        """
+        if chat_id == context["active_chat"] or chat_id not in context["saved_chats"]:
+            return
+        if not start_job("reset"):
+            return
+        item = context["saved_chats"][chat_id]
+        context["active_chat"] = chat_id
+        context["last_reply"] = ""
+        chat_title.set(item["title"])
+        mode.set(item["mode"])
+        context["review"] = False
+        entry.delete("1.0", "end")
+        chat.configure(state="normal")
+        chat.delete("1.0", "end")
+        chat.configure(state="disabled")
+        for message in item["messages"]:
+            append_message(chat, message["speaker"], message["text"])
+            if message["speaker"] == "Chexsa":
+                context["last_reply"] = message["text"]
+        welcome.place_forget()
+        chat.pack(fill="both", expand=True)
+        refresh_history()
+
+    def select_chat(event=None):
+        """Open the selected sidebar row with a double-click or Enter key."""
+        selection = history_box.curselection()
+        if selection:
+            open_chat(context["chat_order"][selection[0]])
 
     def persist_chat(item):
         """A disk error warns the user without breaking an already running task."""
@@ -721,6 +774,7 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
             context["active_chat"] = None
             context["last_reply"] = ""
             entry.delete("1.0", "end")
+            refresh_history()
 
     def suggest(selected_mode, prompt):
         """Prepare a starting message for review; suggestion buttons never run it."""
@@ -1040,6 +1094,9 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
             event, lambda event: modes.after_idle(modes.selection_clear), add="+"
         )
     modes.bind("<FocusOut>", lambda event: modes.selection_clear(), add="+")
+    history_box.bind("<Double-Button-1>", select_chat)
+    history_box.bind("<Return>", select_chat)
+    refresh_history()
     root.protocol("WM_DELETE_WINDOW", close)
     controls()
     if warning:
@@ -1061,6 +1118,7 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         poll=poll,
         start_audio=start_audio,
         new_chat=new_chat,
+        open_chat=open_chat,
         suggest=suggest,
         send_button=send,
         review_button=review_button,

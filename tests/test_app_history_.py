@@ -68,3 +68,26 @@ class SavedChatTests(unittest.TestCase):
         self.close_window(context)
         self.assertEqual(len(load_chats(self.path)), 1)
         self.assertEqual(self.calls, ["Example task"])
+
+    def test_reopen_after_restart_does_not_replay_actions(self):
+        """Sidebar history survives a restart, but old tools and send approvals do not run."""
+        context = self.open_window()
+        context["submit"]("First task")
+        pump_until(context["root"], lambda: not context["busy"])
+        saved_id = context["active_chat"]
+        self.close_window(context)
+        context = self.open_window()
+        self.assertEqual(context["history_box"].size(), 1)
+        context["open_chat"](saved_id)
+        pump_until(context["root"], lambda: not context["busy"])
+        self.assertIn("Fixture result: First task", context["chat"].get("1.0", "end"))
+        self.assertEqual(self.calls, ["First task"])
+        self.assertFalse(context["review"])
+        context["new_chat"]()
+        pump_until(context["root"], lambda: not context["busy"])
+        context["submit"]("Second task")
+        pump_until(context["root"], lambda: not context["busy"])
+        self.assertEqual(len(load_chats(self.path)), 2)
+        context["open_chat"](saved_id)
+        pump_until(context["root"], lambda: not context["busy"])
+        self.assertNotIn("Second task", context["chat"].get("1.0", "end"))

@@ -320,6 +320,7 @@ def run_worker(jobs, events, cancel, shutdown, initial_settings=None, handlers=N
                 elif job["kind"] == "reset":
                     # Keep live connections, but discard the previous chat's selected targets.
                     states["desktop"].clear()
+                    states["browser"].pop("_browser_task", None)
                     gmail = states["gmail"]
                     for key in tuple(gmail):
                         if key not in ("service", "client", "_cancel"):

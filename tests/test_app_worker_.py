@@ -101,3 +101,33 @@ class AppWorkerTests(unittest.TestCase):
         finally:
             shutdown.set()
             worker.join(timeout=3)
+
+    def test_switching_chats_forgets_browser_task(self):
+        """A new conversation keeps Chrome attached but cannot resume the old task."""
+        jobs, events = Queue(), Queue()
+        cancel, shutdown = Event(), Event()
+        page = object()
+
+        def handler(text, state):
+            if text == "seed":
+                state.update(page=page, _browser_task={"request": "old task"})
+            else:
+                self.assertIs(state["page"], page)
+                self.assertNotIn("_browser_task", state)
+            return "Done"
+
+        worker = Thread(
+            target=run_worker,
+            args=(jobs, events, cancel, shutdown),
+            kwargs={"handlers": {"browser": handler}},
+        )
+        worker.start()
+        try:
+            self.assertEqual(events.get(timeout=3)["kind"], "ready")
+            for kind, text in (("task", "seed"), ("reset", ""), ("task", "check")):
+                jobs.put({"kind": kind, "mode": "browser", "text": text})
+                self.assertEqual(events.get(timeout=3)["kind"], "started")
+                self.assertEqual(events.get(timeout=3)["kind"], "result")
+        finally:
+            shutdown.set()
+            worker.join(timeout=3)
