@@ -3,11 +3,12 @@
 from queue import Empty, Queue
 from threading import Event, Thread
 import tkinter as tk
-from tkinter import filedialog, messagebox, scrolledtext, ttk
+from tkinter import filedialog, messagebox, scrolledtext, simpledialog, ttk
 
 from app_runtime_ import (
     MASCOTS,
     chats_path,
+    delete_chat,
     load_chats,
     save_chat,
     load_settings,
@@ -349,7 +350,12 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         anchor="w",
     ).pack(fill="x", pady=(0, 12))
     tk.Label(
-        sidebar, text="Today", bg=SIDEBAR, fg=MUTED, font=("Segoe UI", 12), anchor="w"
+        sidebar,
+        text="Saved on this laptop",
+        bg=SIDEBAR,
+        fg=MUTED,
+        font=("Segoe UI", 12),
+        anchor="w",
     ).pack(fill="x", pady=(0, 8))
     # Saved chats are display history, not saved automation sessions.
     history_box = tk.Listbox(
@@ -365,8 +371,11 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         exportselection=False,
         activestyle="none",
     )
-    history_box.pack(fill="both", expand=True, pady=(0, 10))
     # Mouse wheel and arrow keys scroll this list without stealing the chat selection.
+
+    chat_options = ttk.Menubutton(sidebar, text="Chat options")
+    chat_menu = tk.Menu(chat_options, tearoff=False)
+    chat_options.configure(menu=chat_menu)
 
     sidebar_bottom = tk.Frame(sidebar, bg=SIDEBAR)
     sidebar_bottom.pack(side="bottom", fill="x")
@@ -400,6 +409,9 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
     tk.Frame(sidebar_bottom, bg="#dddfda", height=1).pack(side="bottom", fill="x")
     toolbar = tk.Frame(sidebar_bottom, bg=SIDEBAR)
     toolbar.pack(side="bottom", fill="x", pady=12)
+    # Reserve Settings and Gmail first. The history list uses the space left over.
+    chat_options.pack(side="bottom", fill="x", pady=(0, 8))
+    history_box.pack(fill="both", expand=True, pady=(0, 10))
 
     main = tk.Frame(root, bg=BG)
     main.grid(row=0, column=1, sticky="nsew")
@@ -628,6 +640,74 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         if selection:
             open_chat(context["chat_order"][selection[0]])
 
+    def selected_chat():
+        """Return the highlighted conversation, or the one currently on screen."""
+        selection = history_box.curselection()
+        return (
+            context["chat_order"][selection[0]] if selection else context["active_chat"]
+        )
+
+    def rename_chat(title=None):
+        """Give the selected chat a short title; this does not change any task."""
+        chat_id = selected_chat()
+        if (
+            context["busy"]
+            or context["audio_busy"]
+            or context["closing"]
+            or not chat_id
+        ):
+            return
+        item = context["saved_chats"][chat_id]
+        if title is None:
+            title = simpledialog.askstring(
+                "Rename chat", "New name:", initialvalue=item["title"], parent=root
+            )
+        if title is None:
+            return
+        title = title.strip()
+        if not title or len(title) > 80:
+            messagebox.showwarning(
+                "Chat name", "Use a name with 1 to 80 characters.", parent=root
+            )
+            return
+        item["title"] = title
+        if chat_id == context["active_chat"]:
+            chat_title.set(title)
+        persist_chat(item)
+        refresh_history()
+
+    def remove_chat():
+        """Delete a selected conversation after asking. Created files are never deleted."""
+        chat_id = selected_chat()
+        if (
+            context["busy"]
+            or context["audio_busy"]
+            or context["closing"]
+            or not chat_id
+        ):
+            return
+        if not messagebox.askyesno(
+            "Delete chat?",
+            "Delete this saved conversation? Files it created will stay on your laptop.",
+            parent=root,
+        ):
+            return
+        if context["history_path"] is not None:
+            try:
+                delete_chat(chat_id, context["history_path"])
+            except Exception:
+                messagebox.showwarning(
+                    "Chat not deleted",
+                    "Could not delete the saved chat. Try again later.",
+                    parent=root,
+                )
+                return
+        context["saved_chats"].pop(chat_id)
+        context["chat_order"].remove(chat_id)
+        if context["active_chat"] == chat_id:
+            new_chat()
+        refresh_history()
+
     def persist_chat(item):
         """A disk error warns the user without breaking an already running task."""
         if context["history_path"] is not None:
@@ -662,6 +742,7 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
             connect_button,
             microphone_button,
             new_chat_button,
+            chat_options,
         ):
             button.configure(state="normal" if available else "disabled")
         stop.configure(
@@ -756,7 +837,7 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         if start_job("task", text=value):
             welcome.place_forget()
             chat.pack(fill="both", expand=True)
-            if chat_title.get() == "New chat":
+            if context["active_chat"] is None:
                 chat_title.set(value[:28] + ("…" if len(value) > 28 else ""))
             append_message(chat, "You · " + mode.get(), value)
             remember("You · " + mode.get(), value)
@@ -1094,6 +1175,10 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
             event, lambda event: modes.after_idle(modes.selection_clear), add="+"
         )
     modes.bind("<FocusOut>", lambda event: modes.selection_clear(), add="+")
+    chat_menu.add_command(label="Rename", command=rename_chat)
+    chat_menu.add_command(label="Delete", command=remove_chat)
+    history_box.bind("<F2>", lambda event: rename_chat())
+    history_box.bind("<Delete>", lambda event: remove_chat())
     history_box.bind("<Double-Button-1>", select_chat)
     history_box.bind("<Return>", select_chat)
     refresh_history()
@@ -1119,6 +1204,8 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         start_audio=start_audio,
         new_chat=new_chat,
         open_chat=open_chat,
+        rename_chat=rename_chat,
+        remove_chat=remove_chat,
         suggest=suggest,
         send_button=send,
         review_button=review_button,

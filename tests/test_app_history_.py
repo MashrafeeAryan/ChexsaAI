@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import tkinter as tk
 import unittest
+from unittest.mock import patch
 
 from app_ import build_app
 from app_runtime_ import load_chats
@@ -91,3 +92,29 @@ class SavedChatTests(unittest.TestCase):
         context["open_chat"](saved_id)
         pump_until(context["root"], lambda: not context["busy"])
         self.assertNotIn("Second task", context["chat"].get("1.0", "end"))
+
+    def test_rename_and_delete_only_the_selected_chat(self):
+        """Names persist; cancelling deletion keeps the chat and confirming removes only it."""
+        context = self.open_window()
+        context["submit"]("First task")
+        pump_until(context["root"], lambda: not context["busy"])
+        context["rename_chat"]("My example")
+        first_id = context["active_chat"]
+        self.assertEqual(load_chats(self.path)[0]["title"], "My example")
+        context["new_chat"]()
+        pump_until(context["root"], lambda: not context["busy"])
+        context["submit"]("Second task")
+        pump_until(context["root"], lambda: not context["busy"])
+        context["open_chat"](first_id)
+        pump_until(context["root"], lambda: not context["busy"])
+        with patch("app_.messagebox.askyesno", return_value=False):
+            context["remove_chat"]()
+        self.assertEqual(len(load_chats(self.path)), 2)
+        with patch("app_.messagebox.askyesno", return_value=True):
+            context["remove_chat"]()
+        pump_until(context["root"], lambda: not context["busy"])
+        self.assertIsNone(context["active_chat"])
+        self.assertEqual(
+            [item["title"] for item in load_chats(self.path)], ["Second task"]
+        )
+        self.assertEqual(self.calls, ["First task", "Second task"])
