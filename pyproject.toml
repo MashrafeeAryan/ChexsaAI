@@ -15,6 +15,7 @@ dependencies = [
     "pywinauto==0.6.9",
     "python-dotenv",
     "python-docx>=1.1,<2",
+    "Pillow>=10.4",  # Capture the visible area in Visual desktop mode.
 ]
 
 [project.optional-dependencies]
@@ -46,6 +47,7 @@ py-modules = [
     "llm_",
     "observations_",
     "voice_",
+    "visual_",
     "files_",
 ]
 
