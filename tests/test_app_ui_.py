@@ -355,3 +355,38 @@ class AppWindowTests(unittest.TestCase):
             context["close"]()
             pump_until(root, lambda: context.get("closed", False))
             context["worker"].join(timeout=3)
+
+
+    def test_visual_desktop_is_an_explicit_mode(self):
+        """Only a confirmed Visual desktop request reaches the visual engine."""
+        calls = []
+
+        def visual(text, state):
+            """Use the real worker's status queue without taking a screenshot."""
+            calls.append(text)
+            state["_visual_status"]("Fixture countdown")
+            return "Fixture visual result"
+
+        root = tk.Tk()
+        root.withdraw()
+        context = build_app(root, handlers={"visual": visual}, initial_settings={})
+        try:
+            pump_until(root, lambda: context["ready"])
+            self.assertEqual(context["mode"].get(), "desktop")
+            selector = context["mode_selector"]
+            selector.current(3)
+            selector.event_generate("<<ComboboxSelected>>")
+            self.assertEqual(context["mode"].get(), "visual")
+            with patch("app_.messagebox.askokcancel", side_effect=[False, True]) as confirm:
+                context["submit"]("Check the window")
+                self.assertFalse(context["busy"])
+                context["submit"]("Check the window")
+                pump_until(root, lambda: not context["busy"])
+            self.assertEqual(confirm.call_count, 2)
+            self.assertEqual(calls, ["Check the window"])
+            self.assertEqual(context["last_reply"], "Fixture visual result")
+            self.assertEqual(context["saved_chats"][context["active_chat"]]["mode"], "visual")
+        finally:
+            context["close"]()
+            pump_until(root, lambda: context.get("closed", False))
+            context["worker"].join(timeout=3)

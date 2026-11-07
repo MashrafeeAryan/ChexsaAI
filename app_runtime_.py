@@ -4,7 +4,8 @@ import json
 import os
 from pathlib import Path
 
-SETTING_KEYS = ("LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL")
+SETTING_KEYS = ("LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "VISION_MODEL")
+APP_MODES = ("desktop", "browser", "gmail", "visual")
 MASCOTS = ("Foxy", "Fluffy", "Bruhhh")
 
 
@@ -18,7 +19,7 @@ def settings_path():
 def validate_settings(settings):
     """Check model settings before saving them. Empty fields use the existing .env.
 
-    Input: {'LLM_MODEL': 'example-model'}. Output: the three allowed text fields.
+    Input: {'LLM_MODEL': 'example-model'}. Output: the allowed model settings.
     """
     from urllib.parse import urlsplit
 
@@ -168,7 +169,7 @@ def load_chats(path=None):
             or not all(
                 isinstance(chat.get(key), str) for key in ("id", "title", "mode")
             )
-            or chat["mode"] not in ("desktop", "browser", "gmail")
+            or chat["mode"] not in APP_MODES
             or not isinstance(chat.get("messages"), list)
             or any(
                 not isinstance(message, dict)
@@ -215,6 +216,7 @@ def _load_engines(states):
         import llm_
         import files_
         import desktop_
+        from visual_ import run_visual_agent
         from browser_ import close_browser
         from plugins.gmail import gmail_agent_
     except BaseException:
@@ -229,6 +231,7 @@ def _load_engines(states):
         "browser": agent_.run_agent,
         "desktop": desktop_agent_.run_desktop_agent,
         "gmail": gmail_agent_.run_gmail_agent,
+        "visual": run_visual_agent,
     }
 
     def reset_clients():
@@ -271,7 +274,7 @@ def run_worker(jobs, events, cancel, shutdown, initial_settings=None, handlers=N
     """
     from queue import Empty
 
-    states = {mode: {} for mode in ("browser", "desktop", "gmail")}
+    states = {mode: {} for mode in APP_MODES}
     cleanup = lambda: None
     reset_clients = lambda: None
     production = handlers is None
@@ -306,7 +309,7 @@ def run_worker(jobs, events, cancel, shutdown, initial_settings=None, handlers=N
             mode = job.get("mode", "desktop")
             try:
                 if mode not in states:
-                    raise ValueError("Choose browser, desktop, or Gmail mode.")
+                    raise ValueError("Choose an available app mode.")
                 state = states[mode]
                 state["_cancel"] = cancel
                 check_cancelled(state)
@@ -320,6 +323,7 @@ def run_worker(jobs, events, cancel, shutdown, initial_settings=None, handlers=N
                 elif job["kind"] == "reset":
                     # Keep live connections, but discard the previous chat's selected targets.
                     states["desktop"].clear()
+                    states["visual"].clear()
                     states["browser"].pop("_browser_task", None)
                     gmail = states["gmail"]
                     for key in tuple(gmail):
@@ -347,6 +351,11 @@ def run_worker(jobs, events, cancel, shutdown, initial_settings=None, handlers=N
                         ):
                             # File dialogs belong on Tk's main thread, never this worker.
                             state["service"] = connect_gmail(allow_picker=False)
+                    if mode == "visual":
+                        # Keep countdown messages on the UI queue, never in chat history.
+                        state["_visual_status"] = lambda text: events.put(
+                            {"kind": "visual_status", "text": text}
+                        )
                     text = handlers[mode](job["text"], state)
 
                 events.put(

@@ -29,6 +29,7 @@ MODE_LABELS = {
     "desktop": "🖥︎ Desktop",
     "browser": "🌐︎ Browser",
     "gmail": "✉︎ Gmail",
+    "visual": "◉ Visual desktop",
 }
 
 
@@ -477,7 +478,7 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         textvariable=mode_label,
         values=tuple(MODE_LABELS.values()),
         state="readonly",
-        width=14,
+        width=17,
         font=("Segoe UI", 12),
         style="Engine.TCombobox",
         takefocus=True,
@@ -856,6 +857,15 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
         if mode.get() == "gmail" and value == "/connect":
             connect()
             return
+        if mode.get() == "visual" and not messagebox.askokcancel(
+            "Visual desktop",
+            "This mode sends screenshots of your target window to your model provider. "
+            "Make sure the visible area is safe to share.\n\n"
+            "After clicking OK, switch to the target window within 5 seconds. "
+            "Switch back to Chexsa to stop.",
+            parent=root,
+        ):
+            return
         if start_job("task", text=value):
             welcome.place_forget()
             chat.pack(fill="both", expand=True)
@@ -975,6 +985,7 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
                 ("LLM_API_KEY", "API key"),
                 ("LLM_BASE_URL", "API address"),
                 ("LLM_MODEL", "Model"),
+                ("VISION_MODEL", "Vision model"),
             ),
             start=1,
         ):
@@ -987,17 +998,17 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
             fields[key] = field
 
         ttk.Label(frame, text="Display name").grid(
-            row=4, column=0, sticky="w", padx=(0, 12), pady=7
+            row=5, column=0, sticky="w", padx=(0, 12), pady=7
         )
         name_field = ttk.Entry(frame, width=48)
         name_field.insert(0, values.get("DISPLAY_NAME", "Mashrafee"))
-        name_field.grid(row=4, column=1, sticky="ew", pady=7)
+        name_field.grid(row=5, column=1, sticky="ew", pady=7)
         ttk.Label(frame, text="Mascot").grid(
-            row=5, column=0, sticky="w", padx=(0, 12), pady=7
+            row=6, column=0, sticky="w", padx=(0, 12), pady=7
         )
         mascot_field = ttk.Combobox(frame, values=MASCOTS, state="readonly", width=46)
         mascot_field.set(values.get("MASCOT", "Foxy"))
-        mascot_field.grid(row=5, column=1, sticky="ew", pady=7)
+        mascot_field.grid(row=6, column=1, sticky="ew", pady=7)
 
         def save():
             """Validate first, then let the worker save and reset its API connections."""
@@ -1017,9 +1028,9 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
 
         ttk.Label(
             frame, text="Saved under your Windows user and encrypted by Windows."
-        ).grid(row=6, column=0, columnspan=2, pady=12)
+        ).grid(row=7, column=0, columnspan=2, pady=12)
         ttk.Button(frame, text="Save settings", command=save).grid(
-            row=7, column=1, sticky="e"
+            row=8, column=1, sticky="e"
         )
 
     def on_enter(event):
@@ -1050,6 +1061,9 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
                     # Stop may be pressed before this queued message reaches Tk.
                     if not cancel.is_set() and not context["closing"]:
                         show_status("working", "Working — " + event["mode"])
+                elif kind == "visual_status":
+                    if context["busy"] and not cancel.is_set() and not context["closing"]:
+                        show_status("working", event["text"])
                 elif kind in ("result", "error", "cancelled", "fatal"):
                     context["busy"] = False
                     context["review"] = event.get("review", False)

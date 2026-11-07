@@ -25,7 +25,7 @@ class AppSettingsTests(unittest.TestCase):
                 self.assertEqual(app_runtime_.load_settings()["LLM_MODEL"], "")
                 app_runtime_.save_settings(values)
                 self.assertNotIn(b"example-test-key", path.read_bytes())
-                self.assertEqual(app_runtime_.load_settings(), values)
+                self.assertEqual(app_runtime_.load_settings(), {**values, "VISION_MODEL": ""})
 
     def test_settings_reject_bad_addresses(self):
         """A mistyped address or an unknown setting fails before a model call."""
@@ -65,6 +65,15 @@ class AppSettingsTests(unittest.TestCase):
         self.assertEqual(values["MASCOT"], "Foxy")
 
 
+    def test_vision_model_is_separate(self):
+        """Changing the vision model does not change the text model."""
+        values = app_runtime_.validate_settings(
+            {"LLM_MODEL": "text-fixture", "VISION_MODEL": "image-fixture"}
+        )
+        self.assertEqual(values["LLM_MODEL"], "text-fixture")
+        self.assertEqual(values["VISION_MODEL"], "image-fixture")
+
+
 class ChatStorageTests(unittest.TestCase):
     """Saved conversations survive restarts without storing automation objects."""
 
@@ -82,7 +91,7 @@ class ChatStorageTests(unittest.TestCase):
                 "pending_send": {"id": "never-save"},
             }
             app_runtime_.save_chat(first, path)
-            second = {**first, "id": "second", "title": "Another task"}
+            second = {**first, "id": "second", "title": "Another task", "mode": "visual"}
             app_runtime_.save_chat(second, path)
             first["title"] = "Renamed"
             app_runtime_.save_chat(first, path)
