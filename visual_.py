@@ -1,7 +1,7 @@
 """Read a visible Windows window and send checked mouse or keyboard input."""
 
 from contextlib import contextmanager
-from ctypes import byref, c_void_p, sizeof, windll
+from ctypes import c_void_p, windll
 from time import monotonic
 from uuid import uuid4
 
@@ -63,3 +63,29 @@ def capture_window(handle):
         "image": image,
         "captured": monotonic(),
     }
+
+
+def model_image(image):
+    """Keep screenshots readable while limiting the pixels sent to the model."""
+    from PIL import Image
+
+    preview = image.copy()
+    preview.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+    return preview
+
+
+def screen_point(frame, x, y):
+    """Map a pixel in the model image to the center of its area on screen.
+
+    Example: a 2x smaller preview at screen origin (-500, 100).
+    Preview point (10, 20) maps to screen point (-479, 141).
+    """
+    width, height = frame["preview"].size
+    if type(x) is not int or type(y) is not int or not (0 <= x < width and 0 <= y < height):
+        raise ValueError("Choose integer coordinates inside the current screenshot.")
+
+    left, top, right, bottom = frame["bounds"]
+    return (
+        left + (2 * x + 1) * (right - left) // (2 * width),
+        top + (2 * y + 1) * (bottom - top) // (2 * height),
+    )

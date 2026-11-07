@@ -32,3 +32,16 @@ class VisualTests(unittest.TestCase):
             self.assertRaisesRegex(RuntimeError, "moved"),
         ):
             visual_.capture_window(7)
+
+
+    def test_preview_preserves_aspect_and_maps_negative_origin(self):
+        """A smaller screenshot still points to the correct physical screen pixel."""
+        image = Image.new("RGB", (3200, 1200))
+        preview = visual_.model_image(image)
+        self.assertEqual(preview.size, (1600, 600))
+        frame = {"preview": preview, "bounds": (-3200, 100, 0, 1300)}
+        self.assertEqual(visual_.screen_point(frame, 10, 20), (-3179, 141))
+        self.assertEqual(visual_.screen_point(frame, 1599, 599), (-1, 1299))
+        for x, y in ((1600, 0), (0, -1), (True, 0), (0, 1.5)):
+            with self.subTest(x=x, y=y), self.assertRaises(ValueError):
+                visual_.screen_point(frame, x, y)
