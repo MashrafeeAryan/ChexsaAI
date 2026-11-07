@@ -1062,7 +1062,11 @@ def build_app(root=None, handlers=None, initial_settings=None, history_path=None
                     if not cancel.is_set() and not context["closing"]:
                         show_status("working", "Working — " + event["mode"])
                 elif kind == "visual_status":
-                    if context["busy"] and not cancel.is_set() and not context["closing"]:
+                    if (
+                        context["busy"]
+                        and not cancel.is_set()
+                        and not context["closing"]
+                    ):
                         show_status("working", event["text"])
                 elif kind in ("result", "error", "cancelled", "fatal"):
                     context["busy"] = False

@@ -57,10 +57,20 @@ def capture_window(handle):
         try:
             image = ImageGrab.grab(bbox=bounds, all_screens=True).convert("RGB")
         except OSError:
-            raise RuntimeError("Could not capture this window. Check that Windows is unlocked.") from None
+            raise RuntimeError(
+                "Could not capture this window. Check that Windows is unlocked."
+            ) from None
+
+        left, top, right, bottom = bounds
+        if image.size != (right - left, bottom - top):
+            raise RuntimeError(
+                "The capture size did not match the screen bounds. No input was sent."
+            )
 
         # Capture and window geometry must describe the same moment.
-        if (process, bounds) != window_bounds(handle) or focus != keyboard_focus(handle):
+        if (process, bounds) != window_bounds(handle) or focus != keyboard_focus(
+            handle
+        ):
             raise RuntimeError("The window moved during capture. Start again.")
 
     return {
@@ -90,7 +100,11 @@ def screen_point(frame, x, y):
     Preview point (10, 20) maps to screen point (-479, 141).
     """
     width, height = frame["preview"].size
-    if type(x) is not int or type(y) is not int or not (0 <= x < width and 0 <= y < height):
+    if (
+        type(x) is not int
+        or type(y) is not int
+        or not (0 <= x < width and 0 <= y < height)
+    ):
         raise ValueError("Choose integer coordinates inside the current screenshot.")
 
     left, top, right, bottom = frame["bounds"]
@@ -125,7 +139,9 @@ def target_at(frame, point):
         raise RuntimeError("The target window moved. Start again.")
     hit = win32gui.WindowFromPoint(point)
     if not hit or win32gui.GetAncestor(hit, 2) != frame["handle"]:
-        raise RuntimeError("Another window covers that point. No click or scroll was sent.")
+        raise RuntimeError(
+            "Another window covers that point. No click or scroll was sent."
+        )
     return hit
 
 
@@ -143,9 +159,13 @@ def pointer_target(state, view_id, x, y):
         try:
             win32api.SetCursorPos(point)
         except win32api.error:
-            raise RuntimeError("Could not move the cursor on this Windows desktop.") from None
+            raise RuntimeError(
+                "Could not move the cursor on this Windows desktop."
+            ) from None
         if win32api.GetCursorPos() != point or target_at(frame, point) != hit:
-            raise RuntimeError("The pointer target changed. No click or scroll was sent.")
+            raise RuntimeError(
+                "The pointer target changed. No click or scroll was sent."
+            )
         check_cancelled(state)
         check_input_idle()
         yield
@@ -169,7 +189,9 @@ def send_inputs(events, releases=()):
     if releases:
         cleanup = (INPUT * len(releases))(*releases)
         SendInput(len(cleanup), byref(cleanup), sizeof(INPUT))
-    raise RuntimeError("Input outcome is uncertain. Check the window before repeating it.")
+    raise RuntimeError(
+        "Input outcome is uncertain. Check the window before repeating it."
+    )
 
 
 def mouse_input(flag, data=0):
@@ -228,12 +250,19 @@ def keyboard_focus(handle):
 def check_input_idle():
     """Pause if the user is holding a button or modifier that would alter our input."""
     held_keys = (
-        win32con.VK_LBUTTON, win32con.VK_RBUTTON, win32con.VK_MBUTTON,
-        win32con.VK_CONTROL, win32con.VK_SHIFT, win32con.VK_MENU,
-        win32con.VK_LWIN, win32con.VK_RWIN,
+        win32con.VK_LBUTTON,
+        win32con.VK_RBUTTON,
+        win32con.VK_MBUTTON,
+        win32con.VK_CONTROL,
+        win32con.VK_SHIFT,
+        win32con.VK_MENU,
+        win32con.VK_LWIN,
+        win32con.VK_RWIN,
     )
     if any(win32api.GetAsyncKeyState(key) & 0x8000 for key in held_keys):
-        raise RuntimeError("Release the mouse buttons and modifier keys, then try again.")
+        raise RuntimeError(
+            "Release the mouse buttons and modifier keys, then try again."
+        )
 
 
 def send_keyboard(state, view_id, events, releases):
@@ -242,7 +271,9 @@ def send_keyboard(state, view_id, events, releases):
     with physical_pixels():
         frame = checked_frame(state, view_id)
         if not frame["focus"] or keyboard_focus(frame["handle"]) != frame["focus"]:
-            raise RuntimeError("Keyboard focus changed or is unavailable. No keys were sent.")
+            raise RuntimeError(
+                "Keyboard focus changed or is unavailable. No keys were sent."
+            )
         check_input_idle()
         check_cancelled(state)
         state.pop("frame")
@@ -266,7 +297,7 @@ def type_literal(state, view_id, text):
     encoded = normalized.encode("utf-16-le")
     events = []
     for offset in range(0, len(encoded), 2):
-        unit = chr(int.from_bytes(encoded[offset:offset + 2], "little"))
+        unit = chr(int.from_bytes(encoded[offset : offset + 2], "little"))
         events.extend(KeyAction(unit).GetInput())
     send_keyboard(state, view_id, events, events[1::2])
     return "Text sent. Check the new screenshot to confirm what was entered."
@@ -278,14 +309,26 @@ def press_keys(state, view_id, keys):
 
     modifiers = {"CTRL": win32con.VK_CONTROL, "SHIFT": win32con.VK_SHIFT}
     names = {
-        "ENTER": win32con.VK_RETURN, "TAB": win32con.VK_TAB, "ESC": win32con.VK_ESCAPE,
-        "BACKSPACE": win32con.VK_BACK, "DELETE": win32con.VK_DELETE,
-        "SPACE": win32con.VK_SPACE, "HOME": win32con.VK_HOME, "END": win32con.VK_END,
-        "UP": win32con.VK_UP, "DOWN": win32con.VK_DOWN,
-        "LEFT": win32con.VK_LEFT, "RIGHT": win32con.VK_RIGHT,
-        "PAGEUP": win32con.VK_PRIOR, "PAGEDOWN": win32con.VK_NEXT,
+        "ENTER": win32con.VK_RETURN,
+        "TAB": win32con.VK_TAB,
+        "ESC": win32con.VK_ESCAPE,
+        "BACKSPACE": win32con.VK_BACK,
+        "DELETE": win32con.VK_DELETE,
+        "SPACE": win32con.VK_SPACE,
+        "HOME": win32con.VK_HOME,
+        "END": win32con.VK_END,
+        "UP": win32con.VK_UP,
+        "DOWN": win32con.VK_DOWN,
+        "LEFT": win32con.VK_LEFT,
+        "RIGHT": win32con.VK_RIGHT,
+        "PAGEUP": win32con.VK_PRIOR,
+        "PAGEDOWN": win32con.VK_NEXT,
     }
-    if not isinstance(keys, list) or not 1 <= len(keys) <= 3 or not all(isinstance(key, str) for key in keys):
+    if (
+        not isinstance(keys, list)
+        or not 1 <= len(keys) <= 3
+        or not all(isinstance(key, str) for key in keys)
+    ):
         raise ValueError("Give a key or a Ctrl/Shift shortcut as a list.")
     keys = [key.upper() for key in keys]
     if len(set(keys)) != len(keys) or any(key not in modifiers for key in keys[:-1]):
@@ -331,7 +374,9 @@ def vision_reply(client, model, request, frame, history):
     preview = frame["preview"]
     with BytesIO() as buffer:
         preview.save(buffer, format="PNG")
-        image_url = "data:image/png;base64," + b64encode(buffer.getvalue()).decode("ascii")
+        image_url = "data:image/png;base64," + b64encode(buffer.getvalue()).decode(
+            "ascii"
+        )
     payload = {
         "request": request,
         "view": frame["id"],
@@ -344,26 +389,38 @@ def vision_reply(client, model, request, frame, history):
             model=model,
             messages=[
                 {"role": "system", "content": VISION_PROMPT},
-                {"role": "user", "content": [
-                    {"type": "text", "text": json.dumps(payload, ensure_ascii=False)},
-                    {"type": "image_url", "image_url": {"url": image_url}},
-                ]},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(payload, ensure_ascii=False),
+                        },
+                        {"type": "image_url", "image_url": {"url": image_url}},
+                    ],
+                },
             ],
             max_completion_tokens=2048,
         )
     except RateLimitError:
-        raise RuntimeError("The vision API limit was reached. Try again later.") from None
+        raise RuntimeError(
+            "The vision API limit was reached. Try again later."
+        ) from None
     except BadRequestError:
         raise RuntimeError(
             "The vision request was rejected. Check that Vision model supports image input at your API address."
         ) from None
     except APIError:
-        raise RuntimeError("Could not get a vision reply. Check your model settings and connection.") from None
+        raise RuntimeError(
+            "Could not get a vision reply. Check your model settings and connection."
+        ) from None
 
     try:
         return json.loads(response.choices[0].message.content)
     except (IndexError, TypeError, ValueError):
-        raise RuntimeError("The vision model returned an unreadable action. No input was sent.") from None
+        raise RuntimeError(
+            "The vision model returned an unreadable action. No input was sent for that decision."
+        ) from None
 
 
 def visual_action(reply, frame):
@@ -385,7 +442,9 @@ def visual_action(reply, frame):
         or reply.get("view") != frame["id"]
         or set(reply) != {"action", "view", *fields[name]}
     ):
-        raise RuntimeError("The vision model chose an invalid action or an old screenshot. No input was sent.")
+        raise RuntimeError(
+            "The vision model chose an invalid action or an old screenshot. No input was sent for that decision."
+        )
     for key in ("text", "evidence"):
         if key in reply and (not isinstance(reply[key], str) or not reply[key].strip()):
             raise RuntimeError("The vision model did not supply the required text.")
@@ -429,16 +488,24 @@ def run_visual_task(request, handle, state, decide):
             if name == "finish":
                 checked_frame(state, frame["id"])
                 check_cancelled(state)
-                return arguments["text"] + "\n\nVisible result: " + arguments["evidence"]
+                return (
+                    arguments["text"] + "\n\nVisible result: " + arguments["evidence"]
+                )
             if name == "wait":
                 pause_visual(state, 0.75)
                 history.append("Waited for a visible update.")
                 continue
 
             # A click may take effect later. Never repeat the same input on the same image.
-            attempt = (hash(frame["image"].tobytes()), name, json.dumps(arguments, sort_keys=True))
+            attempt = (
+                hash(frame["image"].tobytes()),
+                name,
+                json.dumps(arguments, sort_keys=True),
+            )
             if attempt in attempts:
-                raise RuntimeError("The screen did not show a result for that input. Check it before repeating.")
+                raise RuntimeError(
+                    "The screen did not show a result for that input. Check it before repeating."
+                )
             attempts.add(attempt)
             actions[name](state, frame["id"], **arguments)
             history.append(name + " input sent")
@@ -454,9 +521,13 @@ def run_visual_agent(request, state):
     from openai import OpenAI
     from functools import partial
 
-    key, address, model = (os.getenv(name) for name in ("LLM_API_KEY", "LLM_BASE_URL", "VISION_MODEL"))
+    key, address, model = (
+        os.getenv(name) for name in ("LLM_API_KEY", "LLM_BASE_URL", "VISION_MODEL")
+    )
     if not all((key, address, model)):
-        raise RuntimeError("Set an API key, API address, and image-capable Vision model in Settings.")
+        raise RuntimeError(
+            "Set an API key, API address, and image-capable Vision model in Settings."
+        )
 
     status = state.get("_visual_status")
     if status is not None:
@@ -464,9 +535,13 @@ def run_visual_agent(request, state):
     pause_visual(state, 5)
     handle = win32gui.GetForegroundWindow()
     if not handle or win32process.GetWindowThreadProcessId(handle)[1] == os.getpid():
-        raise RuntimeError("Switch to the window you want to control before the countdown ends.")
+        raise RuntimeError(
+            "Switch to the window you want to control before the countdown ends."
+        )
 
     if status is not None:
         status("Working in the selected window. Switch back to stop.")
     with OpenAI(api_key=key, base_url=address, timeout=30, max_retries=0) as client:
-        return run_visual_task(request, handle, state, partial(vision_reply, client, model))
+        return run_visual_task(
+            request, handle, state, partial(vision_reply, client, model)
+        )

@@ -16,7 +16,9 @@ class VisualTests(unittest.TestCase):
         bounds = (-600, 100, 0, 400)
         with (
             patch("visual_.window_bounds", return_value=(42, bounds)),
-            patch("PIL.ImageGrab.grab", return_value=Image.new("RGB", (600, 300))) as grab,
+            patch(
+                "PIL.ImageGrab.grab", return_value=Image.new("RGB", (600, 300))
+            ) as grab,
         ):
             frame = visual_.capture_window(7)
         grab.assert_called_once_with(bbox=bounds, all_screens=True)
@@ -27,12 +29,14 @@ class VisualTests(unittest.TestCase):
     def test_capture_rejects_moved_window(self):
         """A window that moves during capture cannot supply action coordinates."""
         with (
-            patch("visual_.window_bounds", side_effect=[(42, (0, 0, 10, 10)), (42, (1, 0, 11, 10))]),
+            patch(
+                "visual_.window_bounds",
+                side_effect=[(42, (0, 0, 10, 10)), (42, (1, 0, 11, 10))],
+            ),
             patch("PIL.ImageGrab.grab", return_value=Image.new("RGB", (10, 10))),
             self.assertRaisesRegex(RuntimeError, "moved"),
         ):
             visual_.capture_window(7)
-
 
     def test_preview_preserves_aspect_and_maps_negative_origin(self):
         """A smaller screenshot still points to the correct physical screen pixel."""
@@ -46,12 +50,15 @@ class VisualTests(unittest.TestCase):
             with self.subTest(x=x, y=y), self.assertRaises(ValueError):
                 visual_.screen_point(frame, x, y)
 
-
     def test_stale_and_changed_screens_are_rejected(self):
         """An older reading or a moved button cannot be used to send input."""
         frame = {
-            "id": "current", "handle": 7, "process": 42, "bounds": (0, 0, 60, 60),
-            "image": Image.new("RGB", (60, 60)), "captured": visual_.monotonic(),
+            "id": "current",
+            "handle": 7,
+            "process": 42,
+            "bounds": (0, 0, 60, 60),
+            "image": Image.new("RGB", (60, 60)),
+            "captured": visual_.monotonic(),
         }
         state = {"frame": frame}
         with patch("visual_.capture_window") as capture:
@@ -65,10 +72,11 @@ class VisualTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "visible window changed"):
                 visual_.checked_frame(state, "current")
 
-        with patch("visual_.capture_window", return_value={**frame, "bounds": (2, 0, 62, 60)}):
+        with patch(
+            "visual_.capture_window", return_value={**frame, "bounds": (2, 0, 62, 60)}
+        ):
             with self.assertRaisesRegex(RuntimeError, "window moved"):
                 visual_.checked_frame(state, "current")
-
 
     def test_move_checks_target_and_consumes_the_screenshot(self):
         """A move uses the scaled point, then requires a fresh reading."""
@@ -84,7 +92,6 @@ class VisualTests(unittest.TestCase):
             visual_.move_pointer(state, "view", 5, 5)
         move.assert_called_once_with((-29, 11))
         self.assertNotIn("frame", state)
-
 
     def test_double_click_releases_button_and_does_not_retry(self):
         """A partial Windows input batch sends a release, never another click."""
@@ -110,7 +117,6 @@ class VisualTests(unittest.TestCase):
         ):
             visual_.target_at(frame, (5, 5))
 
-
     def test_scroll_uses_signed_wheel_steps_at_the_checked_point(self):
         """Two down steps send a negative wheel delta after target validation."""
         from contextlib import nullcontext
@@ -125,7 +131,6 @@ class VisualTests(unittest.TestCase):
         event = send.call_args.args[0][0]
         self.assertEqual(event.mi.dwFlags, visual_.win32con.MOUSEEVENTF_WHEEL)
         self.assertEqual(c_int32(event.mi.mouseData).value, -240)
-
 
     def test_literal_input_never_parses_shortcut_text(self):
         """Braces and an emoji become Unicode units, not executable key names."""
@@ -162,14 +167,25 @@ class VisualTests(unittest.TestCase):
                 visual_.type_literal(state, "view", "hello")
             send.assert_not_called()
 
-
     def test_task_observes_again_before_reporting_result(self):
         """Scripted actions use one image each and finish from a new visible result."""
         first = {"id": "first", "image": Image.new("RGB", (20, 20))}
         second = {"id": "second", "image": Image.new("RGB", (20, 20), "white")}
         replies = [
-            {"view": "first", "action": "click", "x": 5, "y": 5, "button": "left", "count": 1},
-            {"view": "second", "action": "finish", "text": "Saved", "evidence": "Saved label"},
+            {
+                "view": "first",
+                "action": "click",
+                "x": 5,
+                "y": 5,
+                "button": "left",
+                "count": 1,
+            },
+            {
+                "view": "second",
+                "action": "finish",
+                "text": "Saved",
+                "evidence": "Saved label",
+            },
         ]
         state = {}
         with (
@@ -178,7 +194,9 @@ class VisualTests(unittest.TestCase):
             patch("visual_.checked_frame") as check,
             patch("visual_.pause_visual"),
         ):
-            result = visual_.run_visual_task("Save", 7, state, lambda *_: replies.pop(0))
+            result = visual_.run_visual_task(
+                "Save", 7, state, lambda *_: replies.pop(0)
+            )
         self.assertEqual(capture.call_count, 2)
         click.assert_called_once_with(state, "first", x=5, y=5, button="left", count=1)
         check.assert_called_once_with(state, "second")
@@ -189,7 +207,14 @@ class VisualTests(unittest.TestCase):
         """Reject stale model coordinates and repeated clicks on an unchanged image."""
         state = {}
         frame = {"id": "current", "image": Image.new("RGB", (20, 20))}
-        reply = {"view": "old", "action": "click", "x": 5, "y": 5, "button": "left", "count": 1}
+        reply = {
+            "view": "old",
+            "action": "click",
+            "x": 5,
+            "y": 5,
+            "button": "left",
+            "count": 1,
+        }
         with (
             patch("visual_.capture_window", return_value=frame),
             patch("visual_.click_pointer") as click,
@@ -212,13 +237,34 @@ class VisualTests(unittest.TestCase):
 
         client = Mock()
         client.chat.completions.create.return_value = SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content='{"action":"reply"}'))]
+            choices=[
+                SimpleNamespace(message=SimpleNamespace(content='{"action":"reply"}'))
+            ]
         )
-        frame = {"id": "test", "preview": Image.new("RGB", (20, 10)), "handle": object()}
-        visual_.vision_reply(client, "fixture-model", "What is shown?", frame, ["click input sent"])
-        content = client.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+        frame = {
+            "id": "test",
+            "preview": Image.new("RGB", (20, 10)),
+            "handle": object(),
+        }
+        visual_.vision_reply(
+            client, "fixture-model", "What is shown?", frame, ["click input sent"]
+        )
+        content = client.chat.completions.create.call_args.kwargs["messages"][1][
+            "content"
+        ]
         data = json.loads(content[0]["text"])
         self.assertEqual((data["width"], data["height"]), (20, 10))
         self.assertEqual(data["view"], "test")
         self.assertNotIn("handle", data)
-        self.assertTrue(content[1]["image_url"]["url"].startswith("data:image/png;base64,"))
+        self.assertTrue(
+            content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+        )
+
+    def test_capture_rejects_mismatched_pixel_size(self):
+        """Unexpected capture scaling must never turn into guessed coordinates."""
+        with (
+            patch("visual_.window_bounds", return_value=(42, (0, 0, 60, 60))),
+            patch("PIL.ImageGrab.grab", return_value=Image.new("RGB", (30, 30))),
+            self.assertRaisesRegex(RuntimeError, "size did not match"),
+        ):
+            visual_.capture_window(7)

@@ -356,7 +356,6 @@ class AppWindowTests(unittest.TestCase):
             pump_until(root, lambda: context.get("closed", False))
             context["worker"].join(timeout=3)
 
-
     def test_visual_desktop_is_an_explicit_mode(self):
         """Only a confirmed Visual desktop request reaches the visual engine."""
         calls = []
@@ -377,7 +376,9 @@ class AppWindowTests(unittest.TestCase):
             selector.current(3)
             selector.event_generate("<<ComboboxSelected>>")
             self.assertEqual(context["mode"].get(), "visual")
-            with patch("app_.messagebox.askokcancel", side_effect=[False, True]) as confirm:
+            with patch(
+                "app_.messagebox.askokcancel", side_effect=[False, True]
+            ) as confirm:
                 context["submit"]("Check the window")
                 self.assertFalse(context["busy"])
                 context["submit"]("Check the window")
@@ -385,7 +386,9 @@ class AppWindowTests(unittest.TestCase):
             self.assertEqual(confirm.call_count, 2)
             self.assertEqual(calls, ["Check the window"])
             self.assertEqual(context["last_reply"], "Fixture visual result")
-            self.assertEqual(context["saved_chats"][context["active_chat"]]["mode"], "visual")
+            self.assertEqual(
+                context["saved_chats"][context["active_chat"]]["mode"], "visual"
+            )
         finally:
             context["close"]()
             pump_until(root, lambda: context.get("closed", False))
