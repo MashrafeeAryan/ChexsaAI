@@ -18,7 +18,7 @@ the window. The existing `chexsa` and `python cli_.py` commands still work.
 
 ## Use the window
 
-- Choose **desktop**, **browser**, or **gmail**. Modes are explicit for now.
+- Choose **Desktop**, **Browser**, **Gmail**, or **Visual desktop**.
 - Type a request and press **Enter** or **Send request**. Shift+Enter adds a line.
 - Read progress in the status line and the result in the chat.
 - **Stop** prevents the next model call or action at a safe boundary.
@@ -40,12 +40,11 @@ These preferences stay local and are not sent to the model.
 
 Suggestion buttons fill an editable request and choose its mode; they do not run
 the task. **New chat** clears the current display and selected desktop/Gmail targets
-while keeping connections. The sidebar shows the current conversation only;
-there is no saved chat archive yet. Stop and email-send review appear when needed.
+while keeping connections. Double-click a saved chat to read its messages.
+Use **Chat options** to rename or delete it. Stop and email-send review appear when needed.
 
 The terminal launch commands are independent of this interface and keep their
-existing behavior. The UI uses Tk's PNG support, so terminal users do not need a
-new image library.
+existing behavior.
 
 ## Settings and files survive app updates
 
@@ -60,9 +59,39 @@ Files created by the desktop app with relative filenames go under
 `%LOCALAPPDATA%\Chexsa\output`. An explicitly requested absolute path still works.
 The terminal keeps its existing repository `output/` default.
 
-Chat stays in memory and is not automatically saved. Requested task and email
-contents still go to your configured model provider; encryption of local settings
-does not make those model requests local.
+Windows encrypts saved chat text in the local chat database under the same folder.
+Requested task and email contents go to your configured model provider.
+
+## Visual desktop
+
+1. Open the window you want Chexsa to work in.
+2. In **Settings**, set **Vision model** to a model that accepts images at your API
+   address. You can also set `VISION_MODEL` in `.env`. This uses your configured
+   API address and key.
+3. Choose **Visual desktop**, write a request, and accept the screenshot notice.
+4. Switch to the target window within five seconds. To stop, switch back and
+   press **Stop**.
+
+Example request: **Type Hello in the blank editor.** The model sees the current
+window image, chooses a point or keyboard action, then checks a new image for
+the result. It can move, click, double-click, right-click, scroll, type, and press
+common Ctrl/Shift shortcuts. **Desktop** uses Windows controls as before.
+
+Each request stays in one foreground window. Keep it visible and leave the mouse
+and keyboard free during input. Covered points, changing screens, and a switch
+to another window can stop the request. If the window spans monitors, the preview
+covers its visible area on the nearest monitor. Screenshots go to your vision model
+and stay in memory for the request. Chat history saves text only.
+
+The disposable native test uses scripted replies and makes zero model API calls:
+
+```powershell
+python tests/desktop_actions_integration_.py --visual
+```
+
+The native input portion needs an unlocked, interactive Windows desktop.
+Live vision accuracy, API latency, and comparative cost against Windows MCP
+require separate benchmarks.
 
 ## Microphone and spoken replies
 
@@ -120,7 +149,7 @@ not create an independent plugin-update system.
 
 ```powershell
 python -m unittest discover -s tests -p "test_*.py" -q
-python -m compileall -q app_.py app_runtime_.py plugins tests
+python -m compileall -q app_.py app_runtime_.py visual_.py plugins tests
 ```
 
 The app tests use fake task and audio responses. Real Tk widgets check chat,

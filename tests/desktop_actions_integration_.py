@@ -50,7 +50,12 @@ def fixture():
             20, y, 530, 70, root, number, definition.hInstance, None)
     win32gui.CreateWindow("STATIC", "0,0", win32con.WS_CHILD | win32con.WS_VISIBLE,
         20, 265, 200, 30, root, 301, definition.hInstance, None)
-    print(root, flush=True)
+    if "--visual-fixture" in sys.argv:
+        from os import getpid
+
+        print(root, getpid(), flush=True)
+    else:
+        print(root, flush=True)
     win32gui.PumpMessages()
 
 
@@ -217,9 +222,97 @@ def test_word():
             word.Quit(SaveChanges=0)
 
 
+def test_visual_window():
+    """Check visual input on our own disposable window with scripted replies."""
+    import win32process
+    from visual_ import capture_window, physical_pixels, run_visual_task
+
+    process = subprocess.Popen(
+        [sys.executable, __file__, "--fixture", "--visual-fixture"],
+        stdout=subprocess.PIPE,
+        text=True,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+    handle = None
+    try:
+        # A venv launcher can start a second Python process to own the window.
+        fixture_handle, fixture_pid = map(int, process.stdout.readline().split())
+        assert win32process.GetWindowThreadProcessId(fixture_handle)[1] == fixture_pid
+        handle = fixture_handle
+        try:
+            win32gui.SetForegroundWindow(handle)
+        except win32gui.error:
+            pass
+        if win32gui.GetForegroundWindow() != handle:
+            print("SKIP: Windows did not let the disposable fixture take foreground focus.")
+            return
+
+        frame = capture_window(handle)
+        assert frame["image"].width > 100 and frame["image"].height > 100
+        assert frame["image"].getbbox(), "Fixture screenshot was blank."
+        print("PASS: Captured a real disposable window in memory.", flush=True)
+
+        with physical_pixels():
+            try:
+                # Probe input without moving the cursor away from its current point.
+                win32api.SetCursorPos(win32api.GetCursorPos())
+            except win32api.error:
+                print("SKIP: This Windows session does not allow physical cursor input.")
+                return
+
+        counter = win32gui.GetDlgItem(handle, 301)
+        editor = win32gui.GetDlgItem(handle, 201)
+        literal = "Café {ENTER} 😀"
+        calls = 0
+
+        def choose(request, frame, history):
+            """Supply fixture points while the real engine captures and acts."""
+            nonlocal calls
+            index = calls
+            calls += 1
+            if index < 3:
+                target = win32gui.GetDlgItem(handle, 102) if index < 2 else editor
+                with physical_pixels():
+                    left, top, right, bottom = win32gui.GetWindowRect(target)
+                x1, y1, x2, y2 = frame["bounds"]
+                x = ((left + right) // 2 - x1) * frame["preview"].width // (x2 - x1)
+                y = ((top + bottom) // 2 - y1) * frame["preview"].height // (y2 - y1)
+                action = {"action": "move", "x": x, "y": y}
+                if index:
+                    action.update(action="click", button="left", count=1)
+            elif index == 3:
+                assert win32gui.GetWindowText(counter) == "0,1"
+                action = {"action": "press", "keys": ["CTRL", "A"]}
+            elif index == 4:
+                action = {"action": "type", "text": literal}
+            else:
+                assert _edit_text(editor) == literal
+                action = {
+                    "action": "finish",
+                    "text": "Fixture updated",
+                    "evidence": "Only the second button was pressed, and the field shows the literal text.",
+                }
+            return {"view": frame["id"], **action}
+
+        result = run_visual_task("Update the disposable fixture", handle, {}, choose)
+        assert "Fixture updated" in result and calls == 6
+        assert win32gui.GetWindowText(counter) == "0,1"
+        print("PASS: Real move, exact duplicate-button click, Ctrl+A, and Unicode typing. Six scripted decisions.")
+    finally:
+        if handle and win32gui.IsWindow(handle):
+            win32gui.PostMessage(handle, win32con.WM_CLOSE, 0, 0)
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+
+
 if __name__ == "__main__":
     if "--fixture" in sys.argv:
         fixture()
+    elif "--visual" in sys.argv:
+        test_visual_window()
     else:
         test_native_window()
         test_connected_agent()
