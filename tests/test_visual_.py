@@ -108,3 +108,19 @@ class VisualTests(unittest.TestCase):
             self.assertRaisesRegex(RuntimeError, "covers"),
         ):
             visual_.target_at(frame, (5, 5))
+
+
+    def test_scroll_uses_signed_wheel_steps_at_the_checked_point(self):
+        """Two down steps send a negative wheel delta after target validation."""
+        from contextlib import nullcontext
+        from ctypes import c_int32
+
+        with (
+            patch("visual_.pointer_target", return_value=nullcontext()) as target,
+            patch("visual_.send_inputs") as send,
+        ):
+            visual_.scroll_pointer({}, "view", 4, 5, -2)
+        target.assert_called_once_with({}, "view", 4, 5)
+        event = send.call_args.args[0][0]
+        self.assertEqual(event.mi.dwFlags, visual_.win32con.MOUSEEVENTF_WHEEL)
+        self.assertEqual(c_int32(event.mi.mouseData).value, -240)

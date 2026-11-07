@@ -193,3 +193,13 @@ def click_pointer(state, view_id, x, y, button, count):
     with pointer_target(state, view_id, x, y):
         send_inputs(events, [events[-1]])
     return "Click sent. Check the new screenshot for the result."
+
+
+def scroll_pointer(state, view_id, x, y, steps):
+    """Scroll at a checked point. Positive steps go up; negative steps go down."""
+    if type(steps) is not int or steps == 0 or abs(steps) > 8:
+        raise ValueError("Choose 1 to 8 wheel steps in either direction.")
+
+    with pointer_target(state, view_id, x, y):
+        send_inputs([mouse_input(win32con.MOUSEEVENTF_WHEEL, 120 * steps)])
+    return "Wheel input sent. Check the new screenshot."
