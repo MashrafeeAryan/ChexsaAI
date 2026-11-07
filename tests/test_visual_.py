@@ -68,3 +68,18 @@ class VisualTests(unittest.TestCase):
         with patch("visual_.capture_window", return_value={**frame, "bounds": (2, 0, 62, 60)}):
             with self.assertRaisesRegex(RuntimeError, "window moved"):
                 visual_.checked_frame(state, "current")
+
+
+    def test_move_checks_target_and_consumes_the_screenshot(self):
+        """A move uses the scaled point, then requires a fresh reading."""
+        frame = {"preview": Image.new("RGB", (20, 10)), "bounds": (-40, 0, 0, 20)}
+        state = {"frame": frame}
+        with (
+            patch("visual_.checked_frame", return_value=frame),
+            patch("visual_.target_at", return_value=9),
+            patch("visual_.win32api.SetCursorPos") as move,
+            patch("visual_.win32api.GetCursorPos", return_value=(-29, 11)),
+        ):
+            visual_.move_pointer(state, "view", 5, 5)
+        move.assert_called_once_with((-29, 11))
+        self.assertNotIn("frame", state)

@@ -9,6 +9,8 @@ import win32api
 import win32gui
 import win32process
 
+from app_runtime_ import check_cancelled
+
 
 @contextmanager
 def physical_pixels():
@@ -109,3 +111,39 @@ def checked_frame(state, view_id):
     if changed and (changed[2] - changed[0] > 3 or changed[3] - changed[1] > 40):
         raise RuntimeError("The visible window changed before input. Start again.")
     return frame
+
+
+def target_at(frame, point):
+    """Check what would actually receive a pointer event at this position."""
+    if (frame["process"], frame["bounds"]) != window_bounds(frame["handle"]):
+        raise RuntimeError("The target window moved. Start again.")
+    hit = win32gui.WindowFromPoint(point)
+    if not hit or win32gui.GetAncestor(hit, 2) != frame["handle"]:
+        raise RuntimeError("Another window covers that point. No click or scroll was sent.")
+    return hit
+
+
+@contextmanager
+def pointer_target(state, view_id, x, y):
+    """Move to a current screenshot point and keep the pixel scale through input."""
+    check_cancelled(state)
+    with physical_pixels():
+        frame = checked_frame(state, view_id)
+        point = screen_point(frame, x, y)
+        hit = target_at(frame, point)
+        check_cancelled(state)
+        state.pop("frame")  # Moving the pointer can change the page through hover.
+        try:
+            win32api.SetCursorPos(point)
+        except win32api.error:
+            raise RuntimeError("Could not move the cursor on this Windows desktop.") from None
+        if win32api.GetCursorPos() != point or target_at(frame, point) != hit:
+            raise RuntimeError("The pointer target changed. No click or scroll was sent.")
+        check_cancelled(state)
+        yield
+
+
+def move_pointer(state, view_id, x, y):
+    """Move the real cursor to a checked image point without clicking."""
+    with pointer_target(state, view_id, x, y):
+        return "Pointer moved. Check the new screenshot."
