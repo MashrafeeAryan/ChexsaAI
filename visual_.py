@@ -61,6 +61,7 @@ def capture_window(handle):
         "process": process,
         "bounds": bounds,
         "image": image,
+        "preview": model_image(image),
         "captured": monotonic(),
     }
 
@@ -89,3 +90,22 @@ def screen_point(frame, x, y):
         left + (2 * x + 1) * (right - left) // (2 * width),
         top + (2 * y + 1) * (bottom - top) // (2 * height),
     )
+
+
+def checked_frame(state, view_id):
+    """Reject old coordinates or a changed scene before any input is sent."""
+    from PIL import ImageChops
+
+    frame = state.get("frame")
+    if frame is None or frame["id"] != view_id or monotonic() - frame["captured"] > 45:
+        raise RuntimeError("That screenshot is no longer current. Start again.")
+
+    current = capture_window(frame["handle"])
+    if (current["process"], current["bounds"]) != (frame["process"], frame["bounds"]):
+        raise RuntimeError("The window moved or changed. Start again.")
+
+    changed = ImageChops.difference(frame["image"], current["image"]).getbbox()
+    # A blinking text cursor can change a narrow strip without moving a target.
+    if changed and (changed[2] - changed[0] > 3 or changed[3] - changed[1] > 40):
+        raise RuntimeError("The visible window changed before input. Start again.")
+    return frame

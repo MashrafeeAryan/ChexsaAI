@@ -45,3 +45,26 @@ class VisualTests(unittest.TestCase):
         for x, y in ((1600, 0), (0, -1), (True, 0), (0, 1.5)):
             with self.subTest(x=x, y=y), self.assertRaises(ValueError):
                 visual_.screen_point(frame, x, y)
+
+
+    def test_stale_and_changed_screens_are_rejected(self):
+        """An older reading or a moved button cannot be used to send input."""
+        frame = {
+            "id": "current", "handle": 7, "process": 42, "bounds": (0, 0, 60, 60),
+            "image": Image.new("RGB", (60, 60)), "captured": visual_.monotonic(),
+        }
+        state = {"frame": frame}
+        with patch("visual_.capture_window") as capture:
+            with self.assertRaisesRegex(RuntimeError, "no longer current"):
+                visual_.checked_frame(state, "previous")
+            capture.assert_not_called()
+
+        changed = frame["image"].copy()
+        changed.paste("white", (10, 10, 20, 20))
+        with patch("visual_.capture_window", return_value={**frame, "image": changed}):
+            with self.assertRaisesRegex(RuntimeError, "visible window changed"):
+                visual_.checked_frame(state, "current")
+
+        with patch("visual_.capture_window", return_value={**frame, "bounds": (2, 0, 62, 60)}):
+            with self.assertRaisesRegex(RuntimeError, "window moved"):
+                visual_.checked_frame(state, "current")
