@@ -1,11 +1,12 @@
 """Read a visible Windows window and send checked mouse or keyboard input."""
 
 from contextlib import contextmanager
-from ctypes import c_void_p, windll
+from ctypes import byref, c_void_p, sizeof, windll
 from time import monotonic
 from uuid import uuid4
 
 import win32api
+import win32con
 import win32gui
 import win32process
 
@@ -147,3 +148,48 @@ def move_pointer(state, view_id, x, y):
     """Move the real cursor to a checked image point without clicking."""
     with pointer_target(state, view_id, x, y):
         return "Pointer moved. Check the new screenshot."
+
+
+def send_inputs(events, releases=()):
+    """Send a batch to Windows. Release any held input if only part was accepted."""
+    from pywinauto.win32functions import SendInput
+    from pywinauto.win32structures import INPUT
+
+    batch = (INPUT * len(events))(*events)
+    if SendInput(len(batch), byref(batch), sizeof(INPUT)) == len(batch):
+        return
+
+    if releases:
+        cleanup = (INPUT * len(releases))(*releases)
+        SendInput(len(cleanup), byref(cleanup), sizeof(INPUT))
+    raise RuntimeError("Input outcome is uncertain. Check the window before repeating it.")
+
+
+def mouse_input(flag, data=0):
+    """Make one Windows mouse event. Flag selects the button or wheel."""
+    from pywinauto.win32structures import INPUT
+
+    event = INPUT()
+    event.type = 0  # INPUT_MOUSE
+    event.mi.dwFlags = flag
+    event.mi.mouseData = data
+    return event
+
+
+def click_pointer(state, view_id, x, y, button, count):
+    """Send one primary/secondary click or a double click to a checked point."""
+    if button not in ("left", "right") or type(count) is not int or count not in (1, 2):
+        raise ValueError("Choose left or right and a click count of 1 or 2.")
+
+    # Respect the Windows setting for users with swapped mouse buttons.
+    swapped = win32api.GetSystemMetrics(win32con.SM_SWAPBUTTON)
+    primary = (button == "left") != bool(swapped)
+    if primary:
+        down, up = win32con.MOUSEEVENTF_LEFTDOWN, win32con.MOUSEEVENTF_LEFTUP
+    else:
+        down, up = win32con.MOUSEEVENTF_RIGHTDOWN, win32con.MOUSEEVENTF_RIGHTUP
+    events = [mouse_input(down), mouse_input(up)] * count
+
+    with pointer_target(state, view_id, x, y):
+        send_inputs(events, [events[-1]])
+    return "Click sent. Check the new screenshot for the result."
