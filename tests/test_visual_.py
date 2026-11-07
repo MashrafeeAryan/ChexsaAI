@@ -161,3 +161,64 @@ class VisualTests(unittest.TestCase):
             with self.assertRaises(InterruptedError):
                 visual_.type_literal(state, "view", "hello")
             send.assert_not_called()
+
+
+    def test_task_observes_again_before_reporting_result(self):
+        """Scripted actions use one image each and finish from a new visible result."""
+        first = {"id": "first", "image": Image.new("RGB", (20, 20))}
+        second = {"id": "second", "image": Image.new("RGB", (20, 20), "white")}
+        replies = [
+            {"view": "first", "action": "click", "x": 5, "y": 5, "button": "left", "count": 1},
+            {"view": "second", "action": "finish", "text": "Saved", "evidence": "Saved label"},
+        ]
+        state = {}
+        with (
+            patch("visual_.capture_window", side_effect=[first, second]) as capture,
+            patch("visual_.click_pointer") as click,
+            patch("visual_.checked_frame") as check,
+            patch("visual_.pause_visual"),
+        ):
+            result = visual_.run_visual_task("Save", 7, state, lambda *_: replies.pop(0))
+        self.assertEqual(capture.call_count, 2)
+        click.assert_called_once_with(state, "first", x=5, y=5, button="left", count=1)
+        check.assert_called_once_with(state, "second")
+        self.assertIn("Visible result: Saved label", result)
+        self.assertNotIn("frame", state)
+
+    def test_late_or_repeated_decisions_do_not_click(self):
+        """Reject stale model coordinates and repeated clicks on an unchanged image."""
+        state = {}
+        frame = {"id": "current", "image": Image.new("RGB", (20, 20))}
+        reply = {"view": "old", "action": "click", "x": 5, "y": 5, "button": "left", "count": 1}
+        with (
+            patch("visual_.capture_window", return_value=frame),
+            patch("visual_.click_pointer") as click,
+            patch("visual_.pause_visual"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "old screenshot"):
+                visual_.run_visual_task("Save", 7, state, lambda *_: reply)
+            click.assert_not_called()
+            reply["view"] = "current"
+            with self.assertRaisesRegex(RuntimeError, "did not show a result"):
+                visual_.run_visual_task("Save", 7, state, lambda *_: reply)
+            click.assert_called_once()
+        self.assertNotIn("frame", state)
+
+    def test_vision_request_contains_current_image_only(self):
+        """The API gets a PNG and image dimensions, never Windows objects or old images."""
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        import json
+
+        client = Mock()
+        client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"action":"reply"}'))]
+        )
+        frame = {"id": "test", "preview": Image.new("RGB", (20, 10)), "handle": object()}
+        visual_.vision_reply(client, "fixture-model", "What is shown?", frame, ["click input sent"])
+        content = client.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+        data = json.loads(content[0]["text"])
+        self.assertEqual((data["width"], data["height"]), (20, 10))
+        self.assertEqual(data["view"], "test")
+        self.assertNotIn("handle", data)
+        self.assertTrue(content[1]["image_url"]["url"].startswith("data:image/png;base64,"))
