@@ -76,6 +76,7 @@ class VisualTests(unittest.TestCase):
         state = {"frame": frame}
         with (
             patch("visual_.checked_frame", return_value=frame),
+            patch("visual_.check_input_idle"),
             patch("visual_.target_at", return_value=9),
             patch("visual_.win32api.SetCursorPos") as move,
             patch("visual_.win32api.GetCursorPos", return_value=(-29, 11)),
@@ -124,3 +125,39 @@ class VisualTests(unittest.TestCase):
         event = send.call_args.args[0][0]
         self.assertEqual(event.mi.dwFlags, visual_.win32con.MOUSEEVENTF_WHEEL)
         self.assertEqual(c_int32(event.mi.mouseData).value, -240)
+
+
+    def test_literal_input_never_parses_shortcut_text(self):
+        """Braces and an emoji become Unicode units, not executable key names."""
+        with patch("visual_.send_keyboard") as send:
+            visual_.type_literal({}, "view", "{ENTER}😀")
+        events = send.call_args.args[2]
+        units = [event.ki.wScan for event in events[::2]]
+        self.assertEqual(units, [*(ord(char) for char in "{ENTER}"), 0xD83D, 0xDE00])
+        self.assertTrue(all(event.ki.wVk == 0 for event in events))
+
+    def test_shortcut_releases_in_reverse_order(self):
+        """Ctrl+A is one chord with both keys released in the same batch."""
+        with patch("visual_.send_keyboard") as send:
+            visual_.press_keys({}, "view", ["CTRL", "A"])
+        events, releases = send.call_args.args[2:]
+        self.assertEqual([event.ki.wVk for event in events], [17, 65, 65, 17])
+        self.assertEqual([event.ki.wVk for event in releases], [65, 17])
+
+    def test_focus_change_or_cancellation_blocks_keyboard_input(self):
+        """A late model reply cannot type into a different field or a stopped task."""
+        from threading import Event
+
+        frame = {"handle": 7, "focus": 11}
+        state = {"frame": frame, "_cancel": Event()}
+        with (
+            patch("visual_.checked_frame", return_value=frame),
+            patch("visual_.keyboard_focus", return_value=12),
+            patch("visual_.send_inputs") as send,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "focus changed"):
+                visual_.type_literal(state, "view", "hello")
+            state["_cancel"].set()
+            with self.assertRaises(InterruptedError):
+                visual_.type_literal(state, "view", "hello")
+            send.assert_not_called()

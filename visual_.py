@@ -49,19 +49,21 @@ def capture_window(handle):
 
     with physical_pixels():
         process, bounds = window_bounds(handle)
+        focus = keyboard_focus(handle)
         try:
             image = ImageGrab.grab(bbox=bounds, all_screens=True).convert("RGB")
         except OSError:
             raise RuntimeError("Could not capture this window. Check that Windows is unlocked.") from None
 
         # Capture and window geometry must describe the same moment.
-        if (process, bounds) != window_bounds(handle):
+        if (process, bounds) != window_bounds(handle) or focus != keyboard_focus(handle):
             raise RuntimeError("The window moved during capture. Start again.")
 
     return {
         "id": uuid4().hex,
         "handle": handle,
         "process": process,
+        "focus": focus,
         "bounds": bounds,
         "image": image,
         "preview": model_image(image),
@@ -133,6 +135,7 @@ def pointer_target(state, view_id, x, y):
         point = screen_point(frame, x, y)
         hit = target_at(frame, point)
         check_cancelled(state)
+        check_input_idle()
         state.pop("frame")  # Moving the pointer can change the page through hover.
         try:
             win32api.SetCursorPos(point)
@@ -141,6 +144,7 @@ def pointer_target(state, view_id, x, y):
         if win32api.GetCursorPos() != point or target_at(frame, point) != hit:
             raise RuntimeError("The pointer target changed. No click or scroll was sent.")
         check_cancelled(state)
+        check_input_idle()
         yield
 
 
@@ -203,3 +207,96 @@ def scroll_pointer(state, view_id, x, y, steps):
     with pointer_target(state, view_id, x, y):
         send_inputs([mouse_input(win32con.MOUSEEVENTF_WHEEL, 120 * steps)])
     return "Wheel input sent. Check the new screenshot."
+
+
+def keyboard_focus(handle):
+    """Read the focused control in the foreground thread, not our worker thread."""
+    from pywinauto.win32functions import GetGUIThreadInfo
+    from pywinauto.win32structures import GUITHREADINFO
+
+    info = GUITHREADINFO()
+    info.cbSize = sizeof(info)
+    if GetGUIThreadInfo(0, byref(info)) and info.hwndFocus:
+        if win32gui.GetAncestor(info.hwndFocus, 2) == handle:
+            return info.hwndFocus
+    return None
+
+
+def check_input_idle():
+    """Pause if the user is holding a button or modifier that would alter our input."""
+    held_keys = (
+        win32con.VK_LBUTTON, win32con.VK_RBUTTON, win32con.VK_MBUTTON,
+        win32con.VK_CONTROL, win32con.VK_SHIFT, win32con.VK_MENU,
+        win32con.VK_LWIN, win32con.VK_RWIN,
+    )
+    if any(win32api.GetAsyncKeyState(key) & 0x8000 for key in held_keys):
+        raise RuntimeError("Release the mouse buttons and modifier keys, then try again.")
+
+
+def send_keyboard(state, view_id, events, releases):
+    """Send keys only while the same control in the selected window has focus."""
+    check_cancelled(state)
+    with physical_pixels():
+        frame = checked_frame(state, view_id)
+        if not frame["focus"] or keyboard_focus(frame["handle"]) != frame["focus"]:
+            raise RuntimeError("Keyboard focus changed or is unavailable. No keys were sent.")
+        check_input_idle()
+        check_cancelled(state)
+        state.pop("frame")
+        send_inputs(events, releases)
+
+
+def type_literal(state, view_id, text):
+    """Type Unicode text as characters, without treating braces as shortcuts."""
+    from pywinauto.keyboard import KeyAction
+
+    if (
+        not isinstance(text, str)
+        or not 1 <= len(text) <= 4000
+        or any(ord(char) < 32 and char not in "\r\n" for char in text)
+        or any(0xD800 <= ord(char) <= 0xDFFF for char in text)
+    ):
+        raise ValueError("Give 1 to 4000 characters of text without control keys.")
+
+    # Windows takes UTF-16 units. Emoji use a pair of units.
+    normalized = text.replace("\r\n", "\n").replace("\n", "\r")
+    encoded = normalized.encode("utf-16-le")
+    events = []
+    for offset in range(0, len(encoded), 2):
+        unit = chr(int.from_bytes(encoded[offset:offset + 2], "little"))
+        events.extend(KeyAction(unit).GetInput())
+    send_keyboard(state, view_id, events, events[1::2])
+    return "Text sent. Check the new screenshot to confirm what was entered."
+
+
+def press_keys(state, view_id, keys):
+    """Press one key or chord, for example ['CTRL', 'A'], and release it."""
+    from pywinauto.keyboard import VirtualKeyAction
+
+    modifiers = {"CTRL": win32con.VK_CONTROL, "SHIFT": win32con.VK_SHIFT}
+    names = {
+        "ENTER": win32con.VK_RETURN, "TAB": win32con.VK_TAB, "ESC": win32con.VK_ESCAPE,
+        "BACKSPACE": win32con.VK_BACK, "DELETE": win32con.VK_DELETE,
+        "SPACE": win32con.VK_SPACE, "HOME": win32con.VK_HOME, "END": win32con.VK_END,
+        "UP": win32con.VK_UP, "DOWN": win32con.VK_DOWN,
+        "LEFT": win32con.VK_LEFT, "RIGHT": win32con.VK_RIGHT,
+        "PAGEUP": win32con.VK_PRIOR, "PAGEDOWN": win32con.VK_NEXT,
+    }
+    if not isinstance(keys, list) or not 1 <= len(keys) <= 3 or not all(isinstance(key, str) for key in keys):
+        raise ValueError("Give a key or a Ctrl/Shift shortcut as a list.")
+    keys = [key.upper() for key in keys]
+    if len(set(keys)) != len(keys) or any(key not in modifiers for key in keys[:-1]):
+        raise ValueError("Use each modifier once, before the final key.")
+
+    base = keys[-1]
+    key_code = names.get(base)
+    if key_code is None and len(base) == 1 and base.isascii() and base.isalnum():
+        key_code = ord(base)
+    if key_code is None or ("CTRL" in keys and base in ("ESC", "TAB")):
+        raise ValueError("That shortcut is not supported in Visual desktop mode.")
+
+    codes = [modifiers[key] for key in keys[:-1]] + [key_code]
+    downs = [VirtualKeyAction(code, up=False).GetInput()[0] for code in codes]
+    ups = [VirtualKeyAction(code, down=False).GetInput()[0] for code in reversed(codes)]
+    send_keyboard(state, view_id, downs + ups, ups)
+    return "Keys sent. Check the new screenshot."
