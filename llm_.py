@@ -20,6 +20,15 @@ from observations_ import (
 load_dotenv(Path(__file__).with_name(".env"))
 _client = None
 
+# Before Chrome is connected, only these actions can run.
+START_PROMPT = """You are ChexsaAI. Return one JSON object.
+{"action":"navigate","url":"https://example.com"} opens a requested site.
+{"action":"observe"} connects to Chrome and reads the page.
+{"action":"reply","text":"Answer or ask for missing information"}
+Follow the request. Do not invent a destination or claim an action already ran.
+"""
+
+
 # Describe each action once; repeated instructions also consume input tokens.
 SYSTEM_PROMPT = """You are ChexsaAI. Return one JSON object, no extra text.
 Actions:
@@ -107,7 +116,10 @@ def get_reply(message, observation=None, history=None, previous=None):
         response = _client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "system",
+                    "content": START_PROMPT if observation is None else SYSTEM_PROMPT,
+                },
                 {"role": "user", "content": user_message},
             ],
             response_format={
