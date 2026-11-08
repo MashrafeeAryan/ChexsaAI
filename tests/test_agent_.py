@@ -605,7 +605,6 @@ class AgentModelPayloadTests(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         llm_.get_reply("Continue", observation)
 
-
     def test_start_prompt_only_lists_actions_available_without_a_page(self):
         """Show page tools once the model has a page it can act on."""
         environment = {
@@ -620,35 +619,64 @@ class AgentModelPayloadTests(unittest.TestCase):
             patch.object(llm_, "OpenAI") as client,
         ):
             create = client.return_value.chat.completions.create
-            create.return_value = SimpleNamespace(choices=[
-                SimpleNamespace(message=SimpleNamespace(content='{"action":"observe"}'))
-            ])
+            create.return_value = SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content='{"action":"observe"}')
+                    )
+                ]
+            )
             self.assertEqual(llm_.get_reply("Read my open page"), {"action": "observe"})
             first = create.call_args.kwargs["messages"][0]["content"]
             self.assertIn('"action":"observe"', first)
             self.assertNotIn("backend_node_id", first)
 
-            create.return_value = SimpleNamespace(choices=[
-                SimpleNamespace(message=SimpleNamespace(content='{"action":"reply","text":"Ready"}'))
-            ])
+            create.return_value = SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content='{"action":"reply","text":"Ready"}'
+                        )
+                    )
+                ]
+            )
             llm_.get_reply("Read my open page", observation)
             second = create.call_args.kwargs["messages"][0]["content"]
             self.assertIn("backend_node_id", second)
 
-
     def test_page_prompt_keeps_changes_and_nonzero_omission_counts(self):
         """Empty metadata can go away while outcomes and omissions remain visible."""
-        view = {"elements": '[12] textbox "Subject"', "changes": {
-            "added_text": ["Saved"],
-            "removed_ids": [],
-            "omitted_changes": {"controls": 0, "added_text": 3},
-        }}
+        view = {
+            "elements": '[12] textbox "Subject"',
+            "changes": {
+                "added_text": ["Saved"],
+                "removed_ids": [],
+                "omitted_changes": {"controls": 0, "added_text": 3},
+            },
+        }
         compact = llm_.compact_page_view(view)
-        self.assertEqual(compact["changes"], {
-            "added_text": ["Saved"], "omitted_changes": {"added_text": 3},
-        })
+        self.assertEqual(
+            compact["changes"],
+            {
+                "added_text": ["Saved"],
+                "omitted_changes": {"added_text": 3},
+            },
+        )
         self.assertIn("removed_ids", view["changes"])
-        self.assertNotIn("changes", llm_.compact_page_view({"changes": {"added_ids": []}}))
+        self.assertNotIn(
+            "changes", llm_.compact_page_view({"changes": {"added_ids": []}})
+        )
+
+    def test_search_prompt_shows_each_control_once(self):
+        """Same-name buttons stay separate, but identical control lines appear once."""
+        first = '[12] button "Save" | in "Draft"'
+        second = '[18] button "Save" | in "Copy"'
+        search = {"elements": first + "\n" + second, "next_offset": 40}
+        view = {"elements": first + '\n[19] button "Cancel"', "search": search}
+        compact = llm_.compact_page_view(view)
+        self.assertEqual(compact["elements"], '[19] button "Cancel"')
+        self.assertEqual(compact["search"], search)
+        self.assertIn(first, view["elements"])
 
     def test_request_and_results_are_sent_without_duplicate_page_content(self):
         "Checks that the model gets the goal and results without repeated whole-page readings."

@@ -50,7 +50,7 @@ Track progress with request and previous_actions; ask for missing information. P
 
 
 def compact_page_view(view):
-    """Skip empty change fields while keeping every recorded change.
+    """Skip empty fields and keep each searched control in one place.
 
     Example: {"added_text": ["Saved"], "removed_ids": []} sends just added_text.
     """
@@ -63,6 +63,14 @@ def compact_page_view(view):
         kept["omitted_changes"] = omitted
     if kept:
         result["changes"] = kept
+
+    search = result.get("search")
+    if search:
+        # Keep the order and paging of the matches. Omit only identical lines elsewhere.
+        matches = set(search["elements"].split("\n"))
+        result["elements"] = "\n".join(
+            line for line in result["elements"].split("\n") if line not in matches
+        )
     return result
 
 
