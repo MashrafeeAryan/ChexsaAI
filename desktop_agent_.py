@@ -566,8 +566,8 @@ def run_desktop_agent(request, state):
             raise RuntimeError("Unsupported desktop action. Nothing was run.")
 
         # Keep only the latest rejected draft so the model can fix its word count.
-        for previous in history:
-            previous["arguments"].pop("text", None)
+        for entry in history:
+            entry["arguments"].pop("text", None)
 
         # Leave large text and file contents out of future requests after success.
         saved_arguments = (

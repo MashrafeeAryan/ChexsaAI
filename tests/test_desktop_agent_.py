@@ -349,11 +349,35 @@ def test_desktop_search_executes_on_the_full_fresh_reading():
         tools["click_control"].assert_called_once_with(after, [92])
 
 
+def test_file_save_keeps_the_previous_window_reading():
+    """A non-final save keeps the previous reading after another desktop action."""
+    lines = [f'[{i}] Edit "Field {i}"' for i in range(1, 41)]
+    before = {"title": "Editor", "elements": "\n".join(lines), "window_id": (7,)}
+    after = {**before, "elements": before["elements"] + '\n[91] Button "Apply"'}
+    with ExitStack() as stack:
+        tools = _tools(stack)
+        tools["_observe"].side_effect = [before, after, after]
+        stack.enter_context(patch.object(agent, "write_file", return_value="example.txt"))
+        tools["get_desktop_action"].side_effect = [
+            {"tool": "observe", "arguments": {}},
+            {"tool": "write_file", "arguments": {
+                "path": "example.txt", "content": "Hello", "done": False,
+            }},
+            {"tool": "click_control", "arguments": {"node_id": [91]}},
+            {"tool": "reply", "arguments": {"text": "Done", "done": False}},
+        ]
+        assert agent.run_desktop_agent("Save a note and apply", {"window": object()}) == "Done"
+        view = tools["get_desktop_action"].call_args_list[2].args[1]
+        assert view["view"]["added_or_changed"] == 1
+        tools["click_control"].assert_called_once_with(after, [91])
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
         test_compact_view_rejects_ids_it_did_not_show,
         test_desktop_search_executes_on_the_full_fresh_reading,
+        test_file_save_keeps_the_previous_window_reading,
         test_native_tool_payload_and_validation, test_complete_desktop_flow,
         test_word_count_before_input, test_unverified_completion_is_refused,
         test_failures_and_limits, test_cli_modes_and_exit,
