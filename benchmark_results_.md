@@ -283,3 +283,42 @@ python tests/browser_context_benchmark_.py --repeat 5 --tokenizer C:\path\to\tok
 # Optional snapshot reference using an installed Playwright MCP cli.js
 python tests/browser_context_benchmark_.py --mcp-cli C:\path\to\mcp\cli.js --tokenizer C:\path\to\tokenizer.json
 ```
+
+## Shorter working prompts — November 8, 2026
+
+[You don't need long context](https://arxiv.org/abs/2611.05306) explores keeping
+the current working context short while allowing selective access to earlier
+information. Chexsa applies that idea by offering tools when they can run and
+sending each useful part of the current browser view once.
+
+### Desktop
+
+| Scripted task | Input tokens before | Input tokens after | Input tokens saved | Model calls |
+| --- | ---: | ---: | ---: | ---: |
+| Create a file with no window | 1,020 | 689 | 32.5% | 1 → 1 |
+| Find an omitted button and apply | 4,281 | 4,281 | 0% | 3 → 3 |
+| Create a file, then apply in an open window | 4,690 | 4,690 | 0% | 3 → 3 |
+
+All three tasks completed on both versions. Scripted output tokens stayed at
+54, 60, and 92 respectively. A separate regression covers saving a file after
+a window action and continuing with the correct previous window reading.
+
+### Browser
+
+| Scripted case | Input tokens before | Input tokens after | Input tokens saved | Model calls |
+| --- | ---: | ---: | ---: | ---: |
+| First decision before Chrome opens | 402 | 88 | 78.1% | 1 → 1 |
+| Standard browser view, 28 runs | 86,488 | 82,432 | 4.7% | 88 → 88 |
+| Experimental smaller view, 28 runs | 97,629 | 90,509 | 7.3% | 124 → 124 |
+
+For each browser view, both versions completed 24 runs and safely stopped
+on all four replaced-control runs. There were zero wrong targets or duplicate
+submissions. Searches stayed at 8 for the standard view and 44 for the smaller
+view. Scripted output tokens stayed at 15, 1,434, and 2,102 respectively.
+The standard view remains the default and used fewer tokens overall.
+
+Baseline: 7cc500b. Counts use the local GPT-OSS tokenizer and include scripted
+replies, desktop tool definitions, and all guarded stops. The standard Chrome
+fixture totals took 11.18 and 7.24 seconds locally under varying test load.
+These results measure fixture outcomes and text usage. Live latency, model
+reliability, and provider billing need separate measurements.
