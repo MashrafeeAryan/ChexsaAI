@@ -49,6 +49,23 @@ Track progress with request and previous_actions; ask for missing information. P
 """
 
 
+def compact_page_view(view):
+    """Skip empty change fields while keeping every recorded change.
+
+    Example: {"added_text": ["Saved"], "removed_ids": []} sends just added_text.
+    """
+    result = view.copy()
+    changes = dict(result.pop("changes", {}))
+    omitted = changes.pop("omitted_changes", {})
+    kept = {name: value for name, value in changes.items() if value}
+    omitted = {name: count for name, count in omitted.items() if count}
+    if omitted:
+        kept["omitted_changes"] = omitted
+    if kept:
+        result["changes"] = kept
+    return result
+
+
 # Give the AI the request and any page reading, then check its chosen action.
 def get_reply(message, observation=None, history=None, previous=None):
     # Keep the connection so later messages can reuse it.
@@ -99,9 +116,8 @@ def get_reply(message, observation=None, history=None, previous=None):
     visible_targets = set()
     if observation is not None:
         # Build the smaller page view locally; do not resend the old full page.
-        user_message["page"] = page_context(
-            observation, previous, message, history or []
-        )
+        view = page_context(observation, previous, message, history or [])
+        user_message["page"] = compact_page_view(view)
         # Only accept IDs actually shown to the model, including local search results.
         view = user_message["page"]
         descriptions = (

@@ -40,8 +40,8 @@ def main():
             action = {"action": "type", "backend_node_id": int(match.group(1)), "text": "Hello"}
         elif history[-1]["action"]["action"] == "type":
             assert view["mode"] == "changes"
-            assert not view["changes"]["added_text"], "Unchanged text was marked as new"
-            assert len(view["changes"]["updated_ids"]) <= 2
+            assert not view.get("changes", {}).get("added_text"), "Unchanged text was marked as new"
+            assert len(view.get("changes", {}).get("updated_ids", [])) <= 2
             match = re.search(r'^\[(\d+)\] button "Continue"', view["elements"], re.M)
             action = {"action": "click", "backend_node_id": int(match.group(1))}
         elif len(history) == 2:

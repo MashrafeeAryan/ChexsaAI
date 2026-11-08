@@ -635,6 +635,21 @@ class AgentModelPayloadTests(unittest.TestCase):
             second = create.call_args.kwargs["messages"][0]["content"]
             self.assertIn("backend_node_id", second)
 
+
+    def test_page_prompt_keeps_changes_and_nonzero_omission_counts(self):
+        """Empty metadata can go away while outcomes and omissions remain visible."""
+        view = {"elements": '[12] textbox "Subject"', "changes": {
+            "added_text": ["Saved"],
+            "removed_ids": [],
+            "omitted_changes": {"controls": 0, "added_text": 3},
+        }}
+        compact = llm_.compact_page_view(view)
+        self.assertEqual(compact["changes"], {
+            "added_text": ["Saved"], "omitted_changes": {"added_text": 3},
+        })
+        self.assertIn("removed_ids", view["changes"])
+        self.assertNotIn("changes", llm_.compact_page_view({"changes": {"added_ids": []}}))
+
     def test_request_and_results_are_sent_without_duplicate_page_content(self):
         "Checks that the model gets the goal and results without repeated whole-page readings."
         environment = {
