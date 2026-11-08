@@ -253,6 +253,12 @@ def get_desktop_action(request, observation=None, history=None):
         }
 
     tools = _TOOLS
+    if observation is None:
+        # The other tools require a window reading and would be rejected here.
+        tools = [
+            tool for tool in _TOOLS
+            if tool["function"]["name"] in ("open_app", "write_file", "reply")
+        ]
     search_tip = ""
     if observation is not None and "view" in observation:
         payload["window"]["view"] = observation["view"]

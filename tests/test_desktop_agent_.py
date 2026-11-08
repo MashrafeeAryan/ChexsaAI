@@ -372,12 +372,31 @@ def test_file_save_keeps_the_previous_window_reading():
         tools["click_control"].assert_called_once_with(after, [91])
 
 
+def test_tools_require_a_window_reading():
+    """Before opening an app, offer only tools that can run without a window."""
+    client = Mock()
+    create = client.chat.completions.create
+    with patch.dict(os.environ, {"LLM_MODEL": "fake"}), patch.object(agent, "_client", client):
+        create.return_value = _response("open_app", {"executable": "notepad.exe"})
+        assert agent.get_desktop_action("Open Notepad")["tool"] == "open_app"
+        names = {tool["function"]["name"] for tool in create.call_args.kwargs["tools"]}
+        assert names == {"open_app", "write_file", "reply"}
+
+        create.return_value = _response("press_key", {"keys": ["ENTER"]})
+        with unittest.TestCase().assertRaises(RuntimeError):
+            agent.get_desktop_action("Open Notepad")
+
+        window = {"title": "Editor", "elements": '[1] Edit "Text"', "unavailable_controls": 0}
+        assert agent.get_desktop_action("Press Enter", window)["tool"] == "press_key"
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
         test_compact_view_rejects_ids_it_did_not_show,
         test_desktop_search_executes_on_the_full_fresh_reading,
         test_file_save_keeps_the_previous_window_reading,
+        test_tools_require_a_window_reading,
         test_native_tool_payload_and_validation, test_complete_desktop_flow,
         test_word_count_before_input, test_unverified_completion_is_refused,
         test_failures_and_limits, test_cli_modes_and_exit,
