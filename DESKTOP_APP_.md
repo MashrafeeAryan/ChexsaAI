@@ -82,6 +82,19 @@ paragraph, keeping its formatting and the rest of the document. For example,
 ask **Shorten the conclusion in report.docx.** Chexsa stops if the old text is
 ambiguous or the saved file changed after reading.
 
+## Copy saved text between files
+
+Use **Desktop** and ask **Copy the Conclusion from report.docx to summary.txt.**
+You can also ask **Turn notes.md into a Word file.** In the same running chat,
+**that file** works when there is one recent file.
+
+Chexsa sends the model the filenames and section name. Python copies the text
+locally and checks the new file. An existing destination stays untouched.
+Copies support UTF-8 text, Markdown, and Word body paragraphs as plain text.
+A named section uses a Word heading or a Markdown heading starting with #.
+For a plain Word label, Chexsa copies the first nonempty paragraph below it.
+Name a full path to work outside the output folder.
+
 ## Visual desktop
 
 1. Open the window you want Chexsa to work in.

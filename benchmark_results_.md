@@ -334,3 +334,17 @@ Both versions saved and verified the same edit. Scripted outputs used 55 and 58
 tokens respectively. The quoted exact-replacement fixture also verified a save
 in one decision. Local GPT-OSS counts at d0c2beb compare full-file and excerpt
 inputs with the same tools and scripted replies.
+
+## Copy a Word section locally
+
+Both scripted runs copied the same conclusion to a verified text file.
+
+| Method | Input tokens | Output tokens | Total tokens | Model calls | Local time |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Pass the text through the model | 3,112 | 1,011 | 4,123 | 2 | 0.077 s |
+| Copy the text locally | 1,204 | 37 | 1,241 | 1 | 0.078 s |
+
+Local copying used **69.9% fewer total text tokens**. These are local GPT-OSS
+counts and scripted timings. Live API latency needs a separate measurement.
+
+Run the fixture with `python tests/desktop_context_benchmark_.py --handoff --tokenizer PATH`.
