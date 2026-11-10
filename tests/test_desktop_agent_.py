@@ -470,6 +470,25 @@ def test_explicit_file_replacement_and_ambiguous_targets():
             agent._file_target("", "Edit folder/note.txt", [str(path.resolve())])
 
 
+def test_reading_a_file_cannot_count_as_a_saved_edit():
+    """An unrelated window reading cannot verify a file change."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory() as directory, ExitStack() as stack:
+        path = Path(directory) / "note.txt"
+        path.write_text("Original", encoding="utf-8")
+        tools = _tools(stack)
+        tools["get_desktop_action"].side_effect = [
+            {"tool": "read_file_section", "arguments": {"path": "", "query": ""}},
+            {"tool": "reply", "arguments": {"text": "Updated", "done": True}},
+        ]
+        state = {"window": object(), "recent_files": [str(path.resolve())]}
+        with unittest.TestCase().assertRaisesRegex(RuntimeError, "no file edit was saved"):
+            agent.run_desktop_agent("Shorten that file", state)
+        assert path.read_text(encoding="utf-8") == "Original"
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
@@ -480,6 +499,7 @@ def load_tests(loader, tests, pattern):
         test_remember_only_verified_file_paths,
         test_create_then_edit_the_same_file_through_the_model_tools,
         test_explicit_file_replacement_and_ambiguous_targets,
+        test_reading_a_file_cannot_count_as_a_saved_edit,
         test_native_tool_payload_and_validation, test_complete_desktop_flow,
         test_word_count_before_input, test_unverified_completion_is_refused,
         test_failures_and_limits, test_cli_modes_and_exit,
