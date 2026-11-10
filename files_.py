@@ -215,15 +215,17 @@ def copy_file_text(source, destination, *, section='', version=None, check=None)
     if source.suffix.lower() == ".docx":
         from docx import Document
 
-        content = "\n".join(p.text for p in Document(BytesIO(before)).paragraphs)
+        paragraphs = Document(BytesIO(before)).paragraphs
+        content = _word_section(paragraphs, section) if section.strip() else "\n".join(
+            paragraph.text for paragraph in paragraphs
+        )
     else:
         content = before.decode("utf-8-sig")
-
-    if section.strip():
-        if source.suffix.lower() != ".md":
-            raise ValueError("Named sections need a Markdown heading.")
-        lines = content.splitlines()
-        content = _heading_text(lines, _markdown_headings(lines), section)
+        if section.strip():
+            if source.suffix.lower() != ".md":
+                raise ValueError("Named sections need a Word or Markdown heading.")
+            lines = content.splitlines()
+            content = _heading_text(lines, _markdown_headings(lines), section)
 
     if source.read_bytes() != before:
         raise RuntimeError("The source changed before copying. Try again.")
@@ -264,3 +266,29 @@ def _heading_text(lines, headings, section):
     if not content.strip():
         raise ValueError("That section is empty.")
     return content
+
+
+def _word_section(paragraphs, section):
+    """Copy a Word heading's body or one paragraph after a plain label."""
+    lines = [paragraph.text for paragraph in paragraphs]
+    headings = []
+    for index, paragraph in enumerate(paragraphs):
+        style = re.fullmatch(r"Heading ([1-9])", paragraph.style.name or "")
+        if style:
+            headings.append((index, int(style[1]), paragraph.text.strip()))
+
+    title = section.strip().casefold()
+    if any(label.casefold() == title for _, _, label in headings):
+        return _heading_text(lines, headings, section)
+
+    # Chexsa's own Word files may use a normal paragraph as a heading.
+    matches = [index for index, line in enumerate(lines) if line.strip().casefold() == title]
+    if len(matches) != 1:
+        raise ValueError("Give the exact name of one Word heading or label.")
+    heading_rows = {index for index, _, _ in headings}
+    for index in range(matches[0] + 1, len(lines)):
+        if index in heading_rows:
+            break
+        if lines[index].strip():
+            return lines[index]
+    raise ValueError("There is no text after that label.")

@@ -194,11 +194,36 @@ def test_copy_one_markdown_section():
         assert not target.with_suffix(".md").exists()
 
 
+def test_copy_word_section_to_text():
+    """Copy all text under a styled heading, and handle a plain label too."""
+    from docx import Document
+
+    with TemporaryDirectory() as directory:
+        source = Path(directory) / "report.docx"
+        target = Path(directory) / "summary.txt"
+        document = Document()
+        document.add_heading("Conclusion", level=1)
+        document.add_paragraph("First point")
+        document.add_heading("Detail", level=2)
+        document.add_paragraph("Second point")
+        document.add_heading("Appendix", level=1)
+        document.add_paragraph("Leave out")
+        document.save(source)
+        files_.copy_file_text(source, str(target), section="Conclusion")
+        assert target.read_text(encoding="utf-8") == "First point\nDetail\nSecond point"
+
+        plain = Path(directory) / "plain.docx"
+        files_.write_file(str(plain), "Conclusion\n\nOne paragraph\nAnother paragraph")
+        files_.copy_file_text(plain, str(target.with_suffix(".md")), section="Conclusion")
+        assert target.with_suffix(".md").read_text(encoding="utf-8") == "One paragraph"
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_read_only_the_requested_section,
         test_copy_file_text_keeps_content_local,
         test_copy_one_markdown_section,
+        test_copy_word_section_to_text,
         test_edit_python_checks_version_matches_and_syntax,
         test_word_edit_preserves_formatting_and_checks_locks,
         test_cancelled_or_changed_file_keeps_original_and_cleans_staging,
