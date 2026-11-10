@@ -202,7 +202,7 @@ def _edit_word(before, old, new):
     raise ValueError("The Word text crosses formatting runs. Edit one run at a time.")
 
 
-def copy_file_text(source, destination, *, section='', version=None, check=None):
+def copy_file_text(source, destination, *, section="", version=None, check=None):
     """Copy saved text into a new text or Word file. Return the verified path."""
     source = Path(source).resolve()
     formats = (".txt", ".md", ".docx")
@@ -273,6 +273,9 @@ def _word_section(paragraphs, section):
     lines = [paragraph.text for paragraph in paragraphs]
     headings = []
     for index, paragraph in enumerate(paragraphs):
+        # Plain paragraphs have no heading style to look up.
+        if paragraph._p.style is None:
+            continue
         style = re.fullmatch(r"Heading ([1-9])", paragraph.style.name or "")
         if style:
             headings.append((index, int(style[1]), paragraph.text.strip()))
