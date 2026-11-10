@@ -404,6 +404,72 @@ def test_remember_only_verified_file_paths():
         assert state["recent_files"] == [r"C:\\Fixture\\note.txt"]
 
 
+def test_create_then_edit_the_same_file_through_the_model_tools():
+    """Both Python and Word follow-up edits use the remembered path and a short excerpt."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    for filename, source, query, old, new in (
+        ("fib.py", "def fib(n):\n    return n\n\ndef other():\n    return 7\n",
+         "fib", "return n", "return max(0, n)"),
+        ("report.docx", "Introduction\nKeep the introduction\nConclusion\nLong ending",
+         "Conclusion", "Long ending", "Short ending"),
+    ):
+        with TemporaryDirectory() as directory:
+            client = Mock()
+            create = client.chat.completions.create
+            state = {}
+            path = Path(directory) / filename
+
+            def choose(**kwargs):
+                """Use the actual menu and excerpt to choose a fixture action."""
+                payload = json.loads(kwargs["messages"][-1]["content"])
+                names = {tool["function"]["name"] for tool in kwargs["tools"]}
+                if payload["request"].startswith("Create"):
+                    assert "edit_file" not in names
+                    return _response("write_file", {"path": str(path), "content": source, "done": True})
+                assert "read_file_section" in names and "edit_file" in names
+                assert payload["recent_files"] == [str(path.resolve())]
+                if not payload["previous_actions"]:
+                    return _response("read_file_section", {"path": "", "query": query})
+                excerpt = payload["previous_actions"][-1]["result"]
+                assert old in excerpt["text"] and "version" not in excerpt
+                assert "def other" not in excerpt["text"] and "Keep the introduction" not in excerpt["text"]
+                return _response("edit_file", {"path": "", "old": old, "new": new, "done": True})
+
+            create.side_effect = choose
+            with patch.dict(os.environ, {"LLM_MODEL": "fake"}), patch.object(agent, "_client", client), \
+                 patch.object(agent, "open_app") as launch:
+                agent.run_desktop_agent("Create " + filename, state)
+                answer = agent.run_desktop_agent("Edit that same file", state)
+                assert answer.startswith("Updated and verified:")
+                assert create.call_count == 3
+                launch.assert_not_called()
+            assert agent.read_file(path) == source.replace(old, new, 1)
+
+
+def test_explicit_file_replacement_and_ambiguous_targets():
+    """An exact quoted change can run in one call, while an ambiguous path is refused."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory() as directory, patch.object(agent.files_, "OUTPUT_DIR", Path(directory)):
+        path = Path(directory) / "note.txt"
+        path.write_text("Hello", encoding="utf-8")
+        client = Mock()
+        client.chat.completions.create.return_value = _response("edit_file", {
+            "path": "note.txt", "old": "Hello", "new": "Hi", "done": True,
+        })
+        with patch.dict(os.environ, {"LLM_MODEL": "fake"}), patch.object(agent, "_client", client):
+            agent.run_desktop_agent('In note.txt replace "Hello" with "Hi"', {})
+        assert path.read_text(encoding="utf-8") == "Hi"
+        assert client.chat.completions.create.call_count == 1
+        with unittest.TestCase().assertRaisesRegex(ValueError, "More than one"):
+            agent._file_target("", "Edit that file", [str(path), str(path.with_name("other.txt"))])
+        with unittest.TestCase().assertRaisesRegex(ValueError, "exact file"):
+            agent._file_target("", "Edit folder/note.txt", [str(path.resolve())])
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
@@ -412,6 +478,8 @@ def load_tests(loader, tests, pattern):
         test_file_save_keeps_the_previous_window_reading,
         test_tools_require_a_window_reading,
         test_remember_only_verified_file_paths,
+        test_create_then_edit_the_same_file_through_the_model_tools,
+        test_explicit_file_replacement_and_ambiguous_targets,
         test_native_tool_payload_and_validation, test_complete_desktop_flow,
         test_word_count_before_input, test_unverified_completion_is_refused,
         test_failures_and_limits, test_cli_modes_and_exit,
