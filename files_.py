@@ -110,12 +110,14 @@ def _replace_file(target, before, after, check=None):
         temporary.write_bytes(after)
         if temporary.read_bytes() != after:
             raise RuntimeError("Could not verify the staged edit.")
+        if target.suffix.lower() == ".docx":
+            _check_word_closed(target)
         if check is not None:
             check()
         if target.read_bytes() != before:
             raise RuntimeError("The file changed before saving. Read it again.")
-        if target.suffix.lower() == ".docx":
-            _check_word_closed(target)
+        if check is not None:
+            check()
         try:
             os.replace(temporary, target)
         except PermissionError:

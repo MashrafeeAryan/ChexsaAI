@@ -95,7 +95,8 @@ _FILE_NAME = re.compile(r"\.(?:py|txt|md|docx)\b", re.I)
 
 def _named_path(request, path):
     """Match a literal filename or path, avoiding partial names and directory suffixes."""
-    return re.search(r"(?<![\w./\\:-])" + re.escape(path) + r"(?![\w./\\:-])", request, re.I)
+    pattern = r"(?<![\w./\\:-])" + re.escape(path) + r"(?![\w/\\-]|[.:]\w)"
+    return re.search(pattern, request, re.I)
 
 
 def _file_target(path, request, remembered):

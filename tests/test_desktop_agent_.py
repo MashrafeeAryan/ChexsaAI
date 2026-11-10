@@ -461,7 +461,7 @@ def test_explicit_file_replacement_and_ambiguous_targets():
             "path": "note.txt", "old": "Hello", "new": "Hi", "done": True,
         })
         with patch.dict(os.environ, {"LLM_MODEL": "fake"}), patch.object(agent, "_client", client):
-            agent.run_desktop_agent('In note.txt replace "Hello" with "Hi"', {})
+            agent.run_desktop_agent('In note.txt: replace "Hello" with "Hi"', {})
         assert path.read_text(encoding="utf-8") == "Hi"
         assert client.chat.completions.create.call_count == 1
         with unittest.TestCase().assertRaisesRegex(ValueError, "More than one"):

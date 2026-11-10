@@ -128,10 +128,36 @@ def test_word_edit_preserves_formatting_and_checks_locks():
         assert updated.tables[0].cell(0, 0).text == "Keep the table"
 
 
+def test_cancelled_or_changed_file_keeps_original_and_cleans_staging():
+    """A stop or an outside edit just before save must leave the target alone."""
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "note.txt"
+        path.write_text("Original", encoding="utf-8")
+
+        def cancel():
+            """Simulate Stop at the final save boundary."""
+            raise InterruptedError("Stopped")
+
+        with unittest.TestCase().assertRaises(InterruptedError):
+            files_.edit_file(path, "Original", "New", check=cancel)
+        assert path.read_text(encoding="utf-8") == "Original"
+        assert list(Path(directory).iterdir()) == [path]
+
+        def changed():
+            """Simulate another editor saving before Chexsa rechecks the file."""
+            path.write_text("Changed elsewhere", encoding="utf-8")
+
+        with unittest.TestCase().assertRaisesRegex(RuntimeError, "changed before saving"):
+            files_.edit_file(path, "Original", "New", check=changed)
+        assert path.read_text(encoding="utf-8") == "Changed elsewhere"
+        assert list(Path(directory).iterdir()) == [path]
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_read_only_the_requested_section,
         test_edit_python_checks_version_matches_and_syntax,
         test_word_edit_preserves_formatting_and_checks_locks,
+        test_cancelled_or_changed_file_keeps_original_and_cleans_staging,
         test_create_and_preserve, test_reject_invalid_files, test_text_formats, test_word_documents,
     ))
