@@ -153,9 +153,31 @@ def test_cancelled_or_changed_file_keeps_original_and_cleans_staging():
         assert list(Path(directory).iterdir()) == [path]
 
 
+def test_copy_file_text_keeps_content_local():
+    """Save the same text in a new format and keep any existing file."""
+    with TemporaryDirectory() as directory:
+        source = Path(directory) / "note.md"
+        target = Path(directory) / "copy.docx"
+        source.write_text("Hello café\nSecond line", encoding="utf-8")
+        saved = files_.copy_file_text(source, str(target))
+        assert Path(saved) == target.resolve()
+        assert files_.read_file(target) == source.read_text(encoding="utf-8")
+        before = target.read_bytes()
+        with unittest.TestCase().assertRaises(FileExistsError):
+            files_.copy_file_text(source, str(target))
+        assert target.read_bytes() == before
+
+        old = files_.read_file_section(source, "")["version"]
+        source.write_text("Changed", encoding="utf-8")
+        with unittest.TestCase().assertRaisesRegex(RuntimeError, "changed since"):
+            files_.copy_file_text(source, str(target.with_suffix(".txt")), old)
+        assert not target.with_suffix(".txt").exists()
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_read_only_the_requested_section,
+        test_copy_file_text_keeps_content_local,
         test_edit_python_checks_version_matches_and_syntax,
         test_word_edit_preserves_formatting_and_checks_locks,
         test_cancelled_or_changed_file_keeps_original_and_cleans_staging,

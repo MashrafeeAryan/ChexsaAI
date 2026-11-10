@@ -199,3 +199,27 @@ def _edit_word(before, old, new):
             return buffer.getvalue()
 
     raise ValueError("The Word text crosses formatting runs. Edit one run at a time.")
+
+
+def copy_file_text(source, destination, version=None, check=None):
+    """Copy saved text into a new text or Word file. Return the verified path."""
+    source = Path(source).resolve()
+    formats = (".txt", ".md", ".docx")
+    if source.suffix.lower() not in formats or Path(destination).suffix.lower() not in formats:
+        raise ValueError("Choose .txt, .md, or .docx for the source and the new file.")
+
+    before = source.read_bytes()
+    if version is not None and sha256(before).hexdigest() != version:
+        raise RuntimeError("The source changed since it was read. Read it again.")
+    if source.suffix.lower() == ".docx":
+        from docx import Document
+
+        content = "\n".join(p.text for p in Document(BytesIO(before)).paragraphs)
+    else:
+        content = before.decode("utf-8-sig")
+
+    if source.read_bytes() != before:
+        raise RuntimeError("The source changed before copying. Try again.")
+    if check is not None:
+        check()
+    return write_file(destination, content)
