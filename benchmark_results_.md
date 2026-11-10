@@ -322,3 +322,15 @@ replies, desktop tool definitions, and all guarded stops. The standard Chrome
 fixture totals took 11.18 and 7.24 seconds locally under varying test load.
 These results measure fixture outcomes and text usage. Live latency, model
 reliability, and provider billing need separate measurements.
+
+## Read one section before editing a file
+
+| Scripted edit | Whole-file input tokens | Section input tokens | Input tokens saved | Model calls |
+| --- | ---: | ---: | ---: | ---: |
+| Change the Fibonacci function | 3,716 | 2,155 | 42.0% | 2 → 2 |
+| Shorten the Word conclusion | 3,914 | 2,114 | 46.0% | 2 → 2 |
+
+Both versions saved and verified the same edit. Scripted outputs used 55 and 58
+tokens respectively. The quoted exact-replacement fixture also verified a save
+in one decision. Local GPT-OSS counts at d0c2beb compare full-file and excerpt
+inputs with the same tools and scripted replies.

@@ -62,6 +62,26 @@ The terminal keeps its existing repository `output/` default.
 Windows encrypts saved chat text in the local chat database under the same folder.
 Requested task and email contents go to your configured model provider.
 
+## Edit a saved file
+
+Use **Desktop** in the app or terminal. For example:
+
+1. Ask **Create fibonacci.py with a function called fib that generates the Fibonacci series.**
+2. In the same chat, ask **Edit that same file so fib rejects negative inputs.**
+3. Chexsa reads the function, applies the exact change, checks Python syntax,
+   and verifies the saved file.
+
+You can also name an existing file, such as **In note.txt, replace "Monday" with
+"Tuesday".** Relative paths point into the output folder. Give a full path for
+a file elsewhere. Give the filename when the last request touched several files.
+File references last for the current session or chat.
+
+Direct edits support UTF-8 text, Markdown, Python, and Word documents. Save and
+close a Word document first. A Word edit changes one plain text run in a body
+paragraph, keeping its formatting and the rest of the document. For example,
+ask **Shorten the conclusion in report.docx.** Chexsa stops if the old text is
+ambiguous or the saved file changed after reading.
+
 ## Visual desktop
 
 1. Open the window you want Chexsa to work in.
