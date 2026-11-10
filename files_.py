@@ -1,6 +1,7 @@
 """Create text, code, and Word files directly, without opening an editor or running the code."""
 
 import ast
+from hashlib import sha256
 from pathlib import Path
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "output"
@@ -47,3 +48,45 @@ def read_file(path):
 
         return "\n".join(paragraph.text for paragraph in Document(path).paragraphs)
     return path.read_text(encoding="utf-8")
+
+
+def read_file_section(path, query):
+    """Return a small excerpt and its file version. A Python function name selects its body."""
+    target = Path(path)
+    if target.suffix.lower() not in (".txt", ".md", ".py", ".docx"):
+        raise ValueError("Choose a .txt, .md, .py, or .docx file.")
+    original = target.read_bytes()
+    if target.suffix.lower() == ".docx":
+        from io import BytesIO
+        from docx import Document
+
+        lines = [paragraph.text for paragraph in Document(BytesIO(original)).paragraphs]
+    else:
+        lines = original.decode("utf-8-sig").splitlines()
+
+    matches = [i for i, line in enumerate(lines) if query.casefold() in line.casefold()]
+    first = matches[0] if matches else 0
+    end = min(len(lines), first + (6 if query else 20))
+    if query and target.suffix.lower() == ".py":
+        try:
+            tree = ast.parse(original)
+        except SyntaxError:
+            tree = None  # Plain text search can still help repair a broken file.
+        functions = [
+            node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == query
+        ] if tree is not None else []
+        if len(functions) == 1:
+            function = functions[0]
+            first = min([function.lineno, *(node.lineno for node in function.decorator_list)]) - 1
+            end = function.end_lineno
+            matches = [first]
+
+    excerpt = "\n".join(lines[first:end]) if matches or not query else ""
+    return {
+        "text": excerpt[:6000],
+        "first_line": first + 1,
+        "matches": len(matches) if query else None,
+        "more": len(excerpt) > 6000 or end < len(lines),
+        "version": sha256(original).hexdigest(),
+    }

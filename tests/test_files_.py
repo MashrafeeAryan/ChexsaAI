@@ -59,7 +59,24 @@ def test_word_documents():
             assert path.read_bytes() == before
 
 
+def test_read_only_the_requested_section():
+    """Find a whole named function and keep large excerpts bounded."""
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "example.py"
+        path.write_text("def fib(n):\n    return n\n\ndef other():\n    return 7\n", encoding="utf-8")
+        result = files_.read_file_section(path, "fib")
+        assert result["text"] == "def fib(n):\n    return n"
+        assert result["matches"] == 1 and result["first_line"] == 1
+        assert files_.read_file_section(path, "missing")["text"] == ""
+
+        note = Path(directory) / "note.txt"
+        note.write_text("x" * 8000, encoding="utf-8")
+        result = files_.read_file_section(note, "")
+        assert len(result["text"]) == 6000 and result["more"]
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
+        test_read_only_the_requested_section,
         test_create_and_preserve, test_reject_invalid_files, test_text_formats, test_word_documents,
     ))
