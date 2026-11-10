@@ -489,6 +489,46 @@ def test_reading_a_file_cannot_count_as_a_saved_edit():
         assert path.read_text(encoding="utf-8") == "Original"
 
 
+def test_copy_from_a_recent_file_without_sending_its_text():
+    """One tool moves the section. A later reply sees only the saved path."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory() as directory, patch.object(agent.files_, "OUTPUT_DIR", Path(directory)):
+        source = Path(directory) / "notes.md"
+        secret = "Fixture text stays inside the file tool."
+        source.write_text("# Conclusion\n" + secret + "\n# Next\nLeave out", encoding="utf-8")
+        client = Mock()
+        state = {"recent_files": [str(source.resolve())]}
+
+        def choose(**kwargs):
+            """Use the real tool menu and check the data sent to the model."""
+            sent = kwargs["messages"][-1]["content"]
+            assert secret not in sent and "Leave out" not in sent
+            payload = json.loads(sent)
+            assert any(tool["function"]["name"] == "copy_file_text" for tool in kwargs["tools"])
+            if not payload["previous_actions"]:
+                return _response("copy_file_text", {
+                    "source": "", "destination": "summary.txt", "section": "Conclusion", "done": False,
+                })
+            assert payload["previous_actions"][-1]["result"]["saved"]
+            return _response("reply", {"text": "Copied", "done": True})
+
+        client.chat.completions.create.side_effect = choose
+        with (
+            patch.dict(os.environ, {"LLM_MODEL": "fake"}),
+            patch.object(agent, "_client", client),
+            patch.object(agent, "open_app") as launch,
+        ):
+            answer = agent.run_desktop_agent("Copy the conclusion to summary.txt", state)
+            assert answer == "Copied"
+            launch.assert_not_called()
+
+        target = Path(directory) / "summary.txt"
+        assert target.read_text(encoding="utf-8") == secret
+        assert state["recent_files"] == [str(target.resolve())]
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
@@ -500,6 +540,7 @@ def load_tests(loader, tests, pattern):
         test_create_then_edit_the_same_file_through_the_model_tools,
         test_explicit_file_replacement_and_ambiguous_targets,
         test_reading_a_file_cannot_count_as_a_saved_edit,
+        test_copy_from_a_recent_file_without_sending_its_text,
         test_native_tool_payload_and_validation, test_complete_desktop_flow,
         test_word_count_before_input, test_unverified_completion_is_refused,
         test_failures_and_limits, test_cli_modes_and_exit,

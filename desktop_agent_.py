@@ -25,7 +25,7 @@ from comtypes import COMError
 
 # Save files directly and read them back to check the result.
 import files_
-from files_ import edit_file, read_file, read_file_section, write_file
+from files_ import copy_file_text, edit_file, read_file, read_file_section, write_file
 
 # These functions do the actual Windows actions chosen by the model.
 from desktop_ import (
@@ -90,6 +90,22 @@ _FILE_TOOLS = [
         },
     ),
 ]
+_COPY_TOOL = _tool(
+    "copy_file_text",
+    "Copy saved .txt, .md, or .docx text to a new file. "
+    "Use an empty source for the only recent file. Use a heading name for one section "
+    "or an empty section for all text. Set done if this finishes the request.",
+    {
+        "source": {"type": "string"},
+        "destination": {"type": "string"},
+        "section": {"type": "string"},
+        "done": {"type": "boolean"},
+    },
+)
+_COPY_REQUEST = re.compile(
+    r"\b(copy|convert|extract|export|transfer|turn|take|put)\b|\bsave\b.*\b(as|to|into)\b",
+    re.I,
+)
 _FILE_NAME = re.compile(r"\.(?:py|txt|md|docx)\b", re.I)
 
 
@@ -336,6 +352,13 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
             "Ask the user to save and close Word documents before direct editing. "
         )
 
+    if recent_files is not None and _COPY_REQUEST.search(request):
+        tools = [*tools, _COPY_TOOL]
+        file_tip += (
+            "Use copy_file_text to copy or convert text as-is. Pass the file and heading "
+            "without reading the text first. Keep any destination named by the user. "
+        )
+
     # STEP 1: Send the goal, tools, current reading, and past results to the AI.
     try:
         response = _client.chat.completions.create(
@@ -502,7 +525,7 @@ def run_desktop_agent(request, state):
     observation = None
     remembered = state.get("recent_files", [])
     file_versions = {}
-    edited_versions = {}
+    saved_versions = {}
 
     # Reuse the selected app between requests, but read its current state again.
     if state.get("window") is not None:
@@ -534,7 +557,9 @@ def run_desktop_agent(request, state):
     ) and re.search(r"\b(create|write|save|make|generate)\b", request, re.I)
 
     # Only introduce file-editing tools when a file is named or already known.
-    offer_files = bool(remembered or (_FILE_NAME.search(request) and not file_task))
+    offer_files = bool(
+        remembered or (_FILE_NAME.search(request) and (not file_task or _COPY_REQUEST.search(request)))
+    )
     last = None
     previous = None
     search = None
@@ -556,16 +581,16 @@ def run_desktop_agent(request, state):
         # A completion claim must agree with the results we checked locally.
         if name == "reply":
             if arguments["done"]:
-                for path, version in edited_versions.items():
+                for path, version in saved_versions.items():
                     if sha256(Path(path).read_bytes()).hexdigest() != version:
-                        raise RuntimeError("An edited file changed before completion. Read it again.")
+                        raise RuntimeError("A saved file changed before completion. Read it again.")
                 if verified_file is not None:
                     path, content = verified_file
                     if read_file(path) != content:
                         raise RuntimeError("The file changed after creation. Completion could not be verified.")
                     return arguments["text"]
 
-                if edited_versions:
+                if saved_versions:
                     return arguments["text"]
                 if file_versions and verified_write is None:
                     raise RuntimeError("A file was read, but no file edit was saved and verified.")
@@ -613,6 +638,41 @@ def run_desktop_agent(request, state):
             if arguments["done"]:
                 return "Created and saved:\n" + "\n".join(created_paths)
 
+        elif name == "copy_file_text":
+            destination = arguments["destination"]
+            named = _named_path(request, destination)
+            target = (files_.OUTPUT_DIR / Path(destination).expanduser()).resolve()
+            if not named and not target.is_relative_to(files_.OUTPUT_DIR.resolve()):
+                raise ValueError("Name the full destination path to save outside the output folder.")
+
+            # The destination name is not a request to read a different source.
+            source_request = request
+            if named:
+                source_request = request[:named.start()] + " " + request[named.end():]
+            source = arguments["source"]
+            if source not in file_versions:
+                source = _file_target(source, source_request, remembered)
+            if Path(source).resolve() != Path(source):
+                raise ValueError("The source path changed. Choose the file again.")
+
+            try:
+                path = copy_file_text(
+                    source,
+                    str(target),
+                    section=arguments["section"],
+                    version=file_versions.get(source),
+                    check=lambda: check_cancelled(state),
+                )
+            except FileExistsError:
+                raise RuntimeError("The destination already exists. Choose a new filename.") from None
+
+            created_paths.append(path)
+            state["recent_files"] = created_paths.copy()
+            if arguments["done"]:
+                return "Copied and verified:\n" + "\n".join(created_paths)
+            saved_versions[path] = sha256(Path(path).read_bytes()).hexdigest()
+            result = {"path": path, "saved": True}
+
         elif name in ("read_file_section", "edit_file"):
             selected = arguments["path"]
             # The exact path returned by a read is already authorized for this request.
@@ -638,13 +698,13 @@ def run_desktop_agent(request, state):
                     )
                 except SyntaxError:
                     raise RuntimeError("The edit would break Python syntax. The file was left intact.") from None
-                edited_versions[path] = file_versions[path] = version
+                saved_versions[path] = file_versions[path] = version
                 if verified_file is not None and verified_file[0] == path:
                     verified_file = None  # This edit replaces the earlier saved version.
                 state["recent_files"] = list(dict.fromkeys([*created_paths, *file_versions]))
                 result = {"path": path, "saved": True}
                 if arguments["done"]:
-                    return "Updated and verified:\n" + "\n".join(edited_versions)
+                    return "Updated and verified:\n" + "\n".join(saved_versions)
 
             # Keep the latest excerpt for this file. Old excerpts are no longer current.
             for entry in history:
@@ -714,7 +774,7 @@ def run_desktop_agent(request, state):
 
         # STEP 5: Read the updated app before asking the AI what to do next.
         # File saves need no window; desktop actions need a fresh reading.
-        if name not in ("write_file", "read_file_section", "edit_file"):
+        if name not in ("write_file", "read_file_section", "edit_file", "copy_file_text"):
             check_cancelled(state)
             previous, observation = observation, _observe(state)
 
