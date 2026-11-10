@@ -96,9 +96,42 @@ def test_edit_python_checks_version_matches_and_syntax():
         assert note.read_text(encoding="utf-8") == "aaa"
 
 
+def test_word_edit_preserves_formatting_and_checks_locks():
+    """Edit one span while keeping styles and tables, and refuse a locked file."""
+    from docx import Document
+
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "report.docx"
+        document = Document()
+        document.add_heading("Conclusion", level=1)
+        paragraph = document.add_paragraph("Keep ")
+        paragraph.add_run("the longer conclusion").bold = True
+        document.add_table(1, 1).cell(0, 0).text = "Keep the table"
+        document.save(path)
+
+        section = files_.read_file_section(path, "Conclusion")
+        before = path.read_bytes()
+        with unittest.TestCase().assertRaisesRegex(ValueError, "crosses formatting"):
+            files_.edit_file(path, "Keep the longer conclusion", "Short")
+        lock = path.with_name("~$" + path.name[2:])
+        lock.touch()
+        with unittest.TestCase().assertRaisesRegex(RuntimeError, "Save and close"):
+            files_.edit_file(path, "the longer conclusion", "the short conclusion")
+        assert path.read_bytes() == before
+        lock.unlink()
+
+        files_.edit_file(path, "the longer conclusion", "the short conclusion", section["version"])
+        updated = Document(path)
+        assert updated.paragraphs[0].style.name == "Heading 1"
+        assert updated.paragraphs[1].text == "Keep the short conclusion"
+        assert updated.paragraphs[1].runs[1].bold
+        assert updated.tables[0].cell(0, 0).text == "Keep the table"
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_read_only_the_requested_section,
         test_edit_python_checks_version_matches_and_syntax,
+        test_word_edit_preserves_formatting_and_checks_locks,
         test_create_and_preserve, test_reject_invalid_files, test_text_formats, test_word_documents,
     ))

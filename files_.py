@@ -2,6 +2,7 @@
 
 import ast
 from hashlib import sha256
+from io import BytesIO
 from pathlib import Path
 import os
 from tempfile import NamedTemporaryFile
@@ -59,7 +60,6 @@ def read_file_section(path, query):
         raise ValueError("Choose a .txt, .md, .py, or .docx file.")
     original = target.read_bytes()
     if target.suffix.lower() == ".docx":
-        from io import BytesIO
         from docx import Document
 
         lines = [paragraph.text for paragraph in Document(BytesIO(original)).paragraphs]
@@ -114,6 +114,8 @@ def _replace_file(target, before, after, check=None):
             check()
         if target.read_bytes() != before:
             raise RuntimeError("The file changed before saving. Read it again.")
+        if target.suffix.lower() == ".docx":
+            _check_word_closed(target)
         try:
             os.replace(temporary, target)
         except PermissionError:
@@ -127,13 +129,20 @@ def _replace_file(target, before, after, check=None):
 def edit_file(path, old, new, version=None, check=None):
     """Replace one exact span and return the version of the verified saved file."""
     target = Path(path)
-    if target.suffix.lower() not in (".txt", ".md", ".py"):
-        raise ValueError("Choose a .txt, .md, or .py file.")
+    suffix = target.suffix.lower()
+    if suffix not in (".txt", ".md", ".py", ".docx"):
+        raise ValueError("Choose a .txt, .md, .py, or .docx file.")
     if not isinstance(old, str) or not old or not isinstance(new, str):
         raise ValueError("Give the exact old text and its replacement.")
     before = target.read_bytes()
     if version is not None and sha256(before).hexdigest() != version:
         raise RuntimeError("The file changed since it was read. Read it again.")
+
+    if suffix == ".docx":
+        _check_word_closed(target)
+        after = _edit_word(before, old, new)
+        _replace_file(target, before, after, check)
+        return sha256(after).hexdigest()
 
     # Preserve the file's line endings when the model supplies ordinary newlines.
     text = before.decode("utf-8")
@@ -146,3 +155,45 @@ def edit_file(path, old, new, version=None, check=None):
         ast.parse(after)
     _replace_file(target, before, after, check)
     return sha256(after).hexdigest()
+
+
+def _check_word_closed(target):
+    """Stop when Word's owner file shows that the document may be open."""
+    names = ("~$" + target.name, "~$" + target.name[2:])
+    if any(target.with_name(name).exists() for name in names):
+        raise RuntimeError("Save and close this document in Word before editing it.")
+
+
+def _edit_word(before, old, new):
+    """Edit one plain text span inside a Word run and preserve its formatting."""
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    if any(char in old or char in new for char in "\r\n"):
+        raise ValueError("Edit one Word paragraph at a time.")
+
+    document = Document(BytesIO(before))
+    if document.settings.element.find(qn("w:documentProtection")) is not None:
+        raise ValueError("This Word document has editing protection.")
+    paragraphs = document.paragraphs
+    expected = [paragraph.text for paragraph in paragraphs]
+    _unique_position("\n".join(expected), old)
+
+    for index, paragraph in enumerate(paragraphs):
+        for run in paragraph.runs:
+            if old not in run.text:
+                continue
+            # Replacing a run's text must never delete a picture, field, or other object.
+            if any(child.tag not in (qn("w:rPr"), qn("w:t")) for child in run._element):
+                raise ValueError("Choose a plain text span in this Word paragraph.")
+            run.text = run.text.replace(old, new, 1)
+            expected[index] = expected[index].replace(old, new, 1)
+
+            buffer = BytesIO()
+            document.save(buffer)
+            buffer.seek(0)
+            if [paragraph.text for paragraph in Document(buffer).paragraphs] != expected:
+                raise RuntimeError("The Word edit could not be verified.")
+            return buffer.getvalue()
+
+    raise ValueError("The Word text crosses formatting runs. Edit one run at a time.")
