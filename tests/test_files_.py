@@ -75,8 +75,30 @@ def test_read_only_the_requested_section():
         assert len(result["text"]) == 6000 and result["more"]
 
 
+def test_edit_python_checks_version_matches_and_syntax():
+    """Edit only the matched code, keeping CRLF and the original on rejection."""
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "fib.py"
+        path.write_bytes(b"# Keep this\r\ndef fib(n):\r\n    return n\r\n")
+        section = files_.read_file_section(path, "fib")
+        with unittest.TestCase().assertRaises(SyntaxError):
+            files_.edit_file(path, "return n", "return (", section["version"])
+        assert path.read_bytes() == b"# Keep this\r\ndef fib(n):\r\n    return n\r\n"
+        files_.edit_file(path, section["text"], "def fib(n):\n    return max(n, 0)", section["version"])
+        assert path.read_bytes() == b"# Keep this\r\ndef fib(n):\r\n    return max(n, 0)\r\n"
+        with unittest.TestCase().assertRaisesRegex(RuntimeError, "changed since"):
+            files_.edit_file(path, "max(n, 0)", "n", section["version"])
+
+        note = Path(directory) / "note.txt"
+        note.write_text("aaa", encoding="utf-8")
+        with unittest.TestCase().assertRaisesRegex(ValueError, "exactly once"):
+            files_.edit_file(note, "aa", "b")
+        assert note.read_text(encoding="utf-8") == "aaa"
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_read_only_the_requested_section,
+        test_edit_python_checks_version_matches_and_syntax,
         test_create_and_preserve, test_reject_invalid_files, test_text_formats, test_word_documents,
     ))
