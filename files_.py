@@ -5,6 +5,7 @@ from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 import os
+import re
 from tempfile import NamedTemporaryFile
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "output"
@@ -201,7 +202,7 @@ def _edit_word(before, old, new):
     raise ValueError("The Word text crosses formatting runs. Edit one run at a time.")
 
 
-def copy_file_text(source, destination, version=None, check=None):
+def copy_file_text(source, destination, *, section='', version=None, check=None):
     """Copy saved text into a new text or Word file. Return the verified path."""
     source = Path(source).resolve()
     formats = (".txt", ".md", ".docx")
@@ -218,8 +219,48 @@ def copy_file_text(source, destination, version=None, check=None):
     else:
         content = before.decode("utf-8-sig")
 
+    if section.strip():
+        if source.suffix.lower() != ".md":
+            raise ValueError("Named sections need a Markdown heading.")
+        lines = content.splitlines()
+        content = _heading_text(lines, _markdown_headings(lines), section)
+
     if source.read_bytes() != before:
         raise RuntimeError("The source changed before copying. Try again.")
     if check is not None:
         check()
     return write_file(destination, content)
+
+
+def _markdown_headings(lines):
+    """Find headings and skip examples inside code blocks."""
+    headings = []
+    fence = None
+    for index, line in enumerate(lines):
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+        if fence:
+            if marker and marker[1].startswith(fence) and not marker[2].strip():
+                fence = None
+            continue
+        if marker:
+            fence = marker[1]
+            continue
+        heading = re.match(r"^ {0,3}(#{1,6})[ \t]+(.+)$", line)
+        if heading:
+            title = re.sub(r"[ \t]+#+[ \t]*$", "", heading[2]).strip()
+            headings.append((index, len(heading[1]), title))
+    return headings
+
+
+def _heading_text(lines, headings, section):
+    """Return the body below one exact heading, including any subheadings."""
+    title = section.strip().casefold()
+    matches = [(index, level) for index, level, label in headings if label.casefold() == title]
+    if len(matches) != 1:
+        raise ValueError("The section must match one heading. Give its exact name.")
+    start, level = matches[0]
+    end = next((i for i, depth, _ in headings if i > start and depth <= level), len(lines))
+    content = "\n".join(lines[start + 1:end]).strip("\n")
+    if not content.strip():
+        raise ValueError("That section is empty.")
+    return content

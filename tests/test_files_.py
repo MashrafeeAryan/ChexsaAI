@@ -170,14 +170,35 @@ def test_copy_file_text_keeps_content_local():
         old = files_.read_file_section(source, "")["version"]
         source.write_text("Changed", encoding="utf-8")
         with unittest.TestCase().assertRaisesRegex(RuntimeError, "changed since"):
-            files_.copy_file_text(source, str(target.with_suffix(".txt")), old)
+            files_.copy_file_text(source, str(target.with_suffix(".txt")), version=old)
         assert not target.with_suffix(".txt").exists()
+
+
+def test_copy_one_markdown_section():
+    """Copy the named section, keep its subheading, and stop before the next section."""
+    with TemporaryDirectory() as directory:
+        source = Path(directory) / "notes.md"
+        target = Path(directory) / "section.txt"
+        code = chr(96) * 3
+        source.write_text(
+            f"# Notes\n{code}\n## Conclusion\nFake heading\n{code}\n"
+            "## Conclusion\nKeep this\n### Detail\nKeep this too\n## Next\nLeave this out",
+            encoding="utf-8",
+        )
+        files_.copy_file_text(source, str(target), section="Conclusion")
+        assert target.read_text(encoding="utf-8") == "Keep this\n### Detail\nKeep this too"
+
+        source.write_text("## Conclusion\nFirst\n## Conclusion\nSecond", encoding="utf-8")
+        with unittest.TestCase().assertRaisesRegex(ValueError, "one heading"):
+            files_.copy_file_text(source, str(target.with_suffix(".md")), section="Conclusion")
+        assert not target.with_suffix(".md").exists()
 
 
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_read_only_the_requested_section,
         test_copy_file_text_keeps_content_local,
+        test_copy_one_markdown_section,
         test_edit_python_checks_version_matches_and_syntax,
         test_word_edit_preserves_formatting_and_checks_locks,
         test_cancelled_or_changed_file_keeps_original_and_cleans_staging,
