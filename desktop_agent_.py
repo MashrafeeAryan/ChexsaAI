@@ -521,6 +521,7 @@ def run_desktop_agent(request, state):
                 arguments["content"].replace("\r\n", "\n").replace("\r", "\n"),
             )
             created_paths.append(path)
+            state["recent_files"] = created_paths.copy()
             result = f"Created and verified file: {path}. The code was not run."
 
             # STEP 6: A final verified file save can also end the task.

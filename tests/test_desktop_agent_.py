@@ -390,6 +390,20 @@ def test_tools_require_a_window_reading():
         assert agent.get_desktop_action("Press Enter", window)["tool"] == "press_key"
 
 
+def test_remember_only_verified_file_paths():
+    """A later request can refer to the files that actually saved."""
+    state = {}
+    with patch.object(agent, "get_desktop_action", return_value={
+        "tool": "write_file", "arguments": {"path": "note.txt", "content": "Hi", "done": True},
+    }), patch.object(agent, "write_file", return_value=r"C:\\Fixture\\note.txt") as save:
+        agent.run_desktop_agent("Create note.txt", state)
+        assert state["recent_files"] == [r"C:\\Fixture\\note.txt"]
+        save.side_effect = FileExistsError
+        with unittest.TestCase().assertRaisesRegex(RuntimeError, "already exists"):
+            agent.run_desktop_agent("Create note.txt", state)
+        assert state["recent_files"] == [r"C:\\Fixture\\note.txt"]
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
@@ -397,6 +411,7 @@ def load_tests(loader, tests, pattern):
         test_desktop_search_executes_on_the_full_fresh_reading,
         test_file_save_keeps_the_previous_window_reading,
         test_tools_require_a_window_reading,
+        test_remember_only_verified_file_paths,
         test_native_tool_payload_and_validation, test_complete_desktop_flow,
         test_word_count_before_input, test_unverified_completion_is_refused,
         test_failures_and_limits, test_cli_modes_and_exit,
