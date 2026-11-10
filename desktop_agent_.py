@@ -139,6 +139,15 @@ def _file_target(path, request, remembered):
     return str((files_.OUTPUT_DIR / Path(name).expanduser()).resolve())
 
 
+def _file_stamp(path):
+    """Tell whether a file moved or changed without reading all its text."""
+    try:
+        info = Path(path).stat()
+    except OSError:
+        return None
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+
 # STEP 1: Define the tools the AI is allowed to choose.
 # This menu describes tools to the AI; it does not run them.
 _TOOLS = [
@@ -524,6 +533,8 @@ def run_desktop_agent(request, state):
     history = []
     observation = None
     remembered = state.get("recent_files", [])
+    copy_request = _COPY_REQUEST.search(request)
+    source_stamps = {path: _file_stamp(path) for path in remembered} if copy_request else {}
     file_versions = {}
     saved_versions = {}
 
@@ -558,7 +569,7 @@ def run_desktop_agent(request, state):
 
     # Only introduce file-editing tools when a file is named or already known.
     offer_files = bool(
-        remembered or (_FILE_NAME.search(request) and (not file_task or _COPY_REQUEST.search(request)))
+        remembered or (_FILE_NAME.search(request) and (not file_task or copy_request))
     )
     last = None
     previous = None
@@ -654,6 +665,8 @@ def run_desktop_agent(request, state):
                 source = _file_target(source, source_request, remembered)
             if Path(source).resolve() != Path(source):
                 raise ValueError("The source path changed. Choose the file again.")
+            if source in source_stamps and _file_stamp(source) != source_stamps[source]:
+                raise RuntimeError("The source changed while planning the copy. Try again.")
 
             try:
                 path = copy_file_text(

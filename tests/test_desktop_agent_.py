@@ -529,6 +529,41 @@ def test_copy_from_a_recent_file_without_sending_its_text():
         assert state["recent_files"] == [str(target.resolve())]
 
 
+def test_copy_refuses_changed_sources_and_unnamed_external_destinations():
+    """A stale source or an unrequested save outside output stops the copy."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory() as directory:
+        folder = Path(directory)
+        source = folder / "notes.txt"
+        source.write_text("Saved note", encoding="utf-8")
+        state = {"recent_files": [str(source.resolve())]}
+        outside = folder / "outside.txt"
+        action = {"tool": "copy_file_text", "arguments": {
+            "source": "", "destination": str(outside), "section": "", "done": True,
+        }}
+        with (
+            patch.object(agent.files_, "OUTPUT_DIR", folder / "output"),
+            patch.object(agent, "get_desktop_action", return_value=action) as choose,
+        ):
+            with unittest.TestCase().assertRaisesRegex(ValueError, "destination path"):
+                agent.run_desktop_agent("Copy that file", state)
+            assert not outside.exists()
+
+            action["arguments"]["destination"] = "copy.txt"
+
+            def change_source(*args, **kwargs):
+                """Change the saved file while the model is deciding."""
+                source.write_text("Changed since the request began", encoding="utf-8")
+                return action
+
+            choose.side_effect = change_source
+            with unittest.TestCase().assertRaisesRegex(RuntimeError, "changed while planning"):
+                agent.run_desktop_agent("Copy that file to copy.txt", state)
+            assert not (folder / "output" / "copy.txt").exists()
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
@@ -541,6 +576,7 @@ def load_tests(loader, tests, pattern):
         test_explicit_file_replacement_and_ambiguous_targets,
         test_reading_a_file_cannot_count_as_a_saved_edit,
         test_copy_from_a_recent_file_without_sending_its_text,
+        test_copy_refuses_changed_sources_and_unnamed_external_destinations,
         test_native_tool_payload_and_validation, test_complete_desktop_flow,
         test_word_count_before_input, test_unverified_completion_is_refused,
         test_failures_and_limits, test_cli_modes_and_exit,
