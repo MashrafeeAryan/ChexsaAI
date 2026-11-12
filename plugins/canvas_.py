@@ -1,6 +1,9 @@
 """Read and submit a reviewed assignment using the Canvas API."""
 
+from html import unescape
 import re
+
+import httpx
 from urllib.parse import urlsplit
 
 
@@ -30,3 +33,44 @@ def assignment_path(url, school):
     if not re.fullmatch(r"/courses/[1-9][0-9]*/assignments/[1-9][0-9]*", path):
         raise ValueError("Paste the link to one Canvas assignment.")
     return path
+
+
+def canvas_request(client, school, token, method, path, **kwargs):
+    """Send the Canvas token only to the configured school."""
+    try:
+        response = client.request(
+            method, school + "/api/v1" + path,
+            headers={"Authorization": "Bearer " + token},
+            follow_redirects=False, **kwargs,
+        )
+    except httpx.HTTPError:
+        raise RuntimeError("Could not reach Canvas. Check your connection and Canvas settings.") from None
+    return canvas_json(response)
+
+
+def canvas_json(response):
+    """Read an API result without printing secret headers or server errors."""
+    if not response.is_success:
+        raise RuntimeError(f"Canvas returned HTTP {response.status_code}. Check your access and assignment.")
+    try:
+        result = response.json()
+    except ValueError:
+        raise RuntimeError("Canvas did not return assignment data.") from None
+    if not isinstance(result, dict):
+        raise RuntimeError("Canvas returned an unexpected response.")
+    return result
+
+
+def assignment_details(client, school, token, path):
+    """Get the assignment and check that it is the one we asked for."""
+    details = canvas_request(client, school, token, "GET", path)
+    if str(details.get("id")) != path.rsplit("/", 1)[-1]:
+        raise RuntimeError("Canvas returned a different assignment.")
+    return details
+
+
+def assignment_text(html):
+    """Keep the written instructions and paragraph breaks."""
+    html = re.sub(r"<(script|style)\b[^>]*>.*?</\1\s*>", "", html or "", flags=re.I | re.S)
+    html = re.sub(r"<(?:br\b[^>]*|/(?:p|div|li|h[1-6]))\s*/?>", "\n", html, flags=re.I)
+    return unescape(re.sub(r"<[^>]+>", "", html)).strip()

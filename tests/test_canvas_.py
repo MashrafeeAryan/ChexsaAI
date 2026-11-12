@@ -19,5 +19,30 @@ def test_assignment_link():
             canvas.assignment_path(url, school)
 
 
+
+def test_read_assignment_and_refuse_redirect():
+    """Read the right assignment without following a login or other redirect."""
+    import httpx
+
+    path = "/courses/3/assignments/9"
+    school = "https://school.example"
+    requests = []
+
+    def reply(request):
+        requests.append(request)
+        assert request.headers["Authorization"] == "Bearer fixture"
+        if len(requests) == 1:
+            return httpx.Response(200, json={"id": 9, "name": "Practice", "description": "<p>Write a note.</p><p>Two lines.</p>"})
+        return httpx.Response(302, headers={"Location": "https://other.example/"})
+
+    with httpx.Client(transport=httpx.MockTransport(reply)) as client:
+        details = canvas.assignment_details(client, school, "fixture", path)
+        assert canvas.assignment_text(details["description"]) == "Write a note.\nTwo lines."
+        with TestCase().assertRaisesRegex(RuntimeError, "HTTP 302"):
+            canvas.assignment_details(client, school, "fixture", path)
+    assert len(requests) == 2
+    assert requests[0].url.path == "/api/v1" + path
+
+
 def load_tests(loader, tests, pattern):
     return TestSuite(FunctionTestCase(test) for name, test in globals().items() if name.startswith("test_"))
