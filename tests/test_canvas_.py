@@ -160,5 +160,64 @@ def test_canvas_submission_requirements_are_respected():
             canvas.check_assignment({**allowed, key: value})
 
 
+
+def test_browser_command_reviews_before_any_upload():
+    """Browser chat stages a file, then submits only on the separate command."""
+    import json
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
+    import httpx
+    from agent_ import run_agent
+
+    school = "https://school.example"
+    url = school + "/courses/3/assignments/9"
+    state = {}
+    methods = []
+    submitted = False
+
+    def reply(request):
+        nonlocal submitted
+        methods.append(request.method)
+        path = request.url.path
+        if path.endswith("/assignments/9"):
+            return httpx.Response(200, json={"id": 9, "name": "Practice", "submission_types": ["online_upload"]})
+        if path.endswith("/self/files"):
+            return httpx.Response(200, json={"upload_url": "https://storage.example/file", "upload_params": {}})
+        if request.url.host == "storage.example":
+            assert b"Fixture answer" in request.content and "Authorization" not in request.headers
+            return httpx.Response(201, json={"id": 7})
+        if request.method == "POST" and path.endswith("/submissions"):
+            assert not submitted
+            assert json.loads(request.content)["submission"]["file_ids"] == [7]
+            submitted = True
+            return httpx.Response(201, json={"assignment_id": 9})
+        assert path.endswith("/submissions/self")
+        result = {"assignment_id": 9}
+        if submitted:
+            result.update(submitted_at="fixture time", attachments=[{"id": 7, "display_name": "answer.txt"}])
+        return httpx.Response(200, json=result)
+
+    with TemporaryDirectory() as directory:
+        file = Path(directory) / "answer.txt"
+        file.write_bytes(b"Fixture answer")
+
+        def client(**kwargs):
+            return real_client(transport=httpx.MockTransport(reply), **kwargs)
+
+        real_client = httpx.Client
+        with (
+            patch.dict("os.environ", {"CANVAS_URL": school, "CANVAS_TOKEN": "fixture"}),
+            patch.object(canvas.httpx, "Client", side_effect=client),
+        ):
+            assert "/canvas submit" in run_agent(f"/canvas attach {url} | {file}", state)
+            assert methods == ["GET"] and not submitted
+            assert "Canvas confirmed answer.txt" in run_agent("/canvas submit", state)
+            assert submitted and methods.count("POST") == 3
+            with TestCase().assertRaisesRegex(ValueError, "already used"):
+                run_agent("/canvas submit", state)
+            assert "answer.txt" in run_agent("/canvas status", state)
+
+
 def load_tests(loader, tests, pattern):
     return TestSuite(FunctionTestCase(test) for name, test in globals().items() if name.startswith("test_"))

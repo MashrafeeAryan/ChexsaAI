@@ -4,6 +4,7 @@ from hashlib import sha256
 from html import unescape
 import json
 from mimetypes import guess_type
+import os
 from pathlib import Path
 import re
 
@@ -83,7 +84,7 @@ def assignment_text(html):
     return unescape(re.sub(r"<[^>]+>", "", html)).strip()
 
 
-def draft_text(details):
+def draft_text(details, notes=""):
     """Ask the current model for a draft or a question about missing material."""
     from openai import APIError
     from llm_ import model_client
@@ -92,6 +93,7 @@ def draft_text(details):
         "title": details.get("name", ""),
         "instructions": assignment_text(details.get("description")),
         "rubric": details.get("rubric") or [],
+        "user_notes": notes,
     }, ensure_ascii=False)
     if len(context) > 18000:
         raise ValueError("This assignment is too long for draft mode. Prepare a file and attach it.")
@@ -122,7 +124,7 @@ def draft_text(details):
     return result
 
 
-def save_draft(details, check):
+def save_draft(details, check, notes=""):
     """Save a draft in an allowed text format and return its path."""
     from uuid import uuid4
     from files_ import write_file
@@ -131,7 +133,7 @@ def save_draft(details, check):
     suffix = next((kind for kind in ("docx", "txt", "md") if not extensions or kind in extensions), None)
     if suffix is None:
         raise ValueError("Prepare a file in the assignment's required format and attach it.")
-    result = draft_text(details)
+    result = draft_text(details, notes)
     check()
     if result["question"].strip():
         raise ValueError(result["question"].strip())
@@ -265,3 +267,80 @@ def submit_review(client, school, token, review, check):
     except RuntimeError:
         raise RuntimeError("Canvas submission could not be verified. Check /canvas status before any further action.") from None
     return receipt["submitted_at"]
+
+
+def canvas_command(message, state, check, open_page):
+    """Handle Canvas commands directly so the model cannot submit work."""
+    command, _, arguments = message.strip().partition(" ")
+    command = command.casefold()
+    if not command:
+        return (
+            "Canvas commands: /canvas open LINK, /canvas view LINK, /canvas draft LINK, "
+            "/canvas attach LINK | FILE, /canvas submit, and /canvas status."
+        )
+    if command not in ("open", "view", "draft", "attach", "submit", "status"):
+        raise ValueError("Type /canvas for the available commands.")
+
+    school_url = os.getenv("CANVAS_URL", "").strip()
+    token = os.getenv("CANVAS_TOKEN", "").strip()
+    if command in ("draft", "attach"):
+        state.pop("_canvas_review", None)
+    url, separator, extra = (part.strip() for part in arguments.partition("|"))
+    url = url or state.get("_canvas_link", "")
+    check()
+
+    if command == "open":
+        school = canvas_origin(school_url or url)
+        path = assignment_path(url, school)
+        open_page(school + path)
+        state["_canvas_link"] = school + path
+        if state.get("_canvas_review", {}).get("assignment") != path:
+            state.pop("_canvas_review", None)
+        return "Opened " + school + path
+
+    if not school_url or not token:
+        raise ValueError("Set CANVAS_URL and CANVAS_TOKEN in .env, then restart Chexsa.")
+    school = canvas_origin(school_url)
+    with httpx.Client(timeout=30, follow_redirects=False) as client:
+        if command == "submit":
+            if arguments:
+                raise ValueError("Use /canvas submit after reviewing the staged file.")
+            review = state.get("_canvas_review")
+            submitted_at = submit_review(client, school, token, review, check)
+            return f"Canvas confirmed {review['file'].name} for {review['title']} at {submitted_at}."
+
+        path = assignment_path(url, school)
+        state["_canvas_link"] = school + path
+        review = state.get("_canvas_review", {})
+        if review.get("assignment") != path or review.get("school") != school:
+            state.pop("_canvas_review", None)
+        if command == "status":
+            status = submission_status(client, school, token, path)
+            if not status.get("submitted_at"):
+                return "Canvas shows no submission time for " + school + path
+            names = ", ".join(
+                str(item.get("display_name") or item.get("filename") or item.get("id"))
+                for item in (status.get("attachments") or []) if isinstance(item, dict)
+            )
+            return f"Canvas shows a submission at {status['submitted_at']}. Files: {names or 'none listed'}."
+
+        details = assignment_details(client, school, token, path)
+        check()
+        if command == "view":
+            title = details.get("name") or "Assignment"
+            return title + "\n\n" + assignment_text(details.get("description"))
+        if command == "draft":
+            check_assignment(details)
+            filename = save_draft(details, check, extra)
+        else:
+            if not separator or not extra:
+                raise ValueError("Use /canvas attach LINK | FULL_FILE_PATH.")
+            filename = extra
+
+        review = prepare_review(school, token, path, details, filename)
+        state["_canvas_review"] = review
+        return (
+            f"Review {review['file']} for {review['title']}.\n"
+            f"Assignment: {school}{path}\n"
+            "When the file is ready, enter /canvas submit. If you edit it, attach it again."
+        )

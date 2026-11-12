@@ -324,7 +324,8 @@ def run_worker(jobs, events, cancel, shutdown, initial_settings=None, handlers=N
                     # Keep live connections, but discard the previous chat's selected targets.
                     states["desktop"].clear()
                     states["visual"].clear()
-                    states["browser"].pop("_browser_task", None)
+                    for key in ("_browser_task", "_canvas_review", "_canvas_link"):
+                        states["browser"].pop(key, None)
                     gmail = states["gmail"]
                     for key in tuple(gmail):
                         if key not in ("service", "client", "_cancel"):

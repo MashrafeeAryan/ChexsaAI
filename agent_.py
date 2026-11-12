@@ -20,6 +20,16 @@ def run_agent(message, browser):
     The checkpoint lives only in memory; closing Chexsa clears it.
     """
     check_cancelled(browser)
+    parts = message.strip().split(maxsplit=1)
+    if parts and parts[0].casefold() == "/canvas":
+        from plugins.canvas_ import canvas_command
+
+        return canvas_command(
+            parts[1] if len(parts) > 1 else "",
+            browser,
+            lambda: check_cancelled(browser),
+            lambda url: _open_assignment(browser, url),
+        )
     command = message.strip().casefold()
     saved = browser.get("_browser_task")
     resuming = command in ("/continue", "/resume") or (
@@ -80,6 +90,16 @@ def run_agent(message, browser):
                     or entry["action"]["action"] == "click"
                 )
             )
+
+
+def _open_assignment(browser, url):
+    """Open the checked Canvas link in the current Chrome session."""
+    if browser.get("playwright") is None:
+        browser["playwright"], browser["page"] = open_browser()
+    elif browser["page"].is_closed():
+        browser["page"] = browser["page"].context.new_page()
+    check_cancelled(browser)
+    browser["page"].goto(url, wait_until="domcontentloaded", timeout=30000)
 
 
 def _run_browser_task(task, browser, resuming=False):
