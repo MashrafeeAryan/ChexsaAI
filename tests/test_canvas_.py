@@ -115,5 +115,37 @@ def test_upload_sends_no_token_to_storage():
     assert len(requests) == 3
 
 
+
+def test_submit_verifies_the_file_and_never_replays():
+    """A reviewed file is submitted once and its attachment appears on the receipt."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
+
+    school, token, assignment = "https://school.example", "fixture", "/courses/3/assignments/9"
+    details = {"id": 9, "submission_types": ["online_upload"]}
+    with TemporaryDirectory() as folder:
+        file = Path(folder) / "draft.txt"
+        file.write_bytes(b"Fixture")
+        review = canvas.prepare_review(school, token, assignment, details, file)
+        with (
+            patch.object(canvas, "assignment_details", return_value=details),
+            patch.object(canvas, "upload_attachment", return_value=7) as upload,
+            patch.object(canvas, "canvas_request") as request,
+            patch.object(canvas, "submission_status", side_effect=[{}, {"submitted_at": "fixture time", "attachments": [{"id": 7}]}]),
+        ):
+            assert canvas.submit_review(None, school, token, review, lambda: None) == "fixture time"
+            assert request.call_args.kwargs["json"]["submission"]["file_ids"] == [7]
+            with TestCase().assertRaisesRegex(ValueError, "already used"):
+                canvas.submit_review(None, school, token, review, lambda: None)
+            upload.assert_called_once()
+
+        review = canvas.prepare_review(school, token, assignment, details, file)
+        file.write_bytes(b"Changed")
+        with patch.object(canvas, "assignment_details", return_value=details):
+            with TestCase().assertRaisesRegex(ValueError, "changed after review"):
+                canvas.submit_review(None, school, token, review, lambda: None)
+
+
 def load_tests(loader, tests, pattern):
     return TestSuite(FunctionTestCase(test) for name, test in globals().items() if name.startswith("test_"))

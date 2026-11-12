@@ -213,3 +213,48 @@ def upload_attachment(client, school, token, path, filename, content, check):
     if type(file_id) is not int or file_id <= 0:
         raise RuntimeError("Canvas did not confirm a file ID.")
     return file_id
+
+
+def submission_status(client, school, token, path):
+    """Read this account's submission for the selected assignment."""
+    result = canvas_request(client, school, token, "GET", path + "/submissions/self")
+    if str(result.get("assignment_id")) != path.rsplit("/", 1)[-1]:
+        raise RuntimeError("Canvas returned a receipt for a different assignment.")
+    return result
+
+
+def submit_review(client, school, token, review, check):
+    """Submit once and verify the exact attachment on the Canvas receipt."""
+    if not review or review["school"] != school or review["account"] != sha256(token.encode()).hexdigest():
+        raise ValueError("Review a file with the current Canvas account before submitting.")
+    if review["attempted"]:
+        raise ValueError("This review was already used. Check /canvas status.")
+    path = review["assignment"]
+    details = assignment_details(client, school, token, path)
+    check_assignment(details)
+    content = reviewed_file(review["file"], details)
+    if sha256(content).hexdigest() != review["version"]:
+        raise ValueError("The file changed after review. Attach it again before submitting.")
+    status = submission_status(client, school, token, path)
+    if status.get("submitted_at") or status.get("attempt"):
+        raise ValueError("Canvas already has a submission for this assignment.")
+    check()
+    review["attempted"] = True
+    file_id = upload_attachment(client, school, token, path, review["file"].name, content, check)
+    check()
+
+    # A lost response could mean Canvas already received the submission.
+    try:
+        canvas_request(
+            client, school, token, "POST", path + "/submissions",
+            json={"submission": {"submission_type": "online_upload", "file_ids": [file_id]}},
+        )
+        receipt = submission_status(client, school, token, path)
+        if not receipt.get("submitted_at") or not any(
+            item.get("id") == file_id for item in (receipt.get("attachments") or [])
+            if isinstance(item, dict)
+        ):
+            raise RuntimeError("Missing receipt")
+    except RuntimeError:
+        raise RuntimeError("Canvas submission could not be verified. Check /canvas status before any further action.") from None
+    return receipt["submitted_at"]
