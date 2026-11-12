@@ -294,7 +294,8 @@ def canvas_command(message, state, check, open_page):
         path = assignment_path(url, school)
         open_page(school + path)
         state["_canvas_link"] = school + path
-        if state.get("_canvas_review", {}).get("assignment") != path:
+        review = state.get("_canvas_review", {})
+        if (review.get("school"), review.get("assignment")) != (school, path):
             state.pop("_canvas_review", None)
         return "Opened " + school + path
 

@@ -219,5 +219,33 @@ def test_browser_command_reviews_before_any_upload():
             assert "answer.txt" in run_agent("/canvas status", state)
 
 
+
+def test_lost_submit_response_never_replays_the_upload():
+    """A lost response could mean the file was submitted. Leave the review used."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
+
+    school, token = "https://school.example", "fixture"
+    path = "/courses/3/assignments/9"
+    details = {"id": 9, "submission_types": ["online_upload"]}
+    with TemporaryDirectory() as folder:
+        file = Path(folder) / "answer.txt"
+        file.write_bytes(b"Fixture answer")
+        review = canvas.prepare_review(school, token, path, details, file)
+        with (
+            patch.object(canvas, "assignment_details", return_value=details),
+            patch.object(canvas, "submission_status", return_value={}),
+            patch.object(canvas, "upload_attachment", return_value=7) as upload,
+            patch.object(canvas, "canvas_request", side_effect=RuntimeError("Lost response")) as post,
+        ):
+            with TestCase().assertRaisesRegex(RuntimeError, "could not be verified"):
+                canvas.submit_review(None, school, token, review, lambda: None)
+            with TestCase().assertRaisesRegex(ValueError, "already used"):
+                canvas.submit_review(None, school, token, review, lambda: None)
+            upload.assert_called_once()
+            post.assert_called_once()
+
+
 def load_tests(loader, tests, pattern):
     return TestSuite(FunctionTestCase(test) for name, test in globals().items() if name.startswith("test_"))
