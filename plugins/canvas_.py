@@ -1,7 +1,9 @@
 """Read and submit a reviewed assignment using the Canvas API."""
 
+from hashlib import sha256
 from html import unescape
 import json
+from pathlib import Path
 import re
 
 import httpx
@@ -133,3 +135,44 @@ def save_draft(details, check):
         raise RuntimeError("The model returned an empty draft.")
     name = f"assignment-{details['id']}-{uuid4().hex[:8]}.{suffix}"
     return write_file(name, result["draft"].strip())
+
+
+def check_assignment(details):
+    """Check that this assignment accepts a personal file submission."""
+    if "online_upload" not in (details.get("submission_types") or []):
+        raise ValueError("This assignment does not accept file uploads.")
+    if details.get("group_category_id"):
+        raise ValueError("This workflow handles individual assignments.")
+    if details.get("locked_for_user"):
+        raise ValueError("Canvas says this assignment is locked.")
+
+
+def reviewed_file(path, details):
+    """Read the exact file that will be shown for review or uploaded."""
+    extensions = [str(item).lower().lstrip(".") for item in details.get("allowed_extensions") or []]
+    if extensions and path.suffix.lower().lstrip(".") not in extensions:
+        raise ValueError("Choose an allowed file type: " + ", ".join(extensions))
+    try:
+        with path.open("rb") as file:
+            content = file.read(25 * 1024 * 1024 + 1)
+    except OSError:
+        raise ValueError("Could not read the selected assignment file.") from None
+    if not content or len(content) > 25 * 1024 * 1024:
+        raise ValueError("Choose a nonempty file up to 25 MiB.")
+    return content
+
+
+def prepare_review(school, token, path, details, filename):
+    """Remember the exact assignment and file for the user's review."""
+    check_assignment(details)
+    file = Path(filename).expanduser().resolve()
+    content = reviewed_file(file, details)
+    return {
+        "school": school,
+        "account": sha256(token.encode()).hexdigest(),
+        "assignment": path,
+        "title": details.get("name") or "Assignment",
+        "file": file,
+        "version": sha256(content).hexdigest(),
+        "attempted": False,
+    }

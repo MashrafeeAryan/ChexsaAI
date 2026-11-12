@@ -63,5 +63,24 @@ def test_draft_saves_a_supported_file():
         assert list(Path(folder).iterdir()) == [path]
 
 
+
+def test_review_binds_the_file_and_assignment():
+    """Review only an allowed file and keep credentials out of saved state."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory() as folder:
+        path = Path(folder) / "response.txt"
+        path.write_bytes(b"Fixture response")
+        details = {"submission_types": ["online_upload"], "allowed_extensions": ["txt"]}
+        review = canvas.prepare_review("https://school.example", "private-fixture", "/courses/3/assignments/9", details, path)
+        assert review["file"] == path.resolve() and not review["attempted"]
+        assert "private-fixture" not in repr(review)
+        with TestCase().assertRaisesRegex(ValueError, "allowed file type"):
+            canvas.prepare_review("https://school.example", "token", "/courses/3/assignments/9", {**details, "allowed_extensions": ["pdf"]}, path)
+        with TestCase().assertRaisesRegex(ValueError, "locked"):
+            canvas.check_assignment({**details, "locked_for_user": True})
+
+
 def load_tests(loader, tests, pattern):
     return TestSuite(FunctionTestCase(test) for name, test in globals().items() if name.startswith("test_"))
