@@ -210,7 +210,7 @@ def test_browser_command_reviews_before_any_upload():
             patch.dict("os.environ", {"CANVAS_URL": school, "CANVAS_TOKEN": "fixture"}),
             patch.object(canvas.httpx, "Client", side_effect=client),
         ):
-            assert "/canvas submit" in run_agent(f"/canvas attach {url} | {file}", state)
+            assert "Submit it." in run_agent(f"/canvas attach {url} | {file}", state)
             assert methods == ["GET"] and not submitted
             assert "Canvas confirmed answer.txt" in run_agent("/canvas submit", state)
             assert submitted and methods.count("POST") == 3
@@ -245,6 +245,17 @@ def test_lost_submit_response_never_replays_the_upload():
                 canvas.submit_review(None, school, token, review, lambda: None)
             upload.assert_called_once()
             post.assert_called_once()
+
+
+
+def test_plain_requests_choose_canvas_actions():
+    """Choose draft, upload review, and submit from the user's own words."""
+    assert canvas.canvas_intent("Can you do this assignment in Canvas?") == ("draft", "")
+    assert canvas.canvas_intent("Please submit it.", has_review=True) == ("submit", "")
+    assert canvas.canvas_intent("Don't submit it.", has_review=True) is None
+    assert canvas.canvas_intent("Can it submit it?", has_review=True) is None
+    assert canvas.canvas_intent("Open a canvas in Paint") is None
+    assert canvas.canvas_intent("What is Canvas?") is None
 
 
 def load_tests(loader, tests, pattern):

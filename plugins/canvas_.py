@@ -237,7 +237,7 @@ def submit_review(client, school, token, review, check):
     if not review or review["school"] != school or review["account"] != sha256(token.encode()).hexdigest():
         raise ValueError("Review a file with the current Canvas account before submitting.")
     if review["attempted"]:
-        raise ValueError("This review was already used. Check /canvas status.")
+        raise ValueError("This review was already used. Check the Canvas submission status.")
     path = review["assignment"]
     details = assignment_details(client, school, token, path)
     check_assignment(details)
@@ -265,8 +265,47 @@ def submit_review(client, school, token, review, check):
         ):
             raise RuntimeError("Missing receipt")
     except RuntimeError:
-        raise RuntimeError("Canvas submission could not be verified. Check /canvas status before any further action.") from None
+        raise RuntimeError("Canvas submission could not be verified. Check the Canvas submission status before any further action.") from None
     return receipt["submitted_at"]
+
+
+def canvas_intent(message, has_assignment=False, has_review=False):
+    """Turn a clear Canvas request into an action and an optional link."""
+    request = re.sub(r"^(?:hey chexsa[ ,]+|please |can you |could you )+", "", message.strip(), flags=re.I)
+    words = request.casefold().rstrip(".!? ")
+    if re.fullmatch(
+        r"(?:submit (?:it|the reviewed (?:draft|file))|turn it in)(?: (?:in|to) canvas)?",
+        words,
+    ) and has_review:
+        return "submit", ""
+
+    link = re.search(r"https://[^\s<>\"']+/courses/[1-9][0-9]*/assignments/[1-9][0-9]*(?![0-9/])", request)
+    url = link[0] if link else ""
+    school = os.getenv("CANVAS_URL", "").strip()
+    matches_school = False
+    if url and school:
+        try:
+            matches_school = canvas_origin(url) == canvas_origin(school)
+        except ValueError:
+            pass
+    names_canvas = bool(
+        re.search(r"\bcanvas\b", words)
+        and (url or re.search(r"\b(assignment|homework|submission|status|submitted)\b", words))
+    )
+    if not (names_canvas or matches_school or (has_assignment and "assignment" in words)):
+        return None
+    if re.match(r"(?:do (?:this|that|the|my|an)|draft|complete|finish|help (?:me )?with|write)\b", words):
+        return "draft", url
+    if re.match(r"(?:open|go to)\b", words):
+        return "open", url
+    if re.match(r"(?:read|show|view|summarize)\b", words) and ("assignment" in words or url):
+        return "view", url
+    if re.match(r"(?:check|show)\b", words) and re.search(r"\b(status|submission|submitted)\b", words):
+        return "status", url
+    if re.match(r"(?:upload|attach|submit)\b", words):
+        file = re.search(r'"([^"]+)"', request)
+        return ("attach", url + " | " + file[1]) if file else ("choose_file", url)
+    return None
 
 
 def canvas_command(message, state, check, open_page):
@@ -343,5 +382,5 @@ def canvas_command(message, state, check, open_page):
         return (
             f"Review {review['file']} for {review['title']}.\n"
             f"Assignment: {school}{path}\n"
-            "When the file is ready, enter /canvas submit. If you edit it, attach it again."
+            "When the file is ready, say \"Submit it.\" If you edit it, ask Chexsa to attach the updated file."
         )
