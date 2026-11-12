@@ -147,5 +147,18 @@ def test_submit_verifies_the_file_and_never_replays():
                 canvas.submit_review(None, school, token, review, lambda: None)
 
 
+
+def test_canvas_submission_requirements_are_respected():
+    """Send the user to Canvas when it asks for a pledge or blocks submissions."""
+    allowed = {"submission_types": ["online_upload"]}
+    for key, value in (
+        ("academic_integrity_pledge", "Fixture pledge"),
+        ("require_lockdown_browser", True),
+        ("can_submit", False),
+    ):
+        with TestCase().assertRaises(ValueError):
+            canvas.check_assignment({**allowed, key: value})
+
+
 def load_tests(loader, tests, pattern):
     return TestSuite(FunctionTestCase(test) for name, test in globals().items() if name.startswith("test_"))

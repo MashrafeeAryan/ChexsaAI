@@ -67,7 +67,10 @@ def canvas_json(response):
 
 def assignment_details(client, school, token, path):
     """Get the assignment and check that it is the one we asked for."""
-    details = canvas_request(client, school, token, "GET", path)
+    details = canvas_request(
+        client, school, token, "GET", path,
+        params={"include[]": ["can_submit", "academic_integrity_pledge"]},
+    )
     if str(details.get("id")) != path.rsplit("/", 1)[-1]:
         raise RuntimeError("Canvas returned a different assignment.")
     return details
@@ -146,6 +149,10 @@ def check_assignment(details):
         raise ValueError("This workflow handles individual assignments.")
     if details.get("locked_for_user"):
         raise ValueError("Canvas says this assignment is locked.")
+    if details.get("academic_integrity_pledge") or details.get("require_lockdown_browser"):
+        raise ValueError("Open the assignment in Canvas to complete its required submission steps.")
+    if details.get("can_submit") is False:
+        raise ValueError("Canvas says this account cannot submit this assignment.")
 
 
 def reviewed_file(path, details):
