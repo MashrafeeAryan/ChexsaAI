@@ -212,11 +212,11 @@ def test_browser_command_reviews_before_any_upload():
         ):
             assert "Submit it." in run_agent(f"/canvas attach {url} | {file}", state)
             assert methods == ["GET"] and not submitted
-            assert "Canvas confirmed answer.txt" in run_agent("/canvas submit", state)
+            assert "Canvas confirmed answer.txt" in run_agent("Submit it.", state)
             assert submitted and methods.count("POST") == 3
             with TestCase().assertRaisesRegex(ValueError, "already used"):
-                run_agent("/canvas submit", state)
-            assert "answer.txt" in run_agent("/canvas status", state)
+                run_agent("Submit it.", state)
+            assert "answer.txt" in run_agent("Check my Canvas submission status.", state)
 
 
 
@@ -256,6 +256,41 @@ def test_plain_requests_choose_canvas_actions():
     assert canvas.canvas_intent("Can it submit it?", has_review=True) is None
     assert canvas.canvas_intent("Open a canvas in Paint") is None
     assert canvas.canvas_intent("What is Canvas?") is None
+
+
+
+def test_plain_draft_uses_the_open_assignment():
+    """The ordinary request finds an open assignment and saves a draft."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from unittest.mock import Mock, patch
+    import httpx
+    import files_
+    import agent_
+
+    school = "https://school.example"
+    page = Mock(url=school + "/courses/3/assignments/9")
+    page.is_closed.return_value = False
+    page.context.pages = [page]
+    details = {"id": 9, "name": "Practice", "submission_types": ["online_upload"],
+               "allowed_extensions": ["txt"], "description": "<p>Write two lines.</p>"}
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=details))
+    real_client = httpx.Client
+
+    with (
+        TemporaryDirectory() as folder,
+        patch.dict("os.environ", {"CANVAS_URL": school, "CANVAS_TOKEN": "fixture"}),
+        patch.object(canvas.httpx, "Client", side_effect=lambda **kw: real_client(transport=transport, **kw)),
+        patch.object(canvas, "draft_text", return_value={"draft": "Draft answer", "question": ""}),
+        patch.object(agent_, "open_browser", return_value=(object(), page)),
+        patch.object(agent_, "get_reply") as normal_model,
+        patch.object(files_, "OUTPUT_DIR", Path(folder)),
+    ):
+        state = {}
+        result = agent_.run_agent("Do this assignment in Canvas", state)
+        assert "Submit it." in result
+        assert state["_canvas_review"]["file"].read_text(encoding="utf-8") == "Draft answer"
+        normal_model.assert_not_called()
 
 
 def load_tests(loader, tests, pattern):

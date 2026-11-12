@@ -1,5 +1,11 @@
 """Keep asking what to do next until the request ends or the agent must stop."""
 
+import os
+
+from playwright.sync_api import Error
+
+from plugins.canvas_ import assignment_path, canvas_command, canvas_intent
+
 from browser_ import (
     click_node,
     open_browser,
@@ -22,14 +28,15 @@ def run_agent(message, browser):
     check_cancelled(browser)
     parts = message.strip().split(maxsplit=1)
     if parts and parts[0].casefold() == "/canvas":
-        from plugins.canvas_ import canvas_command
-
         return canvas_command(
             parts[1] if len(parts) > 1 else "",
             browser,
             lambda: check_cancelled(browser),
             lambda url: _open_assignment(browser, url),
         )
+    route = _canvas_route(message, browser)
+    if route is not None:
+        return _run_canvas_request(route, browser)
     command = message.strip().casefold()
     saved = browser.get("_browser_task")
     resuming = command in ("/continue", "/resume") or (
@@ -90,6 +97,79 @@ def run_agent(message, browser):
                     or entry["action"]["action"] == "click"
                 )
             )
+
+
+def _canvas_route(message, browser):
+    """Check if the user wants to work with a Canvas assignment."""
+    page = browser.get("page")
+    return canvas_intent(
+        message,
+        has_assignment=bool(browser.get("_canvas_link")) or bool(
+            page and "/assignments/" in page.url
+        ),
+        has_review=bool(browser.get("_canvas_review")),
+    )
+
+
+def is_canvas_request(message, browser):
+    """Let Desktop chat send Canvas work to the browser agent."""
+    return _canvas_route(message, browser) is not None
+
+
+def _canvas_tab(browser, school):
+    """Use the focused assignment tab or the only matching tab."""
+    if browser.get("playwright") is None:
+        browser["playwright"], browser["page"] = open_browser()
+    pages = []
+    for page in browser["page"].context.pages:
+        if page.is_closed():
+            continue
+        try:
+            assignment_path(page.url, school)
+        except ValueError:
+            continue
+        pages.append(page)
+    if len(pages) == 1:
+        return pages[0].url
+
+    focused = []
+    for page in pages:
+        try:
+            if page.evaluate("document.hasFocus()"):
+                focused.append(page)
+        except Error:
+            continue  # The tab may have closed while we checked it.
+    if len(focused) == 1:
+        return focused[0].url
+    return ""
+
+
+def _run_canvas_request(route, browser):
+    """Find the assignment, then call the Canvas tool for the user."""
+    action, arguments = route
+    if action == "choose_file":
+        return "Ask me to draft the Canvas assignment, or give me the file path in quotes."
+    url, separator, extra = arguments.partition("|")
+    url = url.strip()
+    if not url and action != "submit":
+        if action == "status":
+            url = browser.get("_canvas_link", "")
+        if not url:
+            school = os.getenv("CANVAS_URL", "").strip()
+            if not school:
+                return "Set CANVAS_URL and CANVAS_TOKEN in .env, or paste the assignment link to open it."
+            if action != "open" and not os.getenv("CANVAS_TOKEN", "").strip():
+                return "Set CANVAS_TOKEN in .env and restart Chexsa to read your Canvas assignment."
+            url = _canvas_tab(browser, school)
+        if not url:
+            return "Open the assignment in Chexsa's Chrome window or paste its Canvas link here."
+    arguments = url + (" | " + extra.strip() if separator else "")
+    return canvas_command(
+        f"{action} {arguments}".strip(),
+        browser,
+        lambda: check_cancelled(browser),
+        lambda link: _open_assignment(browser, link),
+    )
 
 
 def _open_assignment(browser, url):
