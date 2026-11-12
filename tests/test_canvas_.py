@@ -82,5 +82,38 @@ def test_review_binds_the_file_and_assignment():
             canvas.check_assignment({**details, "locked_for_user": True})
 
 
+
+def test_upload_sends_no_token_to_storage():
+    """Only the school gets the token, even when the upload uses another host."""
+    import httpx
+
+    requests = []
+
+    def reply(request):
+        requests.append(request)
+        if len(requests) == 1:
+            assert request.url.path.endswith("/submissions/self/files")
+            assert b"submit_assignment=false" in request.content
+            return httpx.Response(200, json={
+                "upload_url": "https://storage.example/upload",
+                "upload_params": {"key": "fixture"},
+            })
+        if len(requests) == 2:
+            assert request.url.host == "storage.example"
+            assert "Authorization" not in request.headers
+            assert b"Fixture bytes" in request.content
+            return httpx.Response(303, headers={"Location": "https://school.example/api/v1/files/7"})
+        assert request.url.host == "school.example"
+        assert request.headers["Authorization"] == "Bearer fixture"
+        return httpx.Response(200, json={"id": 7})
+
+    with httpx.Client(transport=httpx.MockTransport(reply)) as client:
+        assert canvas.upload_attachment(
+            client, "https://school.example", "fixture", "/courses/3/assignments/9",
+            "response.txt", b"Fixture bytes", lambda: None,
+        ) == 7
+    assert len(requests) == 3
+
+
 def load_tests(loader, tests, pattern):
     return TestSuite(FunctionTestCase(test) for name, test in globals().items() if name.startswith("test_"))

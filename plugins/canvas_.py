@@ -3,11 +3,12 @@
 from hashlib import sha256
 from html import unescape
 import json
+from mimetypes import guess_type
 from pathlib import Path
 import re
 
 import httpx
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 
 def canvas_origin(url):
@@ -176,3 +177,39 @@ def prepare_review(school, token, path, details, filename):
         "version": sha256(content).hexdigest(),
         "attempted": False,
     }
+
+
+def upload_attachment(client, school, token, path, filename, content, check):
+    """Send the reviewed bytes and get the Canvas file ID."""
+    kind = guess_type(filename)[0] or "application/octet-stream"
+    setup = canvas_request(
+        client, school, token, "POST", path + "/submissions/self/files",
+        data={"name": filename, "size": len(content), "content_type": kind, "submit_assignment": "false"},
+    )
+    upload_url = setup.get("upload_url")
+    params = setup.get("upload_params")
+    if not isinstance(upload_url, str) or not isinstance(params, dict) or "file" in params:
+        raise RuntimeError("Canvas did not provide valid upload details.")
+    canvas_origin(upload_url)
+    check()
+    try:
+        # The storage server gets the upload fields, never the Canvas token.
+        response = client.post(
+            upload_url, data=params, files={"file": (filename, content, kind)},
+            follow_redirects=False,
+        )
+        if response.status_code in (201, 301, 302, 303, 307, 308) and response.headers.get("Location"):
+            location = urljoin(upload_url, response.headers["Location"])
+            if canvas_origin(location) != school:
+                raise RuntimeError("The upload receipt did not point back to Canvas.")
+            check()
+            response = client.get(
+                location, headers={"Authorization": "Bearer " + token},
+                follow_redirects=False,
+            )
+    except httpx.HTTPError:
+        raise RuntimeError("Could not verify the Canvas file upload.") from None
+    file_id = canvas_json(response).get("id")
+    if type(file_id) is not int or file_id <= 0:
+        raise RuntimeError("Canvas did not confirm a file ID.")
+    return file_id
