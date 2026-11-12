@@ -3,7 +3,7 @@
 import sys
 
 # Browser agent
-from agent_ import run_agent
+from agent_ import is_canvas_request, run_agent
 from desktop_agent_ import run_desktop_agent
 from browser_ import close_browser
 from plugins.gmail import run_gmail_agent
@@ -47,15 +47,16 @@ def main(mode=None):  # modes: browser, desktop, or gmail
                 continue
 
             try:
-                # Keep both engines separate until we add automatic routing.
                 if mode == "gmail":
                     response = run_gmail_agent(message, gmail)
+                elif mode == "browser" or is_canvas_request(message, browser):
+                    response = run_agent(message, browser)
                 else:
-                    response = run_desktop_agent(message, desktop) if mode == "desktop" else run_agent(message, browser)
+                    response = run_desktop_agent(message, desktop)
                 print(f"Chexsa > {response}")
             except KeyboardInterrupt:
                 print("\nChexsa > Request cancelled.")
-            except RuntimeError as error:
+            except (RuntimeError, ValueError) as error:
                 print(f"Chexsa > {error}")
             except Exception:
                 # Keep the chat open without showing private connection details.

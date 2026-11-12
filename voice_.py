@@ -9,7 +9,7 @@ from random import choice
 import re
 import sys
 
-from agent_ import run_agent
+from agent_ import is_canvas_request, run_agent
 from desktop_agent_ import run_desktop_agent
 from browser_ import close_browser
 from plugins.gmail import run_gmail_agent
@@ -112,8 +112,10 @@ def main(mode="desktop"):
             try:
                 if mode == "gmail":
                     response = run_gmail_agent(request, state)
+                elif mode == "browser" or is_canvas_request(request, state):
+                    response = run_agent(request, state)
                 else:
-                    response = run_agent(request, state) if mode == "browser" else run_desktop_agent(request, state)
+                    response = run_desktop_agent(request, state)
             except KeyboardInterrupt:
                 response = "Task cancelled."
             except RuntimeError as error:

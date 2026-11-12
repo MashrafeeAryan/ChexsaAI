@@ -293,5 +293,47 @@ def test_plain_draft_uses_the_open_assignment():
         normal_model.assert_not_called()
 
 
+
+def test_desktop_chat_routes_canvas_and_keeps_the_review():
+    """Desktop uses Browser for the assignment and its submit follow-up."""
+    from queue import Queue
+    from threading import Event, Thread
+    from app_runtime_ import run_worker
+
+    jobs, events = Queue(), Queue()
+    cancel, shutdown = Event(), Event()
+    calls = []
+
+    def browser(text, state):
+        calls.append(text)
+        if len(calls) == 1:
+            state["_canvas_review"] = {"file": "fixture.txt"}
+        else:
+            assert state["_canvas_review"]["file"] == "fixture.txt"
+        return "Browser ran"
+
+    worker = Thread(
+        target=run_worker,
+        args=(jobs, events, cancel, shutdown),
+        kwargs={"handlers": {"desktop": lambda *_: "Desktop ran", "browser": browser}},
+    )
+    worker.start()
+    try:
+        assert events.get(timeout=3)["kind"] == "ready"
+        for text, mode in (
+            ("Do this assignment in Canvas", "browser"),
+            ("Submit it.", "browser"),
+            ("Open Notepad", "desktop"),
+        ):
+            jobs.put({"kind": "task", "mode": "desktop", "text": text})
+            assert events.get(timeout=3)["mode"] == mode
+            result = events.get(timeout=3)
+            assert result["kind"] == "result" and result["mode"] == mode
+        assert len(calls) == 2
+    finally:
+        shutdown.set()
+        worker.join(timeout=3)
+
+
 def load_tests(loader, tests, pattern):
     return TestSuite(FunctionTestCase(test) for name, test in globals().items() if name.startswith("test_"))

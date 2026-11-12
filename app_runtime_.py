@@ -308,6 +308,11 @@ def run_worker(jobs, events, cancel, shutdown, initial_settings=None, handlers=N
 
             mode = job.get("mode", "desktop")
             try:
+                if mode == "desktop" and job["kind"] == "task" and "browser" in handlers:
+                    from agent_ import is_canvas_request
+
+                    if is_canvas_request(job["text"], states["browser"]):
+                        mode = "browser"
                 if mode not in states:
                     raise ValueError("Choose an available app mode.")
                 state = states[mode]

@@ -101,14 +101,17 @@ def run_agent(message, browser):
 
 def _canvas_route(message, browser):
     """Check if the user wants to work with a Canvas assignment."""
+    known_assignment = bool(browser.get("_canvas_link"))
     page = browser.get("page")
-    return canvas_intent(
-        message,
-        has_assignment=bool(browser.get("_canvas_link")) or bool(
-            page and "/assignments/" in page.url
-        ),
-        has_review=bool(browser.get("_canvas_review")),
-    )
+    school = os.getenv("CANVAS_URL", "").strip()
+    url = getattr(page, "url", "")
+    if not known_assignment and school and isinstance(url, str) and url:
+        try:
+            assignment_path(url, school)
+            known_assignment = True
+        except ValueError:
+            pass
+    return canvas_intent(message, known_assignment, bool(browser.get("_canvas_review")))
 
 
 def is_canvas_request(message, browser):
