@@ -74,8 +74,8 @@ def compact_page_view(view):
     return result
 
 
-# Give the AI the request and any page reading, then check its chosen action.
-def get_reply(message, observation=None, history=None, previous=None):
+def model_client():
+    """Reuse the configured model connection."""
     # Keep the connection so later messages can reuse it.
     global _client
 
@@ -92,6 +92,12 @@ def get_reply(message, observation=None, history=None, previous=None):
             timeout=30,
             max_retries=0,  # Do not repeat failed requests automatically.
         )
+    return _client, model
+
+
+# Give the AI the request and any page reading, then check its chosen action.
+def get_reply(message, observation=None, history=None, previous=None):
+    client, model = model_client()
 
     # Keep the original request and past results so the AI knows what remains.
     user_message = {
@@ -137,7 +143,7 @@ def get_reply(message, observation=None, history=None, previous=None):
     user_message = json.dumps(user_message, ensure_ascii=False)
 
     try:
-        response = _client.chat.completions.create(
+        response = client.chat.completions.create(
             model=model,
             messages=[
                 {

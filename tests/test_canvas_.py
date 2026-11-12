@@ -44,5 +44,24 @@ def test_read_assignment_and_refuse_redirect():
     assert requests[0].url.path == "/api/v1" + path
 
 
+
+def test_draft_saves_a_supported_file():
+    """Save model text locally and stop when required material is missing."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
+    import files_
+
+    with TemporaryDirectory() as folder, patch.object(files_, "OUTPUT_DIR", Path(folder)):
+        details = {"id": 9, "allowed_extensions": ["txt"]}
+        with patch.object(canvas, "draft_text", return_value={"draft": "Practice response", "question": ""}):
+            path = Path(canvas.save_draft(details, lambda: None))
+        assert path.suffix == ".txt" and path.read_text(encoding="utf-8") == "Practice response"
+        with patch.object(canvas, "draft_text", return_value={"draft": "", "question": "Please supply the reading."}):
+            with TestCase().assertRaisesRegex(ValueError, "supply the reading"):
+                canvas.save_draft(details, lambda: None)
+        assert list(Path(folder).iterdir()) == [path]
+
+
 def load_tests(loader, tests, pattern):
     return TestSuite(FunctionTestCase(test) for name, test in globals().items() if name.startswith("test_"))
