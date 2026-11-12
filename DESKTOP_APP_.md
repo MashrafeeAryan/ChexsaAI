@@ -95,6 +95,43 @@ A named section uses a Word heading or a Markdown heading starting with #.
 For a plain Word label, Chexsa copies the first nonempty paragraph below it.
 Name a full path to work outside the output folder.
 
+## Canvas assignments
+
+Use **Browser** in the app or terminal. Canvas file submissions use your school's
+Canvas API. Update your local install with `python -m pip install -e .`. Add these
+settings to your local `.env`, then restart Chexsa.
+
+```dotenv
+CANVAS_URL=https://your-school.instructure.com
+CANVAS_TOKEN=your-canvas-access-token
+```
+
+Use a token for your own student account if your school provides one. The school
+address must match the assignment link. Keep the token in `.env`.
+
+| Command | What it does |
+| --- | --- |
+| `/canvas open LINK` | Opens the assignment in Chrome. Sign in there if Canvas asks. |
+| `/canvas view LINK` | Reads the title and written instructions. |
+| `/canvas draft LINK` | Saves a draft and shows the file to review. Add `\| YOUR NOTES` after the link to supply material. |
+| `/canvas attach LINK \| FULL_FILE_PATH` | Shows an existing file for review. Use this again after editing a draft. |
+| `/canvas submit` | Sends the reviewed file and checks the Canvas receipt. |
+| `/canvas status LINK` | Checks the submission time and filenames. Omit the link to check the last assignment in this chat. |
+
+Replace `LINK` with the full assignment URL. For example, use a link ending in
+`/courses/123/assignments/456`. Drafting uses your configured model and sends it
+the assignment instructions, rubric, and notes you supplied. Review the saved
+file before submitting. Canvas already-submitted, locked, and group assignments
+and assignments with a pledge or LockDown Browser requirement use Canvas's own
+submission page. This workflow covers individual file uploads up to 25 MiB.
+
+The local tests use fake Canvas and storage responses. They cover the upload,
+receipt, file changes after review, and a lost response. Check the status or
+open Canvas when the receipt is uncertain.
+
+[Canvas submissions API](https://developerdocs.instructure.com/services/canvas/resources/submissions)
+and [Canvas upload steps](https://developerdocs.instructure.com/services/canvas/basics/file.file_uploads).
+
 ## Visual desktop
 
 1. Open the window you want Chexsa to work in.
