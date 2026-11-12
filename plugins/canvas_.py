@@ -274,12 +274,14 @@ def canvas_intent(message, has_assignment=False, has_review=False):
     request = re.sub(r"^(?:hey chexsa[ ,]+|please |can you |could you )+", "", message.strip(), flags=re.I)
     words = request.casefold().rstrip(".!? ")
     if re.fullmatch(
-        r"(?:submit (?:it|the reviewed (?:draft|file))|turn it in)(?: (?:in|to) canvas)?",
+        r"(?:submit (?:it|the (?:reviewed|canvas) (?:draft|file))|turn it in)(?: (?:in|to) canvas)?",
         words,
-    ) and has_review:
-        return "submit", ""
+    ) and (has_review or has_assignment or "canvas" in words):
+        return ("submit" if has_review else "choose_file"), ""
+    if has_review and words in ("i updated the draft", "use the updated draft", "attach the updated file"):
+        return "review_again", ""
 
-    link = re.search(r"https://[^\s<>\"']+/courses/[1-9][0-9]*/assignments/[1-9][0-9]*(?![0-9/])", request)
+    link = re.search(r"https://[^\s<>\"']+/courses/[1-9][0-9]*/assignments/[1-9][0-9]*(?![\w/%-])", request)
     url = link[0] if link else ""
     school = os.getenv("CANVAS_URL", "").strip()
     matches_school = False
@@ -298,10 +300,10 @@ def canvas_intent(message, has_assignment=False, has_review=False):
         return "draft", url
     if re.match(r"(?:open|go to)\b", words):
         return "open", url
-    if re.match(r"(?:read|show|view|summarize)\b", words) and ("assignment" in words or url):
-        return "view", url
     if re.match(r"(?:check|show)\b", words) and re.search(r"\b(status|submission|submitted)\b", words):
         return "status", url
+    if re.match(r"(?:read|show|view|summarize)\b", words) and ("assignment" in words or url):
+        return "view", url
     if re.match(r"(?:upload|attach|submit)\b", words):
         file = re.search(r'"([^"]+)"', request)
         return ("attach", url + " | " + file[1]) if file else ("choose_file", url)
@@ -382,5 +384,5 @@ def canvas_command(message, state, check, open_page):
         return (
             f"Review {review['file']} for {review['title']}.\n"
             f"Assignment: {school}{path}\n"
-            "When the file is ready, say \"Submit it.\" If you edit it, ask Chexsa to attach the updated file."
+            "When the file is ready, say \"Submit it.\" If you edit it, say \"I updated the draft.\""
         )

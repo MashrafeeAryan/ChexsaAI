@@ -150,6 +150,10 @@ def _canvas_tab(browser, school):
 def _run_canvas_request(route, browser):
     """Find the assignment, then call the Canvas tool for the user."""
     action, arguments = route
+    if action == "review_again":
+        review = browser["_canvas_review"]
+        action = "attach"
+        arguments = f"{review['school']}{review['assignment']} | {review['file']}"
     if action == "choose_file":
         return "Ask me to draft the Canvas assignment, or give me the file path in quotes."
     url, separator, extra = arguments.partition("|")

@@ -254,6 +254,10 @@ def test_plain_requests_choose_canvas_actions():
     assert canvas.canvas_intent("Please submit it.", has_review=True) == ("submit", "")
     assert canvas.canvas_intent("Don't submit it.", has_review=True) is None
     assert canvas.canvas_intent("Can it submit it?", has_review=True) is None
+    assert canvas.canvas_intent("Do not do this assignment in Canvas") is None
+    assert canvas.canvas_intent("Submit it.", has_assignment=True) == ("choose_file", "")
+    assert canvas.canvas_intent("I updated the draft.", has_review=True) == ("review_again", "")
+    assert canvas.canvas_intent("Show my Canvas assignment status.") == ("status", "")
     assert canvas.canvas_intent("Open a canvas in Paint") is None
     assert canvas.canvas_intent("What is Canvas?") is None
 
@@ -333,6 +337,25 @@ def test_desktop_chat_routes_canvas_and_keeps_the_review():
     finally:
         shutdown.set()
         worker.join(timeout=3)
+
+
+
+def test_canvas_tab_needs_a_clear_target():
+    """With two assignments open, use the focused tab or ask for the link."""
+    from unittest.mock import Mock
+    from agent_ import _canvas_tab
+
+    school = "https://school.example"
+    first = Mock(url=school + "/courses/3/assignments/9")
+    second = Mock(url=school + "/courses/3/assignments/10")
+    for page in (first, second):
+        page.is_closed.return_value = False
+        page.evaluate.return_value = False
+    first.context.pages = [first, second]
+    state = {"playwright": object(), "page": first}
+    assert _canvas_tab(state, school) == ""
+    second.evaluate.return_value = True
+    assert _canvas_tab(state, school) == second.url
 
 
 def load_tests(loader, tests, pattern):
