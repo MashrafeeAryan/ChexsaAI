@@ -358,5 +358,29 @@ def test_canvas_tab_needs_a_clear_target():
     assert _canvas_tab(state, school) == second.url
 
 
+
+def test_outline_prompt_uses_only_assignment_context():
+    """Ask for an outline in one model call."""
+    import json
+    from types import SimpleNamespace
+    from unittest.mock import Mock, patch
+
+    model = Mock()
+    create = model.chat.completions.create
+    create.return_value = SimpleNamespace(choices=[SimpleNamespace(
+        message=SimpleNamespace(content='{"draft":"Topic and points","question":""}')
+    )])
+    with patch("llm_.model_client", return_value=(model, "fixture")):
+        result = canvas.draft_text(
+            {"name": "Practice", "description": "<p>Explain the topic.</p>"},
+            outline=True,
+        )
+    assert result["draft"] == "Topic and points"
+    create.assert_called_once()
+    messages = create.call_args.kwargs["messages"]
+    assert "Write an outline" in messages[0]["content"]
+    assert json.loads(messages[1]["content"])["instructions"] == "Explain the topic."
+
+
 def load_tests(loader, tests, pattern):
     return TestSuite(FunctionTestCase(test) for name, test in globals().items() if name.startswith("test_"))
