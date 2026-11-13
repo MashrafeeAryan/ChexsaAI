@@ -111,7 +111,12 @@ def _canvas_route(message, browser):
             known_assignment = True
         except ValueError:
             pass
-    return canvas_intent(message, known_assignment, bool(browser.get("_canvas_review")))
+    route = canvas_intent(message, known_assignment, bool(browser.get("_canvas_review")))
+    if route is None and school and "this assignment" in message.casefold():
+        candidate = canvas_intent(message, has_assignment=True)
+        if candidate and candidate[0] in ("outline", "open_outline"):
+            return candidate
+    return route
 
 
 def is_canvas_request(message, browser):
@@ -187,6 +192,7 @@ def _open_assignment(browser, url):
         browser["page"] = browser["page"].context.new_page()
     check_cancelled(browser)
     browser["page"].goto(url, wait_until="domcontentloaded", timeout=30000)
+    check_cancelled(browser)
 
 
 def _run_browser_task(task, browser, resuming=False):

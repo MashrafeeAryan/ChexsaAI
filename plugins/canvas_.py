@@ -311,6 +311,12 @@ def canvas_intent(message, has_assignment=False, has_review=False):
     )
     if not (names_canvas or matches_school or (has_assignment and "assignment" in words)):
         return None
+    if (
+        re.match(r"(?:open|read|review|write|make|create|save|draft|outline)\b", words)
+        and re.search(r"\boutline\b", words)
+        and re.search(r"\b(?:word|docx)\b", words)
+    ):
+        return ("open_outline" if words.startswith("open ") else "outline"), url
     if re.match(r"(?:do (?:this|that|the|my|an)|draft|complete|finish|help (?:me )?with|write)\b", words):
         return "draft", url
     if re.match(r"(?:open|go to)\b", words):
@@ -334,7 +340,7 @@ def canvas_command(message, state, check, open_page):
             "Canvas commands: /canvas open LINK, /canvas view LINK, /canvas draft LINK, "
             "/canvas attach LINK | FILE, /canvas submit, and /canvas status."
         )
-    if command not in ("open", "view", "draft", "attach", "submit", "status"):
+    if command not in ("open", "view", "draft", "attach", "submit", "status", "outline", "open_outline"):
         raise ValueError("Type /canvas for the available commands.")
 
     school_url = os.getenv("CANVAS_URL", "").strip()
@@ -386,6 +392,11 @@ def canvas_command(message, state, check, open_page):
         if command == "view":
             title = details.get("name") or "Assignment"
             return title + "\n\n" + assignment_text(details.get("description"))
+        if command in ("outline", "open_outline"):
+            if command == "open_outline":
+                open_page(school + path)
+            filename = save_outline(details, check, extra)
+            return "Saved and verified the Word outline at " + filename
         if command == "draft":
             check_assignment(details)
             filename = save_draft(details, check, extra)

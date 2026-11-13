@@ -401,5 +401,59 @@ def test_outline_saves_a_real_word_file():
         assert files_.read_file(path) == "Topic"
 
 
+
+def test_one_request_opens_canvas_and_saves_an_outline():
+    """Use the actual Browser entry point and verify the saved Word text."""
+    import httpx
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from types import SimpleNamespace
+    from unittest.mock import Mock, patch
+    import agent_
+    import files_
+
+    school = "https://school.example"
+    url = school + "/courses/3/assignments/9"
+    details = {"id": 9, "name": "Practice", "description": "<p>Explain the topic.</p>",
+               "submission_types": ["none"], "allowed_extensions": ["pdf"]}
+    requests = []
+
+    def assignment(request):
+        requests.append(request.method)
+        assert request.url.path == "/api/v1/courses/3/assignments/9"
+        return httpx.Response(200, json=details)
+
+    client = httpx.Client
+    page = Mock(url=url)
+    page.is_closed.return_value = False
+    page.context.pages = [page]
+    model = Mock()
+    create = model.chat.completions.create
+    create.return_value = SimpleNamespace(choices=[SimpleNamespace(
+        message=SimpleNamespace(content='{"draft":"Heading\\n- Point","question":""}')
+    )])
+
+    with (
+        TemporaryDirectory() as folder,
+        patch.dict("os.environ", {"CANVAS_URL": school, "CANVAS_TOKEN": "fixture"}),
+        patch.object(canvas.httpx, "Client", side_effect=lambda **kw: client(transport=httpx.MockTransport(assignment), **kw)),
+        patch.object(agent_, "open_browser", return_value=(object(), page)),
+        patch.object(agent_, "get_reply") as browser_model,
+        patch("llm_.model_client", return_value=(model, "fixture")),
+        patch.object(files_, "OUTPUT_DIR", Path(folder)),
+    ):
+        state = {}
+        answer = agent_.run_agent("Open this assignment, read the instructions, and save an outline in Word.", state)
+        saved, = Path(folder).glob("*.docx")
+        assert str(saved) in answer
+        assert files_.read_file(saved) == "Heading\n- Point"
+        assert "_canvas_review" not in state
+        page.goto.assert_called_once()
+        assert page.goto.call_args.args[0] == url
+        create.assert_called_once()
+        browser_model.assert_not_called()
+        assert requests == ["GET"]
+
+
 def load_tests(loader, tests, pattern):
     return TestSuite(FunctionTestCase(test) for name, test in globals().items() if name.startswith("test_"))
