@@ -382,5 +382,24 @@ def test_outline_prompt_uses_only_assignment_context():
     assert json.loads(messages[1]["content"])["instructions"] == "Explain the topic."
 
 
+
+def test_outline_saves_a_real_word_file():
+    """A local outline can be saved even when Canvas only accepts PDF."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
+    import files_
+
+    details = {"id": 9, "allowed_extensions": ["pdf"]}
+    with (
+        TemporaryDirectory() as folder,
+        patch.object(files_, "OUTPUT_DIR", Path(folder)),
+        patch.object(canvas, "draft_text", return_value={"draft": "Topic", "question": ""}),
+    ):
+        path = Path(canvas.save_outline(details, lambda: None))
+        assert path.suffix == ".docx"
+        assert files_.read_file(path) == "Topic"
+
+
 def load_tests(loader, tests, pattern):
     return TestSuite(FunctionTestCase(test) for name, test in globals().items() if name.startswith("test_"))

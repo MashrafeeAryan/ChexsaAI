@@ -130,21 +130,32 @@ def draft_text(details, notes="", *, outline=False):
 
 def save_draft(details, check, notes=""):
     """Save a draft in an allowed text format and return its path."""
-    from uuid import uuid4
-    from files_ import write_file
-
     extensions = [str(item).lower().lstrip(".") for item in details.get("allowed_extensions") or []]
     suffix = next((kind for kind in ("docx", "txt", "md") if not extensions or kind in extensions), None)
     if suffix is None:
         raise ValueError("Prepare a file in the assignment's required format and attach it.")
     result = draft_text(details, notes)
+    return save_response(details, result, suffix, "assignment", check)
+
+
+def save_response(details, result, suffix, label, check):
+    """Save generated text and return the verified file path."""
+    from uuid import uuid4
+    from files_ import write_file
+
     check()
     if result["question"].strip():
         raise ValueError(result["question"].strip())
     if not result["draft"].strip():
         raise RuntimeError("The model returned an empty draft.")
-    name = f"assignment-{details['id']}-{uuid4().hex[:8]}.{suffix}"
+    name = f"{label}-{details['id']}-{uuid4().hex[:8]}.{suffix}"
     return write_file(name, result["draft"].strip())
+
+
+def save_outline(details, check, notes=""):
+    """Save a Word outline for the user to read."""
+    result = draft_text(details, notes, outline=True)
+    return save_response(details, result, "docx", "outline", check)
 
 
 def check_assignment(details):
