@@ -455,5 +455,35 @@ def test_one_request_opens_canvas_and_saves_an_outline():
         assert requests == ["GET"]
 
 
+
+def test_outline_stop_or_missing_material_leaves_no_file():
+    """Do not save after Stop or when the model asks for a missing reading."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from threading import Event
+    from unittest.mock import patch
+    from app_runtime_ import check_cancelled
+    import files_
+
+    stop = Event()
+
+    def stopped_draft(*args, **kwargs):
+        stop.set()
+        return {"draft": "Late answer", "question": ""}
+
+    with (
+        TemporaryDirectory() as folder,
+        patch.object(files_, "OUTPUT_DIR", Path(folder)),
+        patch.object(canvas, "draft_text", side_effect=stopped_draft) as draft,
+    ):
+        with TestCase().assertRaises(InterruptedError):
+            canvas.save_outline({"id": 9}, lambda: check_cancelled({"_cancel": stop}))
+        draft.side_effect = None
+        draft.return_value = {"draft": "", "question": "Please provide the course reading."}
+        with TestCase().assertRaisesRegex(ValueError, "provide the course reading"):
+            canvas.save_outline({"id": 9}, lambda: None)
+        assert not list(Path(folder).iterdir())
+
+
 def load_tests(loader, tests, pattern):
     return TestSuite(FunctionTestCase(test) for name, test in globals().items() if name.startswith("test_"))
