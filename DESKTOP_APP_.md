@@ -105,6 +105,11 @@ in Chexsa's Chrome window or paste its full link in your message.
 2. Review the file. If you change it, say **I updated the draft.**
 3. Say **Submit it.** Chexsa uploads the reviewed file and checks the receipt.
 
+For a Word outline, say **Open this assignment, read the instructions, and
+save an outline in Word.** Chexsa reads the assignment, asks the model for an
+outline, and returns the path to the saved Word document. The outline stays on
+your computer until you choose what to do with it.
+
 You can also say **Read this Canvas assignment**, **Check my Canvas submission
 status**, or **Open this Canvas assignment** and paste its link. To use a file
 you already have, say **Attach "C:\\work\\answer.docx" to this Canvas assignment.**

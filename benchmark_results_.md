@@ -348,3 +348,11 @@ Local copying used **69.9% fewer total text tokens**. These are local GPT-OSS
 counts and scripted timings. Live API latency needs a separate measurement.
 
 Run the fixture with `python tests/desktop_context_benchmark_.py --handoff --tokenizer PATH`.
+
+## Canvas assignment to Word outline
+
+A scripted request opened the selected assignment, read it with one Canvas API
+request, and saved a verified Word outline after one model decision. The fixture
+checked the saved text and the destination link. It used a mocked Chrome page,
+Canvas API, and model. A matched live UI run is still needed to compare tokens
+and elapsed time.
