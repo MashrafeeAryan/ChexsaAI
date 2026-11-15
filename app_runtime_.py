@@ -442,7 +442,7 @@ def record_message(stop):
     if stop.is_set():
         raise InterruptedError("Recording cancelled.")
 
-    text = listen(recognizer, microphone)
+    text = listen(recognizer, microphone, stop)
     if stop.is_set():
         raise InterruptedError("Recording cancelled.")
     request = get_request(text)

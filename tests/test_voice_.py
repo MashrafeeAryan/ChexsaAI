@@ -119,10 +119,26 @@ def test_no_task_on_startup_or_invalid_mode():
         fake.Microphone.assert_not_called()
 
 
+
+def test_stop_during_capture_skips_transcription():
+    """Release the microphone without sending cancelled audio to Google."""
+    from threading import Event
+
+    stop = Event()
+    fake = SimpleNamespace(WaitTimeoutError=TimeoutError, UnknownValueError=ValueError, RequestError=ConnectionError)
+    recognizer, microphone = Mock(), MagicMock()
+    recognizer.listen.side_effect = lambda *args, **kwargs: stop.set()
+    with patch.dict(sys.modules, {"speech_recognition": fake}):
+        with unittest.TestCase().assertRaises(InterruptedError):
+            voice_.listen(recognizer, microphone, stop)
+    recognizer.recognize_google.assert_not_called()
+    microphone.__exit__.assert_called_once()
+
+
 # Run these plain test functions without introducing application classes.
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_windows_speech, test_acknowledgment, test_wake_phrase,
-        test_conversation, test_combined_request_and_silence, test_transcription_errors,
+        test_stop_during_capture_skips_transcription, test_conversation, test_combined_request_and_silence, test_transcription_errors,
         test_agent_error_and_cleanup, test_no_task_on_startup_or_invalid_mode,
     ))

@@ -54,13 +54,16 @@ def get_request(text):
 
 
 # Record one phrase, then ask Google to turn that recording into words.
-def listen(recognizer, microphone):
+def listen(recognizer, microphone, stop=None):
+    """Record one phrase and skip transcription if Stop was pressed."""
     import speech_recognition as sr
 
     try:
         # The microphone is closed before transcription or speech playback starts.
         with microphone as source:
             audio = recognizer.listen(source, timeout=3, phrase_time_limit=12)
+        if stop is not None and stop.is_set():
+            raise InterruptedError("Recording cancelled.")
         return recognizer.recognize_google(audio).strip()
     except (sr.WaitTimeoutError, sr.UnknownValueError):
         return ""  # Silence or unclear speech is not a command.
