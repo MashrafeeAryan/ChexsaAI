@@ -135,10 +135,18 @@ def test_stop_during_capture_skips_transcription():
     microphone.__exit__.assert_called_once()
 
 
+def test_missing_default_microphone_explains_the_problem():
+    """Give device setup advice when Windows has no default input."""
+    fake = SimpleNamespace(Microphone=Mock(side_effect=OSError))
+    with patch.dict(sys.modules, {"speech_recognition": fake}):
+        with unittest.TestCase().assertRaisesRegex(RuntimeError, "Windows input device"):
+            voice_.open_microphone()
+
+
 # Run these plain test functions without introducing application classes.
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_windows_speech, test_acknowledgment, test_wake_phrase,
         test_stop_during_capture_skips_transcription, test_conversation, test_combined_request_and_silence, test_transcription_errors,
-        test_agent_error_and_cleanup, test_no_task_on_startup_or_invalid_mode,
+        test_missing_default_microphone_explains_the_problem, test_agent_error_and_cleanup, test_no_task_on_startup_or_invalid_mode,
     ))

@@ -426,19 +426,11 @@ def record_message(stop):
     Example speech: 'Hey Chexsa, open a website'. Output: 'open a website'.
     The existing recognizer sends this recording to Google for transcription.
     """
-    try:
-        import speech_recognition as sr
-        from voice_ import get_request, listen
-    except ImportError:
-        raise RuntimeError(
-            'Install microphone support: python -m pip install -e ".[voice]"'
-        ) from None
+    from voice_ import get_request, listen, open_microphone
 
-    recognizer = sr.Recognizer()
-    recognizer.operation_timeout = 10
-    microphone = sr.Microphone()
-    with microphone as source:
-        recognizer.adjust_for_ambient_noise(source, duration=0.5)
+    if stop.is_set():
+        raise InterruptedError("Recording cancelled.")
+    recognizer, microphone = open_microphone()
     if stop.is_set():
         raise InterruptedError("Recording cancelled.")
 

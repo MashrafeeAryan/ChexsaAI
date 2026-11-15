@@ -74,6 +74,27 @@ def listen(recognizer, microphone, stop=None):
         raise RuntimeError("Speech recognition is unavailable. Check your internet connection.") from None
 
 
+def open_microphone():
+    """Set up the default microphone and explain common startup errors."""
+    try:
+        import speech_recognition as sr
+
+        microphone = sr.Microphone()
+    except (ImportError, AttributeError):
+        raise RuntimeError('Install voice support: python -m pip install -e ".[voice]"') from None
+    except OSError:
+        raise RuntimeError("No usable microphone. Check the Windows input device and permissions.") from None
+
+    recognizer = sr.Recognizer()
+    recognizer.operation_timeout = 10
+    try:
+        with microphone as source:
+            recognizer.adjust_for_ambient_noise(source, duration=0.5)
+    except OSError:
+        raise RuntimeError("Could not open the microphone. Check Windows microphone permissions.") from None
+    return recognizer, microphone
+
+
 # Listen for requests, pass them to the chosen agent, and speak its response.
 def main(mode="desktop"):
     if mode not in ("desktop", "browser", "gmail"):
@@ -82,19 +103,9 @@ def main(mode="desktop"):
     # Reuse the same app or browser connection across spoken requests.
     state = {}
     try:
-        import speech_recognition as sr
-    except ImportError:
-        print('Install voice support first: python -m pip install -e ".[voice]"')
-        return
-
-    try:
-        recognizer = sr.Recognizer()
-        recognizer.operation_timeout = 10  # Do not wait forever for transcription.
-        microphone = sr.Microphone()
+        recognizer, microphone = open_microphone()
         print(f"Chexsa voice - {mode} mode")
         print("Say Hey Chexsa. Press Ctrl+C to stop.")
-        with microphone as source:
-            recognizer.adjust_for_ambient_noise(source, duration=0.5)
 
         while True:
             request = get_request(listen(recognizer, microphone))
