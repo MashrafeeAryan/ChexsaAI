@@ -48,6 +48,20 @@ def build_server(folder):
             raise ValueError("The Python text has a syntax error.") from None
         return {"path": Path(saved).relative_to(folder).as_posix(), "saved": True}
 
+    @server.tool(annotations={"destructiveHint": True, "openWorldHint": False})
+    def edit_file(path: str, old: str, new: str, version: str) -> dict[str, Any]:
+        """Replace one exact match using the version from read_section."""
+        target = file_path(folder, path)
+        try:
+            saved_version = files_.edit_file(target, old, new, version)
+        except SyntaxError:
+            raise ValueError("The edit would break Python syntax.") from None
+        return {
+            "path": target.relative_to(folder).as_posix(),
+            "version": saved_version,
+            "saved": True,
+        }
+
     return server
 
 

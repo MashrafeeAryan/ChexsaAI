@@ -65,6 +65,28 @@ def test_create_file_keeps_existing_content():
         asyncio.run(asyncio.wait_for(exercise(folder, check), timeout=25))
 
 
+
+def test_edit_requires_current_file_version():
+    """A small edit succeeds once and a stale version cannot change the file."""
+    with TemporaryDirectory() as directory:
+        folder = Path(directory)
+        path = folder / "fib.py"
+        path.write_text("def fib(n):\n    return n\n", encoding="utf-8")
+
+        async def check(session):
+            """Read the version, edit, and try to reuse the old version."""
+            read = await session.call_tool("read_section", {"path": "fib.py", "query": "fib"})
+            args = {"path": "fib.py", "old": "return n", "new": "return n + 1",
+                    "version": read.structuredContent["version"]}
+            edit = await session.call_tool("edit_file", args)
+            assert not edit.isError, edit.content
+            stale = await session.call_tool("edit_file", {**args, "new": "return 0"})
+            assert stale.isError and "changed since" in str(stale.content)
+            assert path.read_text(encoding="utf-8") == "def fib(n):\n    return n + 1\n"
+
+        asyncio.run(asyncio.wait_for(exercise(folder, check), timeout=25))
+
+
 def load_tests(loader, tests, pattern):
     """Run the fixtures when the optional SDK is installed."""
     needs_sdk = skipUnless(find_spec("mcp"), "Install the MCP extra for these tests.")
