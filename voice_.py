@@ -157,6 +157,20 @@ def main(mode="desktop"):
         print("Voice stopped.")
 
 
+def check_voice():
+    """Open the default mic briefly and check Windows speech without going online."""
+    open_microphone()
+    speak("Chexsa voice check.")
+    print("Microphone opened and Windows speech finished.")
+
+
 # Choose the mode just like the terminal version.
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "desktop")
+    if sys.argv[1:] == ["--check"]:
+        try:
+            check_voice()
+        except Exception as error:
+            print(error if isinstance(error, RuntimeError) else "Windows speech could not finish.")
+            sys.exit(1)
+    else:
+        main(sys.argv[1] if len(sys.argv) > 1 else "desktop")

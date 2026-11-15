@@ -177,6 +177,11 @@ require separate benchmarks.
 This app version has on-demand dictation, not an always-listening wake-word loop.
 It reuses the existing Google speech recognition service, which needs an internet
 connection. It does not yet use a local wake model or local transcription.
+Run `python voice_.py --check` to open the default microphone briefly and hear
+a Windows test phrase. The check runs locally. Then try saying **Hey Chexsa,
+open YouTube** in terminal Browser mode. In the app, press the microphone and
+review the transcribed text before sending.
+
 Use `python voice_.py browser`, `desktop`, or `gmail` for the existing spoken-agent
 loop. Microphone accuracy and permissions still require testing on your device.
 

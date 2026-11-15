@@ -143,10 +143,19 @@ def test_missing_default_microphone_explains_the_problem():
             voice_.open_microphone()
 
 
+def test_voice_check_uses_local_audio_only():
+    """The device check opens the mic and plays a short test."""
+    with patch.object(voice_, "open_microphone") as mic, patch.object(voice_, "speak") as speak, patch("builtins.print"):
+        voice_.check_voice()
+    mic.assert_called_once_with()
+    speak.assert_called_once_with("Chexsa voice check.")
+
+
 # Run these plain test functions without introducing application classes.
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_windows_speech, test_acknowledgment, test_wake_phrase,
         test_stop_during_capture_skips_transcription, test_conversation, test_combined_request_and_silence, test_transcription_errors,
+        test_voice_check_uses_local_audio_only,
         test_missing_default_microphone_explains_the_problem, test_agent_error_and_cleanup, test_no_task_on_startup_or_invalid_mode,
     ))
