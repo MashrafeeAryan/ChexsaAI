@@ -41,9 +41,23 @@ class AppAudioTests(unittest.TestCase):
     def test_speech_stop_purges_playback(self):
         """The Stop flag clears Windows speech instead of waiting for a long reply."""
         stop = Event()
-        stop.set()
         speaker = Mock()
-        speaker.Status.RunningState = 2
+
+        def wait(_timeout):
+            """Stop while the first speech item is still queued."""
+            stop.set()
+            return False
+
+        speaker.WaitUntilDone.side_effect = wait
         with patch("win32com.client.Dispatch", return_value=speaker):
             voice_.speak("Example reply", cancel=stop)
         self.assertEqual(speaker.Speak.call_args.args, ("", 3))
+
+
+    def test_stopped_speech_does_not_start(self):
+        """An already cancelled request must stay silent."""
+        stop = Event()
+        stop.set()
+        with patch("win32com.client.Dispatch") as dispatch:
+            voice_.speak("Example reply", cancel=stop)
+        dispatch.assert_not_called()

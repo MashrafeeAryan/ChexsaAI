@@ -27,6 +27,8 @@ ACKNOWLEDGMENTS = (
 def speak(text, cancel=None):
     from win32com.client import Dispatch
 
+    if cancel is not None and cancel.is_set():
+        return
     speaker = Dispatch("SAPI.SpVoice")
     if cancel is None:
         speaker.Speak(text)
@@ -34,8 +36,9 @@ def speak(text, cancel=None):
 
     # Async speech lets the app stop playback without freezing its window.
     speaker.Speak(text, 1)
-    while speaker.Status.RunningState == 2:
-        if cancel.wait(0.05):
+    # WaitUntilDone also covers speech that is queued but hasn't started.
+    while not speaker.WaitUntilDone(50):
+        if cancel.is_set():
             speaker.Speak("", 3)  # Purge queued speech and stop the current reply.
             break
 
