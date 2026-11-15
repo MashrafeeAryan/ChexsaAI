@@ -62,6 +62,19 @@ def build_server(folder):
             "saved": True,
         }
 
+    @server.tool(annotations={"destructiveHint": False, "openWorldHint": False})
+    def copy_text(
+        source: str, destination: str, section: str = "", version: str | None = None,
+    ) -> dict[str, Any]:
+        """Copy text locally. Name a Word or Markdown heading to copy just that section."""
+        original = file_path(folder, source)
+        target = file_path(folder, destination)
+        try:
+            saved = files_.copy_file_text(original, str(target), section=section, version=version)
+        except FileExistsError:
+            raise ValueError("That destination already exists. Choose a new name.") from None
+        return {"path": Path(saved).relative_to(folder).as_posix(), "saved": True}
+
     return server
 
 

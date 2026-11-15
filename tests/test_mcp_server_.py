@@ -87,6 +87,34 @@ def test_edit_requires_current_file_version():
         asyncio.run(asyncio.wait_for(exercise(folder, check), timeout=25))
 
 
+
+def test_copy_word_section_without_returning_its_text():
+    """One MCP call copies the right section and returns only the save result."""
+    from docx import Document
+
+    with TemporaryDirectory() as directory:
+        folder = Path(directory)
+        report = Document()
+        report.add_heading("Conclusion", level=1)
+        report.add_paragraph("The report's fixture conclusion.")
+        report.add_heading("Appendix", level=1)
+        report.add_paragraph("Leave this in the report.")
+        report.save(folder / "report.docx")
+
+        async def check(session):
+            """Check the receipt and the file saved by the tool."""
+            result = await session.call_tool("copy_text", {
+                "source": "report.docx", "destination": "summary.txt",
+                "section": "Conclusion",
+            })
+            assert not result.isError, result.content
+            assert result.structuredContent == {"path": "summary.txt", "saved": True}
+            assert "fixture conclusion" not in str(result.content)
+            assert (folder / "summary.txt").read_text(encoding="utf-8") == "The report's fixture conclusion."
+
+        asyncio.run(asyncio.wait_for(exercise(folder, check), timeout=25))
+
+
 def load_tests(loader, tests, pattern):
     """Run the fixtures when the optional SDK is installed."""
     needs_sdk = skipUnless(find_spec("mcp"), "Install the MCP extra for these tests.")
