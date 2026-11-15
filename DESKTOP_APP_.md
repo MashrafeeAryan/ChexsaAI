@@ -95,6 +95,41 @@ A named section uses a Word heading or a Markdown heading starting with #.
 For a plain Word label, Chexsa copies the first nonempty paragraph below it.
 Name a full path to work outside the output folder.
 
+## Use Chexsa from an MCP client
+
+Install the optional MCP package from the Chexsa folder.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[mcp]"
+```
+
+Set your client to launch Chexsa over stdio. For clients that use
+`mcpServers` JSON, use this example and replace the folder with an existing
+folder you want to share.
+
+```json
+{
+  "mcpServers": {
+    "chexsa-files": {
+      "command": "G:/Chexsa/.venv/Scripts/python.exe",
+      "args": ["-m", "mcp_server_", "--folder", "G:/DemoFiles"]
+    }
+  }
+}
+```
+
+Ask **Copy the Conclusion from report.docx into summary.txt.** The client
+calls `copy_text` with the filenames and heading. Chexsa copies the text and
+returns a save receipt. The client can also read a short excerpt, create a file,
+or use the version from a read to make a targeted edit. Give paths relative
+to the shared folder. Use a folder containing the files you want the client
+to read and edit. The MCP server uses the client's model connection.
+
+The test starts the server as a subprocess and checks all four tools with
+temporary files. The benchmark against Windows MCP is a separate task.
+
+[Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk)
+
 ## Canvas assignments
 
 Ask in plain language from **Desktop** or **Browser** chat. Open the assignment
