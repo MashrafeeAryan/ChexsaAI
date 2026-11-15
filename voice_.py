@@ -31,11 +31,11 @@ def speak(text, cancel=None):
         return
     speaker = Dispatch("SAPI.SpVoice")
     if cancel is None:
-        speaker.Speak(text)
+        speaker.Speak(text, 16)  # Read literal text, including angle brackets.
         return
 
     # Async speech lets the app stop playback without freezing its window.
-    speaker.Speak(text, 1)
+    speaker.Speak(text, 17)  # 16 reads plain text and 1 lets it run in the background.
     # WaitUntilDone also covers speech that is queued but hasn't started.
     while not speaker.WaitUntilDone(50):
         if cancel.is_set():

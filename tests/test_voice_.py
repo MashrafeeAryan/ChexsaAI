@@ -11,9 +11,9 @@ import voice_
 def test_windows_speech():
     "Checks that spoken replies use the Windows speech engine."
     with patch("win32com.client.Dispatch") as speaker:
-        voice_.speak(voice_.GREETING)
+        voice_.speak("<tag>")
         speaker.assert_called_once_with("SAPI.SpVoice")
-        speaker.return_value.Speak.assert_called_once_with(voice_.GREETING)
+        speaker.return_value.Speak.assert_called_once_with("<tag>", 16)
 
 
 def test_acknowledgment():
