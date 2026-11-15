@@ -36,6 +36,18 @@ def build_server(folder):
         """Read a short excerpt. Use a phrase or function name, or blank for the start."""
         return files_.read_file_section(file_path(folder, path), query)
 
+    @server.tool(annotations={"destructiveHint": False, "openWorldHint": False})
+    def create_file(path: str, content: str) -> dict[str, Any]:
+        """Save a new text, Python, or Word file. Existing files stay untouched."""
+        target = file_path(folder, path)
+        try:
+            saved = files_.write_file(str(target), content)
+        except FileExistsError:
+            raise ValueError("That file already exists. Choose a new name.") from None
+        except SyntaxError:
+            raise ValueError("The Python text has a syntax error.") from None
+        return {"path": Path(saved).relative_to(folder).as_posix(), "saved": True}
+
     return server
 
 

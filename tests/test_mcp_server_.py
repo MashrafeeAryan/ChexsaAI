@@ -46,6 +46,25 @@ def test_read_section_and_folder_boundary():
         asyncio.run(asyncio.wait_for(exercise(folder, check), timeout=25))
 
 
+
+def test_create_file_keeps_existing_content():
+    """The client can save a verified file and cannot overwrite it."""
+    with TemporaryDirectory() as directory:
+        folder = Path(directory)
+
+        async def check(session):
+            """Try the same name twice."""
+            args = {"path": "notes.txt", "content": "First note"}
+            result = await session.call_tool("create_file", args)
+            assert not result.isError, result.content
+            assert result.structuredContent == {"path": "notes.txt", "saved": True}
+            denied = await session.call_tool("create_file", {**args, "content": "Second note"})
+            assert denied.isError
+            assert (folder / "notes.txt").read_text(encoding="utf-8") == "First note"
+
+        asyncio.run(asyncio.wait_for(exercise(folder, check), timeout=25))
+
+
 def load_tests(loader, tests, pattern):
     """Run the fixtures when the optional SDK is installed."""
     needs_sdk = skipUnless(find_spec("mcp"), "Install the MCP extra for these tests.")
