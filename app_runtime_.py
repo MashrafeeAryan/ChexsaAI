@@ -218,6 +218,7 @@ def save_browser_checkpoint(record, path=None, task_id=None):
         "status": record["status"],
         "pending": record["pending"],
         "progress": record["progress"],
+        "files": record.get("files", {}),
     }
     encrypted = win32crypt.CryptProtectData(
         json.dumps(data, ensure_ascii=False).encode("utf-8"),

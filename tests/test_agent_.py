@@ -160,9 +160,14 @@ class AgentLoopTests(unittest.TestCase):
         with TemporaryDirectory() as folder, patch("files_.OUTPUT_DIR", Path(folder)):
             result = agent_.run_agent("Save this page to fixture.txt", state)
             assert "Created and verified file" in result
-            assert (Path(folder) / "fixture.txt").read_text(encoding="utf-8") == "Fixture value"
+            saved = Path(folder) / "fixture.txt"
+            assert saved.read_text(encoding="utf-8") == "Fixture value"
+            assert state["last_metrics"]["outcome"] == "verified"
+            state["_checkpoint_path"] = Path(folder) / "tasks.sqlite3"
+            checkpoint_id = agent_.run_agent("/checkpoint", state).split()[-1].rstrip(".")
+            record = agent_.read_browser_checkpoint(checkpoint_id, state["_checkpoint_path"])
+            assert record["files"] == {str(saved.resolve()): agent_.sha256(saved.read_bytes()).hexdigest()}
         assert self.tools["get_reply"].call_count == 2
-        assert state["last_metrics"]["outcome"] == "verified"
 
     def test_page_text_can_stay_local_under_a_short_reference(self):
         """Capture returns only a reference, while the actual content stays in Python."""

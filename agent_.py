@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from hashlib import sha256
 from time import monotonic
 import re
 from urllib.parse import urlsplit
@@ -132,6 +133,7 @@ def _save_checkpoint(task, browser):
         "url": reading.get("url", task.get("saved_url", "")),
         "status": task["status"],
         "progress": actions,
+        "files": task.get("file_receipts", {}),
         "pending": bool(
             task.get("in_flight") or task.get("review_only")
             or (sent_click and task["status"] != "finished")
@@ -454,6 +456,8 @@ def _save_capture(task, action):
         path = write_file(str(target), text)
     except FileExistsError:
         raise RuntimeError("That file already exists. Choose a new filename.") from None
+    # Keep a version locally so a resumed task can distinguish the saved file from edits.
+    task.setdefault("file_receipts", {})[path] = sha256(Path(path).read_bytes()).hexdigest()
     return {"saved_path": path, "verified": True}
 
 
