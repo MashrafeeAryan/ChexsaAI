@@ -581,7 +581,29 @@ def test_desktop_counts_model_calls_without_recording_requests():
     assert create.call_count == 2
 
 
+def test_csv_tool_reads_a_named_file_without_opening_a_window():
+    """The fake model sees a short table, while the file tool does the reading."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    client = Mock()
+    with TemporaryDirectory() as folder:
+        path = Path(folder) / "small.csv"
+        path.write_text("Name,Price\nExample,10", encoding="utf-8")
+        client.chat.completions.create.side_effect = [
+            _response("read_csv_rows", {"path": str(path), "columns": ["Price"], "offset": 0}),
+            _response("reply", {"text": "The price is 10.", "done": False}),
+        ]
+        with patch.dict(os.environ, {"LLM_MODEL": "fake"}), patch.object(agent, "_client", client):
+            request = f'Read the Price column from "{path}"'
+            assert agent.run_desktop_agent(request, {}) == "The price is 10."
+    payload = json.loads(client.chat.completions.create.call_args_list[1].kwargs["messages"][-1]["content"])
+    result = payload["previous_actions"][0]["result"]
+    assert result["columns"] == ["Price"] and result["rows"] == [["10"]]
+
+
 def load_tests(loader, tests, pattern):
+    tests.addTest(unittest.FunctionTestCase(test_csv_tool_reads_a_named_file_without_opening_a_window))
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
         test_compact_view_rejects_ids_it_did_not_show,

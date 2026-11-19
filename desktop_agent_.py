@@ -27,7 +27,9 @@ from comtypes import COMError
 # Save files directly and read them back to check the result.
 import files_
 from observations_ import shown_control_ids
-from files_ import copy_file_text, edit_file, read_file, read_file_section, write_file
+from files_ import (
+    copy_file_text, edit_file, read_csv_rows, read_file, read_file_section, write_file,
+)
 
 # These functions do the actual Windows actions chosen by the model.
 from desktop_ import (
@@ -396,6 +398,18 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
             "Scroll a shown Windows container up or down.",
             {"node_id": _ID, "direction": {"type": "string"}},
         )]
+    if re.search(r"\.csv\b", request, re.I) or any(
+        Path(path).suffix.casefold() == ".csv" for path in recent_files or []
+    ):
+        tools = [*tools, _tool(
+            "read_csv_rows",
+            "Read a page of rows in known CSV columns. An empty columns list shows the first columns.",
+            {
+                "path": {"type": "string"},
+                "columns": {"type": "array", "items": {"type": "string"}},
+                "offset": {"type": "integer"},
+            },
+        )]
     search_tip = ""
     if observation is not None and "view" in observation:
         payload["window"]["view"] = observation["view"]
@@ -517,7 +531,7 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
 
         if kind == "array" and valid:
             # Control IDs contain numbers; keyboard shortcuts contain key names.
-            valid = bool(value) and all(
+            valid = (bool(value) or key == "columns") and all(
                 type(part) is int if key == "node_id" else isinstance(part, str)
                 for part in value
             )
@@ -794,6 +808,10 @@ def _run_desktop_request(request, state):
                 if entry["tool"] == "read_file_section" and entry["result"]["path"] == path:
                     entry["result"].pop("text", None)
 
+        elif name == "read_csv_rows":
+            path = _file_target(arguments["path"], request, remembered)
+            result = read_csv_rows(path, arguments["columns"], arguments["offset"])
+
         elif name in ("open_app", "use_open_app"):
             # Find the installed app, then remember its window and process.
             path = find_app(arguments["executable"])
@@ -880,7 +898,7 @@ def _run_desktop_request(request, state):
 
         # STEP 5: Read the updated app before asking the AI what to do next.
         # File saves need no window; desktop actions need a fresh reading.
-        if name not in ("write_file", "read_file_section", "edit_file", "copy_file_text"):
+        if name not in ("write_file", "read_file_section", "edit_file", "copy_file_text", "read_csv_rows"):
             check_cancelled(state)
             previous, observation = observation, _observe(state)
 
