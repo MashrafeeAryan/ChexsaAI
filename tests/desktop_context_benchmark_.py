@@ -149,6 +149,7 @@ def run_handoff(tokenizer, folder, local):
     assert str(target.resolve()) in answer
     assert state["last_metrics"]["model_calls"] == totals["calls"]
     assert state["last_metrics"]["outcome"] == "verified"
+    assert state["last_metrics"]["seconds"]["file_write"] > 0
     assert target.read_text(encoding="utf-8") == body and source.read_bytes() == before
     return {
         "method": "local" if local else "through_model",

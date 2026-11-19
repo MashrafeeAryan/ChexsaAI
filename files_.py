@@ -4,6 +4,7 @@ import ast
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
+from task_metrics_ import time_step
 import os
 import re
 from tempfile import NamedTemporaryFile
@@ -12,6 +13,7 @@ OUTPUT_DIR = Path(__file__).resolve().parent / "output"
 
 
 # Save a new file and read it back; existing files are never overwritten.
+@time_step("file_write")
 def write_file(path, content):
     if not isinstance(path, str) or not path.strip() or not isinstance(content, str):
         raise ValueError("Give a file path and the text to save.")
@@ -45,6 +47,7 @@ def write_file(path, content):
 
 
 # Read saved text in the right format so both file creation and completion can verify it.
+@time_step("file_read")
 def read_file(path):
     path = Path(path)
     if path.suffix.lower() == ".docx":
@@ -54,6 +57,7 @@ def read_file(path):
     return path.read_text(encoding="utf-8")
 
 
+@time_step("file_read")
 def read_file_section(path, query):
     """Return a small excerpt and its file version. A Python function name selects its body."""
     target = Path(path)
@@ -129,6 +133,7 @@ def _replace_file(target, before, after, check=None):
         temporary.unlink(missing_ok=True)
 
 
+@time_step("file_write")
 def edit_file(path, old, new, version=None, check=None):
     """Replace one exact span and return the version of the verified saved file."""
     target = Path(path)
@@ -202,6 +207,7 @@ def _edit_word(before, old, new):
     raise ValueError("The Word text crosses formatting runs. Edit one run at a time.")
 
 
+@time_step("file_copy")
 def copy_file_text(source, destination, *, section="", version=None, check=None):
     """Copy saved text into a new text or Word file. Return the verified path."""
     source = Path(source).resolve()
