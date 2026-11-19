@@ -1,6 +1,9 @@
 """Keep asking what to do next until the request ends or the agent must stop."""
 
 import os
+from pathlib import Path
+import re
+from urllib.parse import urlsplit
 
 from playwright.sync_api import Error
 
@@ -18,6 +21,7 @@ from browser_ import (
     read_options,
     scroll_page,
     type_node,
+    upload_file,
     run_action_group,
     wait_for_page,
 )
@@ -211,6 +215,40 @@ def _open_assignment(browser, url):
     check_cancelled(browser)
 
 
+def _attachment_path(request, page_url, name):
+    """Limit file attachments to a quoted path and a site named by the user."""
+    def origin(url):
+        """Ignore query, path, and fragment when comparing the allowed site."""
+        try:
+            address = urlsplit(url)
+            if address.scheme in ("http", "https") and address.hostname:
+                return (
+                    address.scheme,
+                    address.hostname,
+                    address.port or (443 if address.scheme == "https" else 80),
+                )
+        except ValueError:
+            pass
+        return None
+
+    current = origin(page_url)
+    links = re.findall(r'https?://[^\s"<>]+', request)
+    if current is None or not any(origin(url.rstrip(".,)")) == current for url in links):
+        raise RuntimeError("Name the attachment's destination with a full web address.")
+    if not any(match == name for match in re.findall(r'"([^"]+)"', request)):
+        raise RuntimeError("Give the local file's full path in double quotes.")
+
+    path = Path(name)
+    if not path.is_absolute() or len(path.drive) != 2 or path.drive[1] != ":":
+        raise RuntimeError("Use an absolute path on a local drive.")
+    if path.is_reserved() or any(":" in part for part in path.parts[1:]):
+        raise RuntimeError("Use a regular local file.")
+    resolved = path.resolve(strict=True)
+    if resolved != path or not resolved.is_file():
+        raise RuntimeError("Use the full path of a regular file without redirects.")
+    return resolved
+
+
 @time_step("action")
 def _navigate(page, action):
     """Navigate within the selected tab and report whether history was available."""
@@ -297,7 +335,7 @@ def _run_browser_task(task, browser, resuming=False):
         entry = {"action": action.copy(), "result": "Not completed."}
         history.append(entry)
         # Save input intent before execution. An exception must not erase it.
-        if action["action"] in ("click", "type", "set_checked", "select_option"):
+        if action["action"] in ("click", "type", "set_checked", "select_option", "upload_file"):
             task["in_flight"] = action.copy()
         # Any action error leaves this function immediately. Uncertain actions are not retried.
         if action["action"] == "observe":
@@ -325,6 +363,9 @@ def _run_browser_task(task, browser, resuming=False):
         elif action["action"] == "click":
             click_node(page, action["backend_node_id"])
             result = "Click sent. Check the new observation for its outcome."
+        elif action["action"] == "upload_file":
+            path = _attachment_path(message, page.url, action["path"])
+            result = upload_file(page, action["backend_node_id"], path)
         elif action["action"] == "select_option":
             select_option(page, action["backend_node_id"], action["label"])
             result = {"option": action["label"], "verified": True}

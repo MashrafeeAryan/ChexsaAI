@@ -4,6 +4,8 @@ from copy import deepcopy
 import json
 import os
 from types import SimpleNamespace
+from tempfile import TemporaryDirectory
+from pathlib import Path
 import unittest
 from unittest.mock import DEFAULT, Mock, patch
 
@@ -61,6 +63,18 @@ class AgentLoopTests(unittest.TestCase):
             with task_metrics_.measure_task({}) as metrics:
                 act()
         assert metrics["seconds"] == {"observation": 2, "action": 2, "task": 6}
+
+    def test_upload_needs_the_exact_user_file_and_site(self):
+        """A choice from page text alone cannot name the file or destination."""
+        with TemporaryDirectory() as folder:
+            file = Path(folder).resolve() / "example.txt"
+            file.write_text("test attachment", encoding="utf-8")
+            request = f'Attach "{file}" at https://example.test/form'
+            assert agent_._attachment_path(request, "https://example.test/next", str(file)) == file
+            with self.assertRaisesRegex(RuntimeError, "destination"):
+                agent_._attachment_path(request, "https://another.test/form", str(file))
+            with self.assertRaisesRegex(RuntimeError, "double quotes"):
+                agent_._attachment_path(request, "https://example.test/", str(file.parent / "other.txt"))
 
     def test_browser_stops_with_unverified_work_in_its_metrics(self):
         """A repeated action ends as a pause, never verified completion."""

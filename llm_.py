@@ -33,7 +33,7 @@ Follow the request. Do not invent a destination or claim an action already ran.
 # Describe each action once; repeated instructions also consume input tokens.
 SYSTEM_PROMPT = """You are ChexsaAI. Return one JSON object, no extra text.
 Actions:
-{"action":"discover","group":"navigation"} shows extra tools. Groups: navigation, inspection, checkboxes, choices.
+{"action":"discover","group":"navigation"} shows extra tools. Groups: navigation, inspection, checkboxes, choices, files.
 {"action":"navigate","url":"https://example.com"}
 {"action":"observe"} only when no page was supplied.
 {"action":"click","backend_node_id":18}
@@ -56,6 +56,7 @@ _EXTRA_ACTIONS = {
     'inspection': '{"action":"find_text","query":"Receipt","offset":0} searches readable page text.\n{"action":"inspect_region","backend_node_id":18,"offset":0} reads nearby controls in its form or dialog.\n{"action":"inspect_control","backend_node_id":18} shows flags and available operations.',
     'checkboxes': '{"action":"set_checked","backend_node_id":12,"checked":true} sets a checkbox or switch.',
     'choices': '{"action":"read_options","backend_node_id":12,"offset":0} lists choices from a native select.\n{"action":"select_option","backend_node_id":12,"label":"First choice"} selects an exact label.',
+    'files': '{"action":"upload_file","backend_node_id":12,"path":"full path from request"} attaches one file to an exact native input. The request must name the site and quote the full path.',
 }
 
 
@@ -234,6 +235,12 @@ def get_reply(message, observation=None, history=None, previous=None):
             and target > 0
             and target in visible_targets
         ):
+            return action
+    elif action.get("action") == "upload_file" and set(action) == {
+        "action", "backend_node_id", "path",
+    }:
+        target, path = action["backend_node_id"], action["path"]
+        if type(target) is int and target in visible_targets and isinstance(path, str) and path:
             return action
     elif action.get("action") == "select_option" and set(action) == {
         "action", "backend_node_id", "label",
