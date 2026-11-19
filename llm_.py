@@ -2,7 +2,6 @@
 
 import json
 import os
-import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -13,6 +12,7 @@ from task_metrics_ import call_model
 from observations_ import (
     compact_history,
     page_context,
+    shown_control_ids,
     validate_action_group,
     validate_wait,
 )
@@ -144,9 +144,7 @@ def get_reply(message, observation=None, history=None, previous=None):
         descriptions = (
             view["elements"] + "\n" + view.get("search", {}).get("elements", "")
         )
-        visible_targets = {
-            int(node) for node in re.findall(r"^\[(\d+)\]", descriptions, re.MULTILINE)
-        }
+        visible_targets = shown_control_ids(descriptions, browser=True)
     user_message = json.dumps(user_message, ensure_ascii=False)
 
     try:

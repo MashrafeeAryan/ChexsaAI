@@ -1,6 +1,32 @@
 """Compare local page readings and choose a small view for the AI."""
 
+import json
 import re
+
+
+def shown_control_ids(text, *, browser=False):
+    """Read target IDs from the leading label on each displayed control line.
+
+    Example: '[12] button "Save"' gives 12 in Chrome or (12,) in Windows.
+    Descriptions and their text cannot create targets on their own.
+    """
+    ids = set()
+    for line in text.splitlines():
+        prefix, marker, _ = line.partition("] ")
+        if not marker or not prefix.startswith("["):
+            continue
+        try:
+            parts = json.loads(prefix + "]")
+        except (ValueError, RecursionError):
+            continue
+        if not parts or any(type(part) is not int for part in parts):
+            continue
+        if browser:
+            if len(parts) == 1 and parts[0] > 0:
+                ids.add(parts[0])
+        else:
+            ids.add(tuple(parts))
+    return ids
 
 
 def validate_action_group(actions, shown_ids):

@@ -26,6 +26,7 @@ from comtypes import COMError
 
 # Save files directly and read them back to check the result.
 import files_
+from observations_ import shown_control_ids
 from files_ import copy_file_text, edit_file, read_file, read_file_section, write_file
 
 # These functions do the actual Windows actions chosen by the model.
@@ -477,9 +478,9 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
         raise RuntimeError("The model returned an empty app name or reply.")
 
     if name in ("click_control", "type_text"):
-        prefix = json.dumps(arguments["node_id"]) + " "
-        if observation is None or not any(
-            line.startswith(prefix) for line in observation["elements"].splitlines()
+        if (
+            observation is None
+            or tuple(arguments["node_id"]) not in shown_control_ids(observation["elements"])
         ):
             raise RuntimeError("That control was not shown in the current view. Search for it first.")
 
