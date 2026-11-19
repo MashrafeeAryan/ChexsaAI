@@ -159,13 +159,76 @@ def run_handoff(tokenizer, folder, local):
     }
 
 
+def run_field_group(tokenizer, grouped):
+    """Compare the same two verified desktop writes with one plan or two."""
+    reading = {
+        "title": "Test form",
+        "window_id": (1,),
+        "elements": '[2] Edit "Reference"\n[3] Edit "Quantity"',
+        "unavailable_controls": 0,
+        "controls": {(2,): object(), (3,): object()},
+    }
+    fields = [
+        {"node_id": [2], "text": "Sample reference"},
+        {"node_id": [3], "text": "45"},
+    ]
+    written = {}
+    totals = {"input": 0, "output": 0, "calls": 0}
+
+    def choose(**kwargs):
+        """Choose the scripted next action and count the exact text provided."""
+        if len(written) == len(fields):
+            tool, arguments = "reply", {"text": "Verified", "done": True}
+        elif grouped:
+            tool, arguments = "type_fields", {"fields": fields}
+        else:
+            tool, arguments = "type_text", fields[len(written)]
+        totals["calls"] += 1
+        totals["input"] += sum(len(tokenizer.encode(item["content"]).ids) for item in kwargs["messages"])
+        totals["input"] += len(tokenizer.encode(json.dumps(kwargs["tools"])).ids)
+        totals["output"] += len(tokenizer.encode(json.dumps({"tool": tool, "arguments": arguments})).ids)
+        return _response(tool, arguments)
+
+    def type_field(observation, node, value):
+        """Check each exact control and the value sent to it."""
+        assert observation is reading and tuple(node) in reading["controls"]
+        written[tuple(node)] = value
+        return "Verified"
+
+    client = Mock()
+    client.chat.completions.create.side_effect = choose
+    state = {"window": object()}
+    with (
+        patch.dict(os.environ, {"LLM_MODEL": "fixture"}),
+        patch.object(agent, "_client", client),
+        patch.object(agent, "_observe", return_value=reading),
+        patch.object(agent, "type_text", side_effect=type_field),
+        patch.object(agent, "read_text", side_effect=lambda view, node: written[tuple(node)]),
+    ):
+        started = perf_counter()
+        result = agent.run_desktop_agent("Enter Sample reference in Reference and 45 in Quantity.", state)
+        elapsed = perf_counter() - started
+    assert written == {(2,): "Sample reference", (3,): "45"} and result == "Verified"
+    assert totals["calls"] == state["last_metrics"]["model_calls"]
+    assert totals["calls"] == (2 if grouped else 3)
+    return {
+        "method": "grouped" if grouped else "sequential",
+        "verified": True, **totals, "local_seconds": round(elapsed, 4),
+    }
+
+
 def main():
     """Run offline and print counts without recording prompt or file content."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tokenizer", type=Path, required=True)
+    parser.add_argument("--field-groups", action="store_true", help="Compare Windows field batching.")
     parser.add_argument("--handoff", action="store_true", help="Measure copying a Word section.")
     args = parser.parse_args()
     tokenizer = Tokenizer.from_file(str(args.tokenizer))
+    if args.field_groups:
+        for grouped in (False, True):
+            print(json.dumps(run_field_group(tokenizer, grouped)))
+        return
     with TemporaryDirectory() as folder:
         if args.handoff:
             for local in (False, True):
