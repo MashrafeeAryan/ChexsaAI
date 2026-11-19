@@ -153,6 +153,11 @@ class AgentLoopTests(unittest.TestCase):
         history = state["_browser_task"]["history"]
         assert text not in str(history)
         assert history[1]["result"]["verified"] is True
+        with self.assertRaisesRegex(RuntimeError, "regular text"):
+            agent_._save_capture(
+                {"request": "Save", "artifacts": {1: text}},
+                {"capture": 1, "path": "existing.txt:hidden.txt"},
+            )
 
     def test_saved_task_records_input_intent_before_clicking(self):
         """An interruption during a click leaves the disk record uncertain."""

@@ -375,7 +375,8 @@ def _save_capture(task, action):
     target = Path(action["path"])
     if target.suffix.lower() not in (".txt", ".md", ".docx"):
         raise RuntimeError("Save captured text to a .txt, .md, or .docx file.")
-    if target.is_reserved() or any(":" in part for part in target.parts[1:]):
+    parts = target.parts[1:] if target.is_absolute() else target.parts
+    if target.is_reserved() or any(":" in part for part in parts):
         raise RuntimeError("Use the name of a regular text or Word document.")
     if target.is_absolute():
         if (
