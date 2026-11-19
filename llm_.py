@@ -36,6 +36,7 @@ Actions:
 {"action":"navigate","url":"https://example.com"}
 {"action":"observe"} only when no page was supplied.
 {"action":"go_back"} or {"action":"go_forward"} moves in this tab's history.
+{"action":"scroll","direction":"down"} scrolls one screen; direction may be up.
 {"action":"click","backend_node_id":18}
 {"action":"type","backend_node_id":12,"text":"Hello"} replaces the whole field, without submitting.
 {"action":"find_elements","query":"Send","offset":0} searches all locally collected controls; empty query lists them. Use next_offset for more.
@@ -245,6 +246,9 @@ def get_reply(message, observation=None, history=None, previous=None):
             type(target) is int and target in visible_targets
             and type(offset) is int and offset >= 0
         ):
+            return action
+    elif action.get("action") == "scroll" and set(action) == {"action", "direction"}:
+        if observation is not None and action["direction"] in ("up", "down"):
             return action
     elif action in ({"action": "go_back"}, {"action": "go_forward"}) and observation is not None:
         return action

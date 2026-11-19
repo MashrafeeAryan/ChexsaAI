@@ -229,6 +229,22 @@ def read_page(page):
         raise
 
 
+@time_step("action")
+def scroll_page(page, direction):
+    """Move about one screen in the active page and return whether it moved."""
+    if direction not in ("up", "down"):
+        raise ValueError("Choose up or down.")
+    return page.evaluate(
+        """direction => {
+            const before = window.scrollY;
+            const distance = Math.round(window.innerHeight * 0.8);
+            window.scrollBy({top: direction === "down" ? distance : -distance, behavior: "instant"});
+            return window.scrollY !== before;
+        }""",
+        direction,
+    )
+
+
 # Check that a Chrome node was observed in this tab and is still on the page.
 def resolve_node(page, backend_node_id):
     observation = _observations.get(page)

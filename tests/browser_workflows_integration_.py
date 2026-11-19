@@ -167,6 +167,16 @@ def run_case(page, runtime, name, grouped=False, tokenizer=None, delay=0):
     return metrics
 
 
+def check_scroll(page):
+    """Scroll a disposable page without coordinates and detect the end."""
+    page.set_content('<main style="height: 2400px">Example</main>')
+    assert browser_.scroll_page(page, "down") is True
+    assert page.evaluate("window.scrollY") > 0
+    while browser_.scroll_page(page, "down"):
+        pass
+    assert browser_.scroll_page(page, "up") is True
+
+
 def check_action_groups(page):
     """Exercise real node guards when a page changes between grouped actions."""
     case = CASES["profile"]
@@ -693,6 +703,7 @@ def main():
                             flush=True,
                         )
             if not args.single_only:
+                check_scroll(page)
                 check_action_groups(page)
                 check_group_progress(page)
                 check_unchanged_fields(page)

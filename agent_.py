@@ -10,6 +10,7 @@ from browser_ import (
     click_node,
     open_browser,
     read_page,
+    scroll_page,
     type_node,
     run_action_group,
     wait_for_page,
@@ -290,6 +291,8 @@ def _run_browser_task(task, browser, resuming=False):
             result = "Local search requested; fresh matches are supplied with the next observation."
         elif action["action"] in ("navigate", "go_back", "go_forward"):
             result = _navigate(page, action)
+        elif action["action"] == "scroll":
+            result = {"moved": scroll_page(page, action["direction"])}
         elif action["action"] == "click":
             click_node(page, action["backend_node_id"])
             result = "Click sent. Check the new observation for its outcome."
