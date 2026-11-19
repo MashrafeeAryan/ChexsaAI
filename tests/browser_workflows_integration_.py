@@ -180,6 +180,17 @@ def check_renamed_node(page):
     else:
         raise AssertionError("A renamed button received the old click.")
     assert page.evaluate("window.wrong") is None
+    page.set_content('<label id="label">Notes<input value="old"></label>')
+    view = browser_.read_page(page)
+    target = next(iter(view["controls"]))
+    page.locator("#label").evaluate("label => label.firstChild.textContent = 'Different field'")
+    try:
+        browser_.type_node(page, target, "new")
+    except RuntimeError as error:
+        assert "label changed" in str(error)
+    else:
+        raise AssertionError("A renamed field received the old write.")
+    assert page.locator("input").input_value() == "old"
 
 
 def check_selection(page):

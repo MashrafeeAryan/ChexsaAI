@@ -700,6 +700,7 @@ def type_node(page, backend_node_id, text):
     attempted = False
 
     try:
+        _verify_label(page, session, target)
         session.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": target})
         node = session.send("DOM.resolveNode", {"backendNodeId": target})["object"][
             "objectId"
