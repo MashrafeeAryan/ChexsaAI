@@ -395,6 +395,23 @@ def resolve_node(page, backend_node_id):
         ) from None
 
 
+def _verify_label(page, session, target):
+    """Refuse input if the node's role or accessible name changed since the reading."""
+    shown = _observations[page]["observation"]["controls"][target]
+    reply = session.send(
+        "Accessibility.getPartialAXTree",
+        {"backendNodeId": target, "fetchRelatives": False},
+    )
+    for node in reply.get("nodes", []):
+        if node.get("backendDOMNodeId") != target or node.get("ignored"):
+            continue
+        role = node.get("role", {}).get("value", "").lower()
+        name = node.get("name", {}).get("value", "")
+        if (role, name) == (shown["role"], shown["name"]):
+            return
+    raise RuntimeError("The control's role or label changed. Read the page before sending input.")
+
+
 # Click an observed Chrome node through CDP; this does not move the Windows cursor.
 @time_step("action")
 def click_node(page, backend_node_id):
@@ -403,6 +420,7 @@ def click_node(page, backend_node_id):
     pressed = False
 
     try:
+        _verify_label(page, session, target)
         session.send("DOM.scrollIntoViewIfNeeded", {"backendNodeId": target})
         node = session.send("DOM.resolveNode", {"backendNodeId": target})["object"][
             "objectId"

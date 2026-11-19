@@ -167,6 +167,21 @@ def run_case(page, runtime, name, grouped=False, tokenizer=None, delay=0):
     return metrics
 
 
+def check_renamed_node(page):
+    """A still-attached button whose meaning changed must not receive the old click."""
+    page.set_content('<button onclick="window.wrong = true">Preview</button>')
+    view = browser_.read_page(page)
+    target = next(iter(view["controls"]))
+    page.locator("button").evaluate("node => node.innerText = 'Submit'")
+    try:
+        browser_.click_node(page, target)
+    except RuntimeError as error:
+        assert "label changed" in str(error)
+    else:
+        raise AssertionError("A renamed button received the old click.")
+    assert page.evaluate("window.wrong") is None
+
+
 def check_selection(page):
     """Read selected text without copying the rest of the page or using the clipboard."""
     page.set_content("<p id='selected'>Chosen text</p><p>Other text</p>")
@@ -791,6 +806,7 @@ def main():
                             flush=True,
                         )
             if not args.single_only:
+                check_renamed_node(page)
                 check_selection(page)
                 check_file_attachment(page)
                 check_options(page)
