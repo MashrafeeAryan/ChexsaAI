@@ -26,7 +26,7 @@ from browser_ import (
     wait_for_page,
 )
 from llm_ import choose_engine, get_reply
-from app_runtime_ import check_cancelled
+from app_runtime_ import check_cancelled, read_browser_checkpoint, save_browser_checkpoint
 from task_metrics_ import measure_task, record_outcome, time_step
 
 
@@ -53,6 +53,32 @@ def run_auto_agent(message, state, browser, desktop):
         return run_desktop_agent(message, desktop)
 
 
+def _save_checkpoint(task, browser):
+    """Keep what was verified or sent, without storing live browser IDs."""
+    actions = {}
+    for entry in task["history"]:
+        kind = entry["action"]["action"]
+        result = entry["result"]
+        if kind in ("type", "set_checked", "select_option", "upload_file", "click"):
+            if result != "Not completed.":
+                actions[kind] = actions.get(kind, 0) + 1
+        elif kind == "batch" and isinstance(result, dict):
+            actions["group_actions"] = actions.get("group_actions", 0) + result.get("completed", 0)
+
+    reading = task.get("_observation") or {}
+    record = {
+        "request": task["request"],
+        "url": reading.get("url", task.get("saved_url", "")),
+        "status": task["status"],
+        "progress": actions,
+        "pending": bool(task.get("in_flight") or task.get("review_only")),
+    }
+    task["checkpoint_id"] = save_browser_checkpoint(
+        record, browser.get("_checkpoint_path"), task.get("checkpoint_id")
+    )
+    return task["checkpoint_id"]
+
+
 # Keep one request and its action history together while working in the browser.
 def run_agent(message, browser):
     """Run one browser request and keep its local model call count."""
@@ -68,6 +94,12 @@ def _run_request(message, browser):
     """
     check_cancelled(browser)
     parts = message.strip().split(maxsplit=1)
+    if parts and parts[0].casefold() == "/checkpoint":
+        task = browser.get("_browser_task")
+        if task is None:
+            return "There is no browser task to save."
+        task_id = _save_checkpoint(task, browser)
+        return f"Saved local browser checkpoint {task_id}."
     if parts and parts[0].casefold() == "/canvas":
         return canvas_command(
             parts[1] if len(parts) > 1 else "",

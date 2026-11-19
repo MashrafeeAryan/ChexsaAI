@@ -64,6 +64,29 @@ class AgentLoopTests(unittest.TestCase):
                 act()
         assert metrics["seconds"] == {"observation": 2, "action": 2, "task": 6}
 
+    def test_checkpoint_saves_progress_without_native_target_ids(self):
+        """Only the goal, site, and action counts survive the process."""
+        from app_runtime_ import read_browser_checkpoint
+
+        state = {"_browser_task": {
+            "request": "Enter supplied information", "status": "paused",
+            "_observation": {"url": "https://example.test/form"},
+            "history": [
+                {"action": {"action": "type", "backend_node_id": 991}, "result": "Verified"},
+            ],
+            "in_flight": {"action": "click", "backend_node_id": 992},
+        }}
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "tasks.sqlite3"
+            state["_checkpoint_path"] = path
+            response = agent_.run_agent("/checkpoint", state)
+            task_id = response.split()[-1].rstrip(".")
+            checkpoint = read_browser_checkpoint(task_id, path)
+        assert checkpoint["progress"] == {"type": 1}
+        assert checkpoint["pending"] is True
+        assert "991" not in str(checkpoint) and "992" not in str(checkpoint)
+        self.tools["get_reply"].assert_not_called()
+
     def test_terminal_auto_accepts_requests_without_opening_an_app_on_start(self):
         """Only the entered request reaches the Auto dispatcher."""
         import cli_
