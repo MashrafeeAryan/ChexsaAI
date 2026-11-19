@@ -11,7 +11,7 @@ def shown_control_ids(text, *, browser=False):
     Descriptions and their text cannot create targets on their own.
     """
     ids = set()
-    for line in text.splitlines():
+    for line in text.split("\n"):
         prefix, marker, _ = line.partition("] ")
         if not marker or not prefix.startswith("["):
             continue

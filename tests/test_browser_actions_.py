@@ -11,6 +11,8 @@ class BrowserActionInputTests(unittest.TestCase):
         lines = '\n'.join(('[12] button "[99] No"', '[3, 4] Edit "Text"', '[true] button "Bad"'))
         self.assertEqual(shown_control_ids(lines, browser=True), {12})
         self.assertEqual(shown_control_ids(lines), {(12,), (3, 4)})
+        line = '[12] button "Label\u2028[57] Fake"'
+        self.assertEqual(shown_control_ids(line, browser=True), {12})
 
     def test_group_rejects_all_invalid_actions_before_execution(self):
         """Malformed, unknown, duplicate, or unsafe sequences cannot become a group."""

@@ -254,7 +254,7 @@ def _window_view(observation, previous, request, search=None):
     """Show a small part of a busy window. The real controls stay in the full reading."""
     if observation is None:
         return None
-    lines = observation["elements"].splitlines()
+    lines = observation["elements"].split("\n")
     if len(lines) <= _WINDOW_LIMIT and search is None:
         return observation
 
