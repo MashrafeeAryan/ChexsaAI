@@ -137,6 +137,23 @@ class AgentLoopTests(unittest.TestCase):
         assert task["artifacts"][1] == text
         assert task["history"][0]["result"] == {"capture": 1, "characters": len(text)}
 
+    def test_save_page_capture_directly_without_sending_content_back(self):
+        """The file engine receives the local text. The model sees a saved path."""
+        state = {"playwright": object(), "page": self.page}
+        text = "Private fixture page text"
+        self.tools["read_page"].return_value = {"content": text}
+        self.tools["get_reply"].side_effect = [
+            {"action": "capture_page_text"},
+            {"action": "save_capture", "capture": 1, "path": "example.txt"},
+            {"action": "reply", "text": "Saved"},
+        ]
+        with TemporaryDirectory() as folder, patch("files_.OUTPUT_DIR", Path(folder)):
+            assert agent_.run_agent("Save the page text as example.txt", state) == "Saved"
+            assert (Path(folder) / "example.txt").read_text(encoding="utf-8") == text
+        history = state["_browser_task"]["history"]
+        assert text not in str(history)
+        assert history[1]["result"]["verified"] is True
+
     def test_saved_task_records_input_intent_before_clicking(self):
         """An interruption during a click leaves the disk record uncertain."""
         state = {"playwright": object(), "page": self.page}

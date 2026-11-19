@@ -26,6 +26,7 @@ from browser_ import (
     wait_for_page,
 )
 from llm_ import choose_engine, get_reply
+from files_ import write_file
 from app_runtime_ import (
     check_cancelled,
     delete_browser_checkpoint,
@@ -366,6 +367,31 @@ def _capture_text(task, text):
     return {"capture": number, "characters": len(text)}
 
 
+def _save_capture(task, action):
+    """Save existing captured text in a new file and verify it through the file tool."""
+    text = task.get("artifacts", {}).get(action["capture"])
+    if text is None:
+        raise RuntimeError("Capture the text in this task before saving it.")
+    target = Path(action["path"])
+    if target.suffix.lower() not in (".txt", ".md", ".docx"):
+        raise RuntimeError("Save captured text to a .txt, .md, or .docx file.")
+    if target.is_reserved() or any(":" in part for part in target.parts[1:]):
+        raise RuntimeError("Use the name of a regular text or Word document.")
+    if target.is_absolute():
+        if (
+            len(target.drive) != 2 or target.drive[1] != ":"
+            or action["path"] not in re.findall(r'"([^"]+)"', task["request"])
+        ):
+            raise RuntimeError("Give the full destination path in double quotes, or use a filename.")
+    elif len(target.parts) != 1 or target.drive:
+        raise RuntimeError("Use one filename in Chexsa's output folder.")
+    try:
+        path = write_file(str(target), text)
+    except FileExistsError:
+        raise RuntimeError("That file already exists. Choose a new filename.") from None
+    return {"saved_path": path, "verified": True}
+
+
 def _attachment_path(request, page_url, name):
     """Limit file attachments to a quoted path and a site named by the user."""
     def origin(url):
@@ -514,6 +540,8 @@ def _run_browser_task(task, browser, resuming=False):
             browser["page"] = page
             listed_tabs = {}
             result = "Selected the listed tab. Read its current page."
+        elif action["action"] == "save_capture":
+            result = _save_capture(task, action)
         elif action["action"] == "capture_page_text":
             result = _capture_text(task, observation.get("content", ""))
         elif action["action"] == "inspect_control":
