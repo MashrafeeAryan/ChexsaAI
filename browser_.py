@@ -276,7 +276,12 @@ def read_page(page):
 @time_step("observation")
 def selected_page_text(page):
     """Return selected regular page text without reading a field or clipboard."""
-    return page.evaluate("() => window.getSelection()?.toString() || ''")
+    return page.evaluate("""() => {
+        let focus = document.activeElement;
+        while (focus?.shadowRoot?.activeElement) focus = focus.shadowRoot.activeElement;
+        if (focus?.matches('input, textarea') || focus?.isContentEditable) return '';
+        return window.getSelection()?.toString() || '';
+    }""")
 
 
 @time_step("action")

@@ -177,6 +177,9 @@ def check_selection(page):
         window.getSelection().addRange(range);
     }""")
     assert browser_.selected_page_text(page) == "Chosen text"
+    page.set_content('<input type="password" value="private fixture">')
+    page.locator("input").evaluate("node => {node.focus(); node.select();}")
+    assert browser_.selected_page_text(page) == ""
 
 
 def check_file_attachment(page):
