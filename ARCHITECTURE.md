@@ -1,8 +1,11 @@
 # Current ChexsaAI architecture
 
-The rebuild uses plain functions and dictionaries. The user chooses desktop or
-browser mode; the model does not switch engines. `voice_.py` accepts spoken
-requests, calls the selected agent, and speaks its response.
+Chexsa uses plain functions and dictionaries. Select a manual engine or use
+Auto in the desktop app or with `python cli_.py auto`. In Auto, one model
+decision selects the browser or Windows engine. Both engines retain their
+own state. A request uses one engine at a time. In manual modes, the request
+goes directly to the selected engine. `voice_.py` accepts spoken requests,
+calls the selected agent, and speaks its response.
 
 ```text
 cli_.py: user request
@@ -89,7 +92,7 @@ scripted action/reply text; they are not provider-reported total API usage.
 ## Future work
 
 - **Voice:** improve wake-word detection and microphone reliability.
-- **Automatic mode choice:** let Chexsa choose browser or desktop tools.
+- **Cross-engine plans:** let a single task pass verified work between the browser, Windows apps, and files.
 - **Saved skills:** remember successful steps and reuse them.
 - **Shared skills:** learn useful workflows from other users.
 - **More browser tools:** add tabs, scrolling, uploads, and other actions.
