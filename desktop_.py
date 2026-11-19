@@ -313,6 +313,22 @@ def click_control(observation, node_id):
 
 
 @time_step("action")
+def focus_control(observation, node_id):
+    """Focus exactly the shown control and read Windows' current focus to check it."""
+    control = _get_control(observation, node_id)
+    _observations.pop(observation["window_id"], None)
+    try:
+        if not control.has_keyboard_focus():
+            control.set_focus()
+        focused = tuple(IUIA().iuia.GetFocusedElement().GetRuntimeId())
+        if focused == tuple(node_id):
+            return {"focused": True, "verified": True}
+    except (COMError, OSError):
+        pass
+    raise RuntimeError("Windows could not verify focus. Read the window again.")
+
+
+@time_step("action")
 def expand_control(observation, node_id, expanded):
     """Open or close a Windows group through its ExpandCollapse pattern."""
     if type(expanded) is not bool:

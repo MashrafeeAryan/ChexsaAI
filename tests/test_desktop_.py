@@ -322,13 +322,25 @@ def test_read_selection_keeps_password_fields_private():
     assert desktop_.read_selection(reading, node) == {"text": "Only this text", "more": False}
 
 
+def test_focus_control_requires_the_exact_focused_id():
+    """Another focused field cannot count as success."""
+    reading, control = _reading()
+    control.has_keyboard_focus.return_value = False
+    node = next(iter(reading["controls"]))
+    with patch.object(desktop_, "IUIA") as uia:
+        uia.return_value.iuia.GetFocusedElement.return_value.GetRuntimeId.return_value = (99,)
+        with unittest.TestCase().assertRaisesRegex(RuntimeError, "verify focus"):
+            desktop_.focus_control(reading, node)
+    control.set_focus.assert_called_once_with()
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_window_selection, test_invalid_launches,
         test_read_window_controls, test_read_window_unavailable,
         test_toggle_control_verifies_a_known_state, test_select_control_verifies_the_exact_item,
         test_expand_control_checks_the_pattern_state, test_inspect_disabled_control_without_sending_input,
-        test_read_selection_keeps_password_fields_private,
+        test_read_selection_keeps_password_fields_private, test_focus_control_requires_the_exact_focused_id,
         test_click_exact_control_and_refresh, test_action_target_guards,
         test_click_failure_is_not_retried, test_type_field_verification,
         test_type_document_focus_and_verification, test_click_covered_target,

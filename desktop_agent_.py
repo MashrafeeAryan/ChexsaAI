@@ -35,6 +35,7 @@ from desktop_ import (
     find_app,
     inspect_control,
     expand_control,
+    focus_control,
     open_app,
     press_key,
     read_selection,
@@ -377,6 +378,10 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
             "read_selection",
             "Read selected text from a shown Windows text control when the user asks.",
             {"node_id": _ID},
+        ), _tool(
+            "focus_control",
+            "Set keyboard focus on an exact shown field and verify it.",
+            {"node_id": _ID},
         )]
     search_tip = ""
     if observation is not None and "view" in observation:
@@ -515,7 +520,7 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
 
     if name in (
         "click_control", "type_text", "toggle_control", "select_control",
-        "expand_control", "inspect_control", "read_selection",
+        "expand_control", "inspect_control", "read_selection", "focus_control",
     ):
         if (
             observation is None
@@ -809,6 +814,9 @@ def _run_desktop_request(request, state):
 
         elif name == "expand_control":
             result = expand_control(observation, arguments["node_id"], arguments["expanded"])
+
+        elif name == "focus_control":
+            result = focus_control(observation, arguments["node_id"])
 
         elif name == "read_selection":
             result = read_selection(observation, arguments["node_id"])
