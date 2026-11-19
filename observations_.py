@@ -310,13 +310,18 @@ def page_context(current, previous, request, history):
             None,
         )
 
-    region = anchor["context"][0] if anchor and anchor["context"] else None
+    region = anchor.get("region_id") if anchor else None
+    label = anchor["context"][0] if anchor and anchor["context"] else None
 
-    # Keep the focused form or dialog ahead of broad matches elsewhere on the page.
+    # Prefer the actual region identity. A name can be shared by two dialogs.
     regional = [
         node
         for node, control in controls.items()
-        if region and region in control["context"]
+        if (
+            control.get("region_id") == region
+            if region is not None
+            else label and label in control["context"]
+        )
     ]
     relevant = [
         node

@@ -98,6 +98,9 @@ class BrowserObservationTests(unittest.TestCase):
         self.assertIn("[19]", result["elements"])
         self.assertIn("[113]", result["elements"])
         self.assertNotIn("[16]", result["elements"])
+        observation["controls"][19]["states"]["focused"] = True
+        view = observations_.page_context(observation, None, "Handle the dialog", [])
+        self.assertLess(view["elements"].index("[113]"), view["elements"].index("[16]"))
 
     def test_full_original_tree_stays_local_including_values_and_hierarchy(self):
         "Checks that the complete page structure stays on the computer."
