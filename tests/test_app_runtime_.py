@@ -92,6 +92,10 @@ class ChatStorageTests(unittest.TestCase):
             self.assertEqual(record["progress"], {"verified_fields": 1})
             self.assertNotIn("page", record)
             self.assertNotIn(b"Compare fake products", path.read_bytes())
+            other = app_runtime_.save_browser_checkpoint(checkpoint, path)
+            self.assertTrue(app_runtime_.delete_browser_checkpoint(task_id, path))
+            self.assertFalse(app_runtime_.delete_browser_checkpoint(task_id, path))
+            self.assertEqual(app_runtime_.read_browser_checkpoint(other, path), record)
             with self.assertRaisesRegex(RuntimeError, "No saved browser task"):
                 app_runtime_.read_browser_checkpoint("unknown", path)
 

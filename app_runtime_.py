@@ -248,6 +248,15 @@ def read_browser_checkpoint(task_id, path=None):
     return record
 
 
+def delete_browser_checkpoint(task_id, path=None):
+    """Forget one saved record while leaving other tasks and chats alone."""
+    from contextlib import closing
+
+    with closing(_task_database(path)) as connection, connection:
+        result = connection.execute("DELETE FROM browser_tasks WHERE id = ?", (task_id,))
+        return result.rowcount == 1
+
+
 def check_cancelled(state):
     """Stop at a safe boundary when the app's Stop button has been pressed.
 

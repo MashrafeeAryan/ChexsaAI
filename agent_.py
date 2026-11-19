@@ -26,7 +26,12 @@ from browser_ import (
     wait_for_page,
 )
 from llm_ import choose_engine, get_reply
-from app_runtime_ import check_cancelled, read_browser_checkpoint, save_browser_checkpoint
+from app_runtime_ import (
+    check_cancelled,
+    delete_browser_checkpoint,
+    read_browser_checkpoint,
+    save_browser_checkpoint,
+)
 from task_metrics_ import measure_task, record_outcome, time_step
 
 
@@ -38,7 +43,7 @@ def run_auto_agent(message, state, browser, desktop):
         check_cancelled(state)
         saved = browser.get("_browser_task", {})
         resuming = message.strip().casefold() in ("continue", "resume", "/continue", "/resume")
-        is_checkpoint = message.strip().split(maxsplit=1)[:1] in (["/checkpoint"], ["/restore"])
+        is_checkpoint = message.strip().split(maxsplit=1)[:1] in (["/checkpoint"], ["/restore"], ["/forget_task"])
         if is_checkpoint or (resuming and saved.get("status") == "paused"):
             choice = {"mode": "browser"}
         else:
@@ -145,6 +150,14 @@ def _run_request(message, browser):
             return "There is no browser task to save."
         task_id = _save_checkpoint(task, browser)
         return f"Saved local browser checkpoint {task_id}."
+    if parts and parts[0].casefold() == "/forget_task":
+        if len(parts) != 2 or not re.fullmatch(r"[0-9a-f]{32}", parts[1]):
+            return "Enter /forget_task followed by the checkpoint ID."
+        task = browser.get("_browser_task")
+        if task and task.get("checkpoint_id") == parts[1]:
+            task.pop("checkpoint_id", None)
+        deleted = delete_browser_checkpoint(parts[1], browser.get("_checkpoint_path"))
+        return "Saved checkpoint deleted." if deleted else "No saved browser task has that ID."
     if parts and parts[0].casefold() == "/restore":
         if len(parts) != 2 or not re.fullmatch(r"[0-9a-f]{32}", parts[1]):
             return "Enter /restore followed by the saved browser checkpoint ID."
