@@ -60,18 +60,20 @@ def validate_action_group(actions, shown_ids):
         if not isinstance(action, dict):
             raise ValueError("Each browser action must be an object.")
         kind = action.get("action")
-        keys = (
-            {"action", "backend_node_id", "text"}
-            if kind == "type"
-            else {"action", "backend_node_id"}
-        )
-        if kind not in ("type", "click") or set(action) != keys:
-            raise ValueError("Groups support typing and one final click only.")
+        keys = {"action", "backend_node_id"}
+        if kind == "type":
+            keys.add("text")
+        elif kind == "set_checked":
+            keys.add("checked")
+        if kind not in ("type", "set_checked", "click") or set(action) != keys:
+            raise ValueError("Groups support typing, checkbox changes, and one final click.")
         node = action["backend_node_id"]
         if type(node) is not int or node <= 0 or node not in shown_ids or node in used:
             raise ValueError("Use different node IDs from the current reading.")
         if kind == "type" and not isinstance(action["text"], str):
             raise ValueError("Text must be a string.")
+        if kind == "set_checked" and type(action["checked"]) is not bool:
+            raise ValueError("Choose true or false for each checkbox.")
         if kind == "click" and index != len(actions) - 1:
             raise ValueError("A click must be the last action in a group.")
         used.add(node)

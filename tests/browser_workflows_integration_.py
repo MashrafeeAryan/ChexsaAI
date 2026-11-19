@@ -218,6 +218,15 @@ def check_checkbox(page):
     browser_.set_checked(page, checked, node, True)
     assert page.locator('input').is_checked()
     assert page.evaluate("window.changes") == 1
+    page.set_content('<label><input type="checkbox"> A</label><label><input type="checkbox"> B</label>')
+    reading = browser_.read_page(page)
+    actions = [
+        {"action": "set_checked", "backend_node_id": target, "checked": True}
+        for target in reading["controls"]
+    ]
+    result = browser_.run_action_group(page, actions, reading)
+    assert result["completed"] == actions and not result["error"]
+    assert page.locator("input:checked").count() == 2
 
 
 def check_scroll(page):

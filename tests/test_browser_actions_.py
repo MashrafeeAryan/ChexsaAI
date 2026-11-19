@@ -27,6 +27,7 @@ class BrowserActionInputTests(unittest.TestCase):
             [dict(type_action, backend_node_id=99)],
             [dict(type_action, text=12)],
             [dict(type_action, extra=True)],
+            [{"action": "set_checked", "backend_node_id": 1, "checked": 1}],
             [{"action": "navigate", "url": "https://example.test"}],
             [None],
         ]

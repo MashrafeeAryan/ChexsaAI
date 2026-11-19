@@ -786,7 +786,11 @@ def run_action_group(page, actions, observation, check_cancel=None, on_progress=
 
     for action in actions:
         control = expected[action["backend_node_id"]]
-        if control["states"].get("disabled") or (
+        invalid_check = action["action"] == "set_checked" and (
+            control["role"] not in ("checkbox", "switch")
+            or type(control["states"].get("checked")) is not bool
+        )
+        if control["states"].get("disabled") or invalid_check or (
             action["action"] == "type"
             and (
                 control["states"].get("readonly")
@@ -850,13 +854,16 @@ def run_action_group(page, actions, observation, check_cancel=None, on_progress=
         if on_progress:
             on_progress(result)
         try:
+            checked_reading = None
             if action["action"] == "type":
                 type_node(page, node, action["text"])
+            elif action["action"] == "set_checked":
+                checked_reading = set_checked(page, current, node, action["checked"])
             else:
                 click_node(page, node)
             result["completed"].append(action.copy())
             result["remaining"] -= 1
-            current = read_page(page)
+            current = checked_reading if checked_reading is not None else read_page(page)
             result["observation"] = current
             if action["action"] == "type":
                 entered = current["controls"].get(node)
@@ -867,6 +874,8 @@ def run_action_group(page, actions, observation, check_cancel=None, on_progress=
                     )
                     break
                 expected[node] = entered
+            elif action["action"] == "set_checked":
+                expected[node] = current["controls"][node]
             result["attempting"] = None
         except (RuntimeError, Error) as error:
             # Do not retry or ask the model to repeat an action with an uncertain outcome.
