@@ -127,6 +127,7 @@ def run_case(page, runtime, name, grouped=False, tokenizer=None, delay=0):
         "LLM_BASE_URL": "https://example.invalid/v1",
         "LLM_MODEL": "fixture",
     }
+    browser_state = {"playwright": runtime, "page": page}
     started = perf_counter()
     with (
         patch.dict(os.environ, environment, clear=True),
@@ -134,9 +135,10 @@ def run_case(page, runtime, name, grouped=False, tokenizer=None, delay=0):
         patch.object(llm_, "OpenAI") as client,
     ):
         client.return_value.chat.completions.create.side_effect = choose
-        result = agent_.run_agent(request, {"playwright": runtime, "page": page})
+        result = agent_.run_agent(request, browser_state)
     elapsed = perf_counter() - started
     assert result == "Fixture verified"
+    assert browser_state["last_metrics"]["model_calls"] == len(replies)
     assert len(replies) == (
         3 if grouped and delay else 2 if grouped else len(planned) + 1
     )
@@ -145,6 +147,7 @@ def run_case(page, runtime, name, grouped=False, tokenizer=None, delay=0):
     assert page.evaluate("window.wrongClicks") == 0
     metrics = {
         "case": name,
+        "verified": True,
         "mode": "grouped" if grouped else "single",
         "model_calls": len(replies),
         "input_characters": sum(
