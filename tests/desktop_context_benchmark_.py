@@ -135,6 +135,7 @@ def run_handoff(tokenizer, folder, local):
     client = Mock()
     client.chat.completions.create.side_effect = choose
     request = "Copy the Conclusion from report.docx to summary.txt."
+    state = {"recent_files": [str(source.resolve())]}
     with (
         patch.dict(os.environ, {"LLM_MODEL": "fixture"}),
         patch.object(agent, "_client", client),
@@ -142,10 +143,12 @@ def run_handoff(tokenizer, folder, local):
         patch.object(agent, "_COPY_REQUEST", agent._COPY_REQUEST if local else re.compile(r"(?!)")),
     ):
         start = perf_counter()
-        answer = agent.run_desktop_agent(request, {"recent_files": [str(source.resolve())]})
+        answer = agent.run_desktop_agent(request, state)
         elapsed = perf_counter() - start
 
     assert str(target.resolve()) in answer
+    assert state["last_metrics"]["model_calls"] == totals["calls"]
+    assert state["last_metrics"]["outcome"] == "verified"
     assert target.read_text(encoding="utf-8") == body and source.read_bytes() == before
     return {
         "method": "local" if local else "through_model",
