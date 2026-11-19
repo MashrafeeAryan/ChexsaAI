@@ -493,6 +493,44 @@ def _node_call(page, target, script, *values):
     raise RuntimeError("Could not check the target result. Read the current page again.")
 
 
+@time_step("action")
+def upload_file(page, target, path):
+    """Attach a checked local file to one exact native input and verify selection."""
+    path = Path(path)
+    file_info = path.stat()
+    usable = _node_call(page, target, """function() {
+        if (!this.isConnected || this.tagName !== 'INPUT' || this.type !== 'file') return false;
+        if (this.matches(':disabled') || this.closest('[aria-disabled="true"], [inert]')) return false;
+        const rect = this.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && getComputedStyle(this).visibility === 'visible';
+    }""")
+    if usable is not True:
+        raise RuntimeError("The observed control is not an enabled, visible file input.")
+
+    session, target = resolve_node(page, target)
+    try:
+        session.send("DOM.setFileInputFiles", {
+            "files": [str(path)],
+            "backendNodeId": target,
+        })
+        attached = _node_call(page, target, """function() {
+            const file = this.files && this.files.length === 1 && this.files[0];
+            return file ? {name: file.name, size: file.size} : null;
+        }""")
+        if attached == {"name": path.name, "size": file_info.st_size}:
+            return {"filename": path.name, "attached": True}
+    except (Error, RuntimeError):
+        pass
+    finally:
+        reading = _observations.pop(page, None)
+        if reading:
+            try:
+                reading["session"].detach()
+            except Error:
+                pass
+    raise RuntimeError("The attachment outcome is uncertain. Read the page before trying again.")
+
+
 @time_step("observation")
 def read_options(page, target, offset=0):
     """Read a page of labels from a native single-choice select."""

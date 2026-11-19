@@ -167,6 +167,19 @@ def run_case(page, runtime, name, grouped=False, tokenizer=None, delay=0):
     return metrics
 
 
+def check_file_attachment(page):
+    """Attach only a disposable file and verify the page holds it."""
+    with TemporaryDirectory(prefix="chexsa-attach-") as folder:
+        file = Path(folder) / "example.txt"
+        file.write_text("fixture content", encoding="utf-8")
+        page.set_content('<input type="file" aria-label="Document">')
+        reading = browser_.read_page(page)
+        node = next(iter(reading["controls"]))
+        result = browser_.upload_file(page, node, file)
+        assert result == {"filename": "example.txt", "attached": True}
+        assert page.locator("input").evaluate("node => node.files[0].name") == "example.txt"
+
+
 def check_options(page):
     """Read visible native labels and selection using Chrome rather than pixels."""
     page.set_content("""<label>Choice
@@ -743,6 +756,7 @@ def main():
                             flush=True,
                         )
             if not args.single_only:
+                check_file_attachment(page)
                 check_options(page)
                 check_checkbox(page)
                 check_scroll(page)
