@@ -263,6 +263,38 @@ def click_control(observation, node_id):
 
 
 @time_step("action")
+def expand_control(observation, node_id, expanded):
+    """Open or close a Windows group through its ExpandCollapse pattern."""
+    if type(expanded) is not bool:
+        raise ValueError("Choose true or false for expanded.")
+    control = _get_control(observation, node_id)
+    try:
+        group = control.iface_expand_collapse
+        before = group.CurrentExpandCollapseState
+    except (NoPatternInterfaceError, COMError, OSError):
+        raise RuntimeError("This control does not expose an expand or collapse action.") from None
+
+    # UI Automation uses 0 for collapsed, 1 for expanded, and 3 for a leaf.
+    desired = int(expanded)
+    if before == desired:
+        return {"expanded": expanded, "verified": True}
+    if before not in (0, 1, 2):
+        raise RuntimeError("This control has no expandable children.")
+
+    _observations.pop(observation["window_id"], None)
+    try:
+        if expanded:
+            group.Expand()
+        else:
+            group.Collapse()
+        if group.CurrentExpandCollapseState == desired:
+            return {"expanded": expanded, "verified": True}
+    except (COMError, OSError):
+        pass
+    raise RuntimeError("The expand or collapse result is uncertain. Read the window again.")
+
+
+@time_step("action")
 def select_control(observation, node_id):
     """Select an exact list item, tab, or option via UI Automation."""
     control = _get_control(observation, node_id)

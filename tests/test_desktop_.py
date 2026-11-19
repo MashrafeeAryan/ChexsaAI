@@ -280,11 +280,26 @@ def test_select_control_verifies_the_exact_item():
     control.click_input.assert_not_called()
 
 
+def test_expand_control_checks_the_pattern_state():
+    """A leaf never gets input, and an expandable item can be opened."""
+    reading, control = _reading("TreeItem")
+    group = control.iface_expand_collapse
+    group.CurrentExpandCollapseState = 3
+    node = next(iter(reading["controls"]))
+    with unittest.TestCase().assertRaisesRegex(RuntimeError, "no expandable"):
+        desktop_.expand_control(reading, node, True)
+    group.Expand.assert_not_called()
+    group.CurrentExpandCollapseState = 0
+    group.Expand.side_effect = lambda: setattr(group, "CurrentExpandCollapseState", 1)
+    assert desktop_.expand_control(reading, node, True)["verified"]
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_window_selection, test_invalid_launches,
         test_read_window_controls, test_read_window_unavailable,
         test_toggle_control_verifies_a_known_state, test_select_control_verifies_the_exact_item,
+        test_expand_control_checks_the_pattern_state,
         test_click_exact_control_and_refresh, test_action_target_guards,
         test_click_failure_is_not_retried, test_type_field_verification,
         test_type_document_focus_and_verification, test_click_covered_target,
