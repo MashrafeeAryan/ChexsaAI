@@ -305,6 +305,19 @@ class AgentLoopTests(unittest.TestCase):
         assert browser["last_metrics"] is state["last_metrics"]
         assert state["engine"] == "browser"
 
+    def test_auto_opens_an_explicit_url_without_a_model_call(self):
+        """A checked direct action reports what Chrome actually opened."""
+        session = {"playwright": object(), "page": self.page}
+        self.tools["read_page"].return_value = {"url": "https://example.test/final"}
+        with patch.object(agent_, "choose_engine") as choose:
+            state = {}
+            result = agent_.run_auto_agent("Open https://example.test/", state, session, {})
+        choose.assert_not_called()
+        self.tools["get_reply"].assert_not_called()
+        assert result == "Opened https://example.test/final"
+        assert state["last_metrics"]["model_calls"] == 0
+        assert state["last_metrics"]["outcome"] == "verified"
+
     def test_direct_open_only_matches_a_clear_single_url_request(self):
         """Typical conversation and multi-step requests still go to the model."""
         assert agent_._simple_open_url("Open https://example.test/") == "https://example.test/"

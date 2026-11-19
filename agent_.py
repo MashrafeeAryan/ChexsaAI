@@ -65,6 +65,12 @@ def run_auto_agent(message, state, browser, desktop):
 
     with measure_task(state):
         check_cancelled(state)
+        url = _simple_open_url(message)
+        if url:
+            state["engine"] = "browser"
+            browser["_cancel"] = state.get("_cancel")
+            return _open_url_locally(message, url, browser)
+
         saved = browser.get("_browser_task", {})
         resuming = message.strip().casefold() in ("continue", "resume", "/continue", "/resume")
         first_word = message.strip().casefold().split(maxsplit=1)[:1]
@@ -498,6 +504,28 @@ def _navigate(page, action):
     response = move(**options)
     moved = response is not None or page.url != old_url
     return "History navigation finished." if moved else "No URL change observed. Read the current page."
+
+
+def _open_url_locally(request, url, browser):
+    """Open a written URL, then report the actual destination without model calls."""
+    if browser.get("playwright") is None:
+        browser["playwright"], browser["page"] = open_browser()
+    elif browser["page"].is_closed():
+        browser["page"] = browser["page"].context.new_page()
+    page = browser["page"]
+    check_cancelled(browser)
+    _navigate(page, {"action": "navigate", "url": url})
+    check_cancelled(browser)
+    reading = read_page(page)
+    browser["_browser_task"] = {
+        "request": request, "history": [], "status": "finished",
+        "in_flight": None, "_observation": reading,
+    }
+    destination = reading["url"]
+    if destination.startswith(("http://", "https://")):
+        record_outcome("verified")
+        return f"Opened {destination}"
+    return "Chrome did not reach a web page. Check the tab."
 
 
 def _run_browser_task(task, browser, resuming=False):
