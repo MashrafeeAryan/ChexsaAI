@@ -39,6 +39,7 @@ from desktop_ import (
     read_window,
     type_text,
     toggle_control,
+    select_control,
 )
 
 load_dotenv(Path(__file__).with_name(".env"))  # Reuse the existing API settings.
@@ -349,6 +350,13 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
             "Set a Windows control that supports Toggle and verify the state.",
             {"node_id": _ID, "checked": {"type": "boolean"}},
         )]
+    selection_types = r"\] (ListItem|TreeItem|TabItem|RadioButton|DataItem) "
+    if observation and re.search(selection_types, observation["elements"]):
+        tools = [*tools, _tool(
+            "select_control",
+            "Select a shown Windows item that supports SelectionItem and verify selection.",
+            {"node_id": _ID},
+        )]
     search_tip = ""
     if observation is not None and "view" in observation:
         payload["window"]["view"] = observation["view"]
@@ -484,7 +492,7 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
     ).strip():
         raise RuntimeError("The model returned an empty app name or reply.")
 
-    if name in ("click_control", "type_text", "toggle_control"):
+    if name in ("click_control", "type_text", "toggle_control", "select_control"):
         if (
             observation is None
             or tuple(arguments["node_id"]) not in shown_control_ids(observation["elements"])
@@ -771,6 +779,9 @@ def _run_desktop_request(request, state):
 
         elif name == "toggle_control":
             result = toggle_control(observation, arguments["node_id"], arguments["checked"])
+
+        elif name == "select_control":
+            result = select_control(observation, arguments["node_id"])
 
         elif name == "press_key":
             result = press_key(observation, arguments["keys"])

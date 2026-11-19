@@ -263,6 +263,27 @@ def click_control(observation, node_id):
 
 
 @time_step("action")
+def select_control(observation, node_id):
+    """Select an exact list item, tab, or option via UI Automation."""
+    control = _get_control(observation, node_id)
+    try:
+        selection = control.iface_selection_item
+        if selection.CurrentIsSelected:
+            return {"selected": True, "verified": True}
+    except (NoPatternInterfaceError, COMError, OSError):
+        raise RuntimeError("This control does not expose a selection action.") from None
+
+    _observations.pop(observation["window_id"], None)
+    try:
+        selection.Select()
+        if selection.CurrentIsSelected:
+            return {"selected": True, "verified": True}
+    except (COMError, OSError):
+        pass
+    raise RuntimeError("The selection could not be verified. Read the window before trying again.")
+
+
+@time_step("action")
 def toggle_control(observation, node_id, checked):
     """Set a Windows toggle through its accessibility pattern and verify it."""
     if type(checked) is not bool:

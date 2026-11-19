@@ -268,10 +268,23 @@ def test_toggle_control_verifies_a_known_state():
         desktop_.toggle_control(reading, node, False)
 
 
+def test_select_control_verifies_the_exact_item():
+    """Selection is checked through the control, without another click."""
+    reading, control = _reading("ListItem")
+    selection = control.iface_selection_item
+    selection.CurrentIsSelected = False
+    selection.Select.side_effect = lambda: setattr(selection, "CurrentIsSelected", True)
+    node = next(iter(reading["controls"]))
+    assert desktop_.select_control(reading, node) == {"selected": True, "verified": True}
+    selection.Select.assert_called_once_with()
+    control.click_input.assert_not_called()
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_window_selection, test_invalid_launches,
-        test_read_window_controls, test_read_window_unavailable, test_toggle_control_verifies_a_known_state,
+        test_read_window_controls, test_read_window_unavailable,
+        test_toggle_control_verifies_a_known_state, test_select_control_verifies_the_exact_item,
         test_click_exact_control_and_refresh, test_action_target_guards,
         test_click_failure_is_not_retried, test_type_field_verification,
         test_type_document_focus_and_verification, test_click_covered_target,
