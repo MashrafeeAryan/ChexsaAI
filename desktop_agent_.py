@@ -12,6 +12,7 @@ from hashlib import sha256
 import json  # Convert model arguments between JSON text and Python data.
 import os  # Read the API settings loaded from .env.
 from app_runtime_ import check_cancelled
+from task_metrics_ import call_model, measure_task
 from pathlib import Path
 import re  # Find word counts and file requests in the user's message.
 from time import monotonic, sleep  # Set waiting limits and pause between checks.
@@ -370,7 +371,8 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
 
     # STEP 1: Send the goal, tools, current reading, and past results to the AI.
     try:
-        response = _client.chat.completions.create(
+        response = call_model(
+            _client.chat.completions.create,
             model=os.environ["LLM_MODEL"],
             tools=tools,
             tool_choice="required",  # Ask for a tool choice, not a plain-text answer.
@@ -529,6 +531,13 @@ def _observe(state):
 
 # Keep the goal, tool results, and fresh window readings together until the task ends.
 def run_desktop_agent(request, state):
+    """Run one desktop request and keep its local model call count."""
+    with measure_task(state):
+        return _run_desktop_request(request, state)
+
+
+def _run_desktop_request(request, state):
+    """Use the current window and tool results to handle the request."""
     check_cancelled(state)
     history = []
     observation = None

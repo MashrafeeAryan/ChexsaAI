@@ -564,6 +564,22 @@ def test_copy_refuses_changed_sources_and_unnamed_external_destinations():
             assert not (folder / "output" / "copy.txt").exists()
 
 
+def test_desktop_counts_model_calls_without_recording_requests():
+    """Count each fake API attempt, including invalid responses."""
+    client = Mock()
+    create = client.chat.completions.create
+    create.return_value = _response("reply", {"text": "Hi", "done": False})
+    state = {}
+    with patch.dict(os.environ, {"LLM_MODEL": "fake"}), patch.object(agent, "_client", client):
+        assert agent.run_desktop_agent("Message", state) == "Hi"
+        assert state["last_metrics"]["model_calls"] == 1
+        create.return_value = _response("invalid", {})
+        with unittest.TestCase().assertRaises(RuntimeError):
+            agent.run_desktop_agent("Another message", state)
+        assert state["last_metrics"]["model_calls"] == 1
+    assert create.call_count == 2
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
