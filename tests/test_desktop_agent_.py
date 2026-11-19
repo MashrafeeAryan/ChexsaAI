@@ -602,10 +602,34 @@ def test_csv_tool_reads_a_named_file_without_opening_a_window():
     assert result["columns"] == ["Price"] and result["rows"] == [["10"]]
 
 
+def test_csv_continuation_rejects_a_changed_file():
+    """Reading another page cannot join rows from two different file versions."""
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory() as folder:
+        path = Path(folder) / "small.csv"
+        path.write_text("Name\nFirst item", encoding="utf-8")
+        calls = []
+        def choose(*args, **kwargs):
+            calls.append(True)
+            if len(calls) == 2:
+                path.write_text("Name\nChanged to a larger record", encoding="utf-8")
+            return {
+                "tool": "read_csv_rows",
+                "arguments": {"path": str(path), "columns": [], "offset": len(calls) - 1},
+            }
+
+        with patch.object(agent, "get_desktop_action", side_effect=choose):
+            with unittest.TestCase().assertRaisesRegex(RuntimeError, "CSV changed"):
+                agent.run_desktop_agent(f'Read "{path}"', {})
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
         test_csv_tool_reads_a_named_file_without_opening_a_window,
+        test_csv_continuation_rejects_a_changed_file,
         test_desktop_counts_model_calls_without_recording_requests,
         test_compact_view_rejects_ids_it_did_not_show,
         test_desktop_search_executes_on_the_full_fresh_reading,

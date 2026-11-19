@@ -618,6 +618,7 @@ def _run_desktop_request(request, state):
     source_stamps = {path: _file_stamp(path) for path in remembered} if copy_request else {}
     file_versions = {}
     saved_versions = {}
+    csv_stamps = {}
 
     # Reuse the selected app between requests, but read its current state again.
     if state.get("window") is not None:
@@ -810,7 +811,14 @@ def _run_desktop_request(request, state):
 
         elif name == "read_csv_rows":
             path = _file_target(arguments["path"], request, remembered)
-            result = read_csv_rows(path, arguments["columns"], arguments["offset"])
+            before = _file_stamp(path)
+            offset = arguments["offset"]
+            if offset and csv_stamps.get(path) != before:
+                raise RuntimeError("The CSV changed or has no starting reading. Read from row zero again.")
+            result = read_csv_rows(path, arguments["columns"], offset)
+            if _file_stamp(path) != before:
+                raise RuntimeError("The CSV changed while reading. Read from row zero again.")
+            csv_stamps[path] = before
 
         elif name in ("open_app", "use_open_app"):
             # Find the installed app, then remember its window and process.
