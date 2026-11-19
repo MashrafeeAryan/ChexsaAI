@@ -658,6 +658,21 @@ def test_field_group_stops_before_a_replaced_target():
     type_field.assert_called_once_with(original, [1], "A")
 
 
+def test_windows_agent_can_offer_one_group_for_multiple_fields():
+    """A group is offered only when there are multiple text targets in view."""
+    client = Mock()
+    group = {"fields": [{"node_id": [1], "text": "A"}, {"node_id": [2], "text": "B"}]}
+    client.chat.completions.create.return_value = _response("type_fields", group)
+    reading = {
+        "elements": '[1] Edit "First"\n[2] Edit "Second"',
+        "title": "Fields", "unavailable_controls": 0,
+    }
+    with patch.object(agent, "_client", client), patch.dict(os.environ, {"LLM_MODEL": "fake"}):
+        assert agent.get_desktop_action("Fill both fields", reading)["arguments"] == group
+        with unittest.TestCase().assertRaises(RuntimeError):
+            agent.get_desktop_action("Write 300 words", reading)
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
@@ -665,6 +680,7 @@ def load_tests(loader, tests, pattern):
         test_csv_continuation_rejects_a_changed_file,
         test_field_group_rejects_unseen_duplicate_and_noninteger_ids,
         test_field_group_stops_before_a_replaced_target,
+        test_windows_agent_can_offer_one_group_for_multiple_fields,
         test_desktop_counts_model_calls_without_recording_requests,
         test_compact_view_rejects_ids_it_did_not_show,
         test_desktop_search_executes_on_the_full_fresh_reading,

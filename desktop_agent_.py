@@ -429,6 +429,21 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
                 "offset": {"type": "integer"},
             },
         )]
+    if (
+        observation is not None
+        and len(re.findall(r"(?m)^\[[^\n]+?\] (Edit|Document) ", observation["elements"])) >= 2
+        and not re.search(r"\b\d+[ -]+words?\b", request, re.I)
+    ):
+        tools = [*tools, _tool(
+            "type_fields",
+            "Replace two to four independent shown fields. Changes stop the remaining fields.",
+            {"fields": {"type": "array", "items": {
+                "type": "object",
+                "properties": {"node_id": _ID, "text": {"type": "string"}},
+                "required": ["node_id", "text"],
+                "additionalProperties": False,
+            }}},
+        )]
     search_tip = ""
     if observation is not None and "view" in observation:
         payload["window"]["view"] = observation["view"]
@@ -535,6 +550,14 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
         or set(arguments) != set(schema["properties"])
     ):
         raise RuntimeError("The model returned an unknown tool or invalid arguments. Nothing was run.")
+
+    if name == "type_fields":
+        shown = shown_control_ids(observation["elements"]) if observation else set()
+        try:
+            _validate_field_group(arguments["fields"], shown)
+        except ValueError as error:
+            raise RuntimeError(str(error) + " Nothing was run.") from None
+        return {"tool": name, "arguments": arguments}
 
     # Check that each input has the promised type before running anything.
     for key, value in arguments.items():
@@ -761,6 +784,7 @@ def _run_desktop_request(request, state):
         if signature == last:
             raise RuntimeError("The model repeated an action without a visible change. Stopped before repeating input.")
 
+        group_reading = None
         # STEP 4: Run the chosen tool in the matching branch below.
         # Match the tool name to the Python function that actually does the work.
         if name == "write_file":
@@ -922,6 +946,19 @@ def _run_desktop_request(request, state):
         elif name == "press_key":
             result = press_key(observation, arguments["keys"])
 
+        elif name == "type_fields":
+            if expected_words is not None:
+                raise RuntimeError("Use one text field for a request with a word count.")
+            fields = arguments["fields"]
+            completed, group_reading = _type_field_group(fields, observation, state)
+            if completed:
+                final = completed[-1]
+                verified_write = {
+                    "node_id": final["node_id"],
+                    "text": final["text"].replace("\r\n", "\n").replace("\r", "\n"),
+                }
+            result = {"verified": len(completed), "remaining": len(fields) - len(completed)}
+
         elif name == "type_text":
             # Reject the wrong word count before changing the editor.
             count = len(arguments["text"].split())
@@ -952,6 +989,8 @@ def _run_desktop_request(request, state):
             }
         )
         # STEP 5: Keep this result for the next AI request.
+        if name == "type_fields":
+            saved_arguments = {"targets": [field["node_id"] for field in arguments["fields"]]}
         history.append({"tool": name, "arguments": saved_arguments, "result": result})
         last = signature
 
@@ -959,7 +998,9 @@ def _run_desktop_request(request, state):
         # File saves need no window; desktop actions need a fresh reading.
         if name not in ("write_file", "read_file_section", "edit_file", "copy_file_text", "read_csv_rows"):
             check_cancelled(state)
-            previous, observation = observation, _observe(state)
+            previous, observation = observation, (
+                group_reading if group_reading is not None else _observe(state)
+            )
 
     # STEP 6: Stop if the decision limit is reached without finishing.
     raise RuntimeError("Stopped after 10 model decisions. The task may be unfinished.")
