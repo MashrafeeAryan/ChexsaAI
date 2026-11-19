@@ -1,5 +1,7 @@
 """Open Chrome and read the current page."""
 
+from task_metrics_ import time_step
+
 import json
 import os
 from pathlib import Path
@@ -87,6 +89,7 @@ def open_browser():
 #     ),
 #     "content": "Inbox\nCompose\nRecipients\nSubject\nMessage Body\nSend"
 # }
+@time_step("observation")
 def read_page(page):
     previous = _observations.pop(page, None)
     if previous:
@@ -276,6 +279,7 @@ def resolve_node(page, backend_node_id):
 
 
 # Click an observed Chrome node through CDP; this does not move the Windows cursor.
+@time_step("action")
 def click_node(page, backend_node_id):
     session, target = resolve_node(page, backend_node_id)
     node = None
@@ -380,6 +384,7 @@ def click_node(page, backend_node_id):
 
 
 # Replace a text field's contents, then check that the exact field kept the text.
+@time_step("action")
 def type_node(page, backend_node_id, text):
     if not isinstance(text, str):
         raise RuntimeError("Typing requires text.")

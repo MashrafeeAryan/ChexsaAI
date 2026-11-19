@@ -33,6 +33,8 @@ class AgentLoopTests(unittest.TestCase):
             assert state["last_metrics"]["output_tokens"] == 8
             assert state["last_metrics"]["cached_input_tokens"] == 12
             assert state["last_metrics"]["calls_with_usage"] == 1
+            seconds = state["last_metrics"]["seconds"]
+            assert 0 <= seconds["model"] <= seconds["task"]
             create.return_value.usage = None
             create.return_value.choices[0].message.content = "invalid"
             with self.assertRaises(RuntimeError):

@@ -1,5 +1,7 @@
 """Open Windows apps and read their visible controls."""
 
+from task_metrics_ import time_step
+
 from collections import Counter
 import json  # Keeps names readable when they contain quotes or line breaks.
 from pathlib import Path  # Gets filenames and checks whether a file exists.
@@ -72,6 +74,7 @@ _READABLE_TYPES = {
 _observations = {}
 
 
+@time_step("observation")
 def read_window(window):
     """Describe the visible controls inside this window without changing anything.
 
@@ -216,6 +219,7 @@ def _get_control(observation, node_id):
     return control
 
 
+@time_step("action")
 def click_control(observation, node_id):
     """Click one observed control, then require a fresh window reading.
 
@@ -258,6 +262,7 @@ def click_control(observation, node_id):
     return "Click sent. Read the window again to check the result."
 
 
+@time_step("action")
 def type_text(observation, node_id, text):
     """Replace the chosen field or document's text and check what was entered.
 
@@ -395,6 +400,7 @@ def focus_window(window):
         raise RuntimeError("The selected app did not become the foreground window.")
 
 
+@time_step("action")
 def press_key(observation, keys):
     """Send a key or shortcut to this window, such as Enter or Ctrl+N."""
     if not isinstance(keys, list) or not keys or len(keys) > 4 or any(not isinstance(key, str) for key in keys):

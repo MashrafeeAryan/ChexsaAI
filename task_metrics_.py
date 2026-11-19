@@ -2,6 +2,8 @@
 
 from contextlib import contextmanager
 from contextvars import ContextVar
+from functools import wraps
+from time import perf_counter
 
 
 # Keep simultaneous requests separate, even when they use the same API client.
@@ -17,15 +19,37 @@ def measure_task(state):
         "output_tokens": None,
         "cached_input_tokens": None,
         "calls_with_usage": 0,
+        "seconds": {},
     }
     state["last_metrics"] = counters
     token = _current.set(counters)
+    started = perf_counter()
     try:
         yield counters
     finally:
+        counters["seconds"]["task"] = perf_counter() - started
         _current.reset(token)
 
 
+def time_step(phase):
+    """Measure a step in a task, leaving calls outside tasks untouched."""
+    def wrap(function):
+        @wraps(function)
+        def timed(*args, **kwargs):
+            counters = _current.get()
+            if counters is None:
+                return function(*args, **kwargs)
+            started = perf_counter()
+            try:
+                return function(*args, **kwargs)
+            finally:
+                seconds = counters["seconds"]
+                seconds[phase] = seconds.get(phase, 0) + perf_counter() - started
+        return timed
+    return wrap
+
+
+@time_step("model")
 def call_model(create, **arguments):
     """Count an attempted model call, including a request that raises an error."""
     counters = _current.get()
