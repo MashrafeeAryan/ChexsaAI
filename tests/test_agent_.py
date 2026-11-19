@@ -158,6 +158,10 @@ class AgentLoopTests(unittest.TestCase):
             saved = Path(folder) / "example.txt"
             assert saved.read_text(encoding="utf-8") == text
             assert desktop["recent_files"] == [str(saved.resolve())]
+            desktop["recent_files"] = ["newer-desktop-file.txt"]
+            with patch.object(agent_, "run_agent", return_value="Checked checkpoint"):
+                agent_.run_auto_agent("/checkpoint", {}, state, desktop)
+            assert desktop["recent_files"] == ["newer-desktop-file.txt"]
         history = state["_browser_task"]["history"]
         assert text not in str(history)
         assert history[1]["result"]["verified"] is True

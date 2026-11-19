@@ -56,12 +56,15 @@ def run_auto_agent(message, state, browser, desktop):
             return choice["reply"]
         if choice["mode"] == "browser":
             browser["_cancel"] = state.get("_cancel")
+            previous = browser.get("_browser_task")
+            previous_count = len(previous.get("history", [])) if previous else 0
             answer = run_agent(message, browser)
-            # Pass file references between engines, while keeping the file contents local.
+            # Pass only exports from this request, not files from an earlier task.
             task = browser.get("_browser_task") or {}
+            start = previous_count if task is previous else 0
             paths = [
                 item["result"]["saved_path"]
-                for item in task.get("history", [])
+                for item in task.get("history", [])[start:]
                 if item["action"]["action"] == "save_capture"
                 and isinstance(item["result"], dict) and item["result"].get("verified") is True
             ]
