@@ -305,6 +305,15 @@ class AgentLoopTests(unittest.TestCase):
         assert browser["last_metrics"] is state["last_metrics"]
         assert state["engine"] == "browser"
 
+    def test_direct_open_only_matches_a_clear_single_url_request(self):
+        """Typical conversation and multi-step requests still go to the model."""
+        assert agent_._simple_open_url("Open https://example.test/") == "https://example.test/"
+        for text in (
+            "open youtube", "open https://example.test and read it", "open file:///notes",
+            "open https://example.test:notaport/", "open https://admin:pass@example.test/",
+        ):
+            assert agent_._simple_open_url(text) is None
+
     def test_auto_route_only_accepts_supported_engines(self):
         """A bare route can choose an engine or ask, and cannot launch an action."""
         client = Mock()

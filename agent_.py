@@ -42,6 +42,23 @@ from app_runtime_ import (
 from task_metrics_ import measure_task, record_outcome, time_step
 
 
+def _simple_open_url(request):
+    """Recognize only an exact Open URL request, including its explicit scheme."""
+    match = re.fullmatch(r"\s*open[ \t]+(https?://[^\s]+)\s*", request, re.I)
+    if not match:
+        return None
+    url = match[1]
+    try:
+        address = urlsplit(url)
+        if address.hostname and not address.username and not address.password:
+            # Access the port here too so invalid port text cannot reach Chrome.
+            _ = address.port
+            return url
+    except ValueError:
+        pass
+    return None
+
+
 def run_auto_agent(message, state, browser, desktop):
     """Choose an existing engine and keep that engine's objects in its own state."""
     from desktop_agent_ import run_desktop_agent
