@@ -10,6 +10,7 @@ from browser_ import (
     click_node,
     list_tabs,
     select_tab,
+    set_checked,
     open_browser,
     read_page,
     scroll_page,
@@ -288,7 +289,7 @@ def _run_browser_task(task, browser, resuming=False):
         entry = {"action": action.copy(), "result": "Not completed."}
         history.append(entry)
         # Save input intent before execution. An exception must not erase it.
-        if action["action"] in ("click", "type"):
+        if action["action"] in ("click", "type", "set_checked"):
             task["in_flight"] = action.copy()
         # Any action error leaves this function immediately. Uncertain actions are not retried.
         if action["action"] == "observe":
@@ -310,6 +311,11 @@ def _run_browser_task(task, browser, resuming=False):
         elif action["action"] == "click":
             click_node(page, action["backend_node_id"])
             result = "Click sent. Check the new observation for its outcome."
+        elif action["action"] == "set_checked":
+            next_observation = set_checked(
+                page, observation, action["backend_node_id"], action["checked"]
+            )
+            result = {"checked": action["checked"], "verified": True}
         elif action["action"] == "type":
             type_node(page, action["backend_node_id"], action["text"])
             result = "Text entered and the field value verified."

@@ -167,6 +167,21 @@ def run_case(page, runtime, name, grouped=False, tokenizer=None, delay=0):
     return metrics
 
 
+def check_checkbox(page):
+    """Read and verify a real checkbox, skipping a second input when it is set."""
+    page.set_content('<label><input type="checkbox"> Visible</label>')
+    page.evaluate("""() => {
+        window.changes = 0;
+        document.querySelector('input').addEventListener('change', () => changes++);
+    }""")
+    first = browser_.read_page(page)
+    node = next(iter(first["controls"]))
+    checked = browser_.set_checked(page, first, node, True)
+    browser_.set_checked(page, checked, node, True)
+    assert page.locator('input').is_checked()
+    assert page.evaluate("window.changes") == 1
+
+
 def check_scroll(page):
     """Scroll a disposable page without coordinates and detect the end."""
     page.set_content('<main style="height: 2400px">Example</main>')
@@ -703,6 +718,7 @@ def main():
                             flush=True,
                         )
             if not args.single_only:
+                check_checkbox(page)
                 check_scroll(page)
                 check_action_groups(page)
                 check_group_progress(page)

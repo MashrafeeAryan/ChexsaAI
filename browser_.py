@@ -228,6 +228,9 @@ def read_page(page):
                     "focused",
                 )
             }
+            # Chrome represents some checkbox states as a tri-state string.
+            if states.get("checked") in ("true", "false"):
+                states["checked"] = states["checked"] == "true"
             controls[target] = {
                 "line": line,
                 "role": role,
@@ -442,6 +445,33 @@ def click_node(page, backend_node_id):
                 session.detach()
             except Error:
                 pass
+
+
+@time_step("action")
+def set_checked(page, reading, target, checked):
+    """Click a checkbox only if needed, then check the same node's new state."""
+    if type(checked) is not bool:
+        raise ValueError("Choose true or false for checked.")
+    resolve_node(page, target)
+    current = read_page(page)
+    same_document = current["document_id"] == reading["document_id"]
+    control = current["controls"].get(target)
+    if not same_document or not control or control["role"] not in ("checkbox", "switch"):
+        raise RuntimeError("The checkbox changed. Read it again.")
+
+    before = control["states"].get("checked")
+    if before is checked:
+        return current
+    if type(before) is not bool:
+        raise RuntimeError("The checkbox does not expose a definite checked state.")
+
+    click_node(page, target)
+    after = read_page(page)
+    same_document = current["document_id"] == after["document_id"]
+    state = after["controls"].get(target, {}).get("states", {}).get("checked")
+    if not same_document or state is not checked:
+        raise RuntimeError("Checkbox change could not be verified. Read the page before trying again.")
+    return after
 
 
 # Replace a text field's contents, then check that the exact field kept the text.
