@@ -352,6 +352,20 @@ def _open_assignment(browser, url):
     check_cancelled(browser)
 
 
+def _capture_text(task, text):
+    """Keep a bounded string locally and return only a short handle to the model."""
+    if not text.strip():
+        return {"reason": "No readable text was found."}
+    if len(text) > 200_000:
+        return {"reason": "The text is too large. Choose a smaller selection."}
+    artifacts = task.setdefault("artifacts", {})
+    if len(artifacts) >= 3:
+        return {"reason": "This task already holds three text captures."}
+    number = len(artifacts) + 1
+    artifacts[number] = text
+    return {"capture": number, "characters": len(text)}
+
+
 def _attachment_path(request, page_url, name):
     """Limit file attachments to a quoted path and a site named by the user."""
     def origin(url):
@@ -457,6 +471,7 @@ def _run_browser_task(task, browser, resuming=False):
             "list_tabs",
             "read_options",
             "inspect_control",
+            "capture_page_text",
             "wait_for",
             "observe",
         ):
@@ -499,6 +514,8 @@ def _run_browser_task(task, browser, resuming=False):
             browser["page"] = page
             listed_tabs = {}
             result = "Selected the listed tab. Read its current page."
+        elif action["action"] == "capture_page_text":
+            result = _capture_text(task, observation.get("content", ""))
         elif action["action"] == "inspect_control":
             result = inspect_control(page, observation, action["backend_node_id"])
         elif action["action"] == "read_options":

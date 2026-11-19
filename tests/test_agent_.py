@@ -124,6 +124,19 @@ class AgentLoopTests(unittest.TestCase):
         assert "total model decision limit" in result
         self.tools["get_reply"].assert_not_called()
 
+    def test_page_text_can_stay_local_under_a_short_reference(self):
+        """Capture returns only a reference, while the actual content stays in Python."""
+        state = {"playwright": object(), "page": self.page}
+        text = "Private fixture page text"
+        self.tools["read_page"].return_value = {"content": text}
+        self.tools["get_reply"].side_effect = [
+            {"action": "capture_page_text"}, {"action": "reply", "text": "Captured"},
+        ]
+        assert agent_.run_agent("Keep the page text", state) == "Captured"
+        task = state["_browser_task"]
+        assert task["artifacts"][1] == text
+        assert task["history"][0]["result"] == {"capture": 1, "characters": len(text)}
+
     def test_saved_task_records_input_intent_before_clicking(self):
         """An interruption during a click leaves the disk record uncertain."""
         state = {"playwright": object(), "page": self.page}

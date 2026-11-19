@@ -56,7 +56,7 @@ _EXTRA_ACTIONS = {
     'inspection': '{"action":"find_text","query":"Receipt","offset":0} searches readable page text.\n{"action":"inspect_region","backend_node_id":18,"offset":0} reads nearby controls in its form or dialog.\n{"action":"inspect_control","backend_node_id":18} shows flags and available operations.',
     'checkboxes': '{"action":"set_checked","backend_node_id":12,"checked":true} sets a checkbox or switch.',
     'choices': '{"action":"read_options","backend_node_id":12,"offset":0} lists choices from a native select.\n{"action":"select_option","backend_node_id":12,"label":"First choice"} selects an exact label.',
-    'files': '{"action":"upload_file","backend_node_id":12,"path":"full path from request"} attaches one file to an exact native input. The request must name the site and quote the full path.',
+    'files': '{"action":"upload_file","backend_node_id":12,"path":"full path from request"} attaches one file to an exact native input. The request must name the site and quote the full path.\n{"action":"capture_page_text"} keeps the current readable page text as a local capture.',
 }
 
 
@@ -353,6 +353,8 @@ def get_reply(message, observation=None, history=None, previous=None):
     elif action in (
         {"action": "go_back"}, {"action": "go_forward"}, {"action": "list_tabs"}
     ) and observation is not None:
+        return action
+    elif action == {"action": "capture_page_text"} and observation is not None:
         return action
     elif action == {"action": "observe"} and observation is None:
         return action
