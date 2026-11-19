@@ -693,6 +693,35 @@ def test_partial_field_group_cannot_claim_verified_completion():
             agent.run_desktop_agent("Fill both fields", {"window": object()})
 
 
+def test_desktop_group_keeps_private_values_out_of_history():
+    """The model plans both edits once, and history only reports their results."""
+    reading = {
+        "window_id": (42,), "controls": {(1,): object(), (2,): object()},
+        "elements": '[1] Edit "First"\n[2] Edit "Second"',
+    }
+    fields = [
+        {"node_id": [1], "text": "private first value"},
+        {"node_id": [2], "text": "private second value"},
+    ]
+    def decide(request, observed, history):
+        if not history:
+            return {"tool": "type_fields", "arguments": {"fields": fields}}
+        result = history[-1]
+        assert result["arguments"] == {"targets": [[1], [2]]}
+        assert result["result"] == {"verified": 2, "remaining": 0}
+        assert "private" not in str(history)
+        return {"tool": "reply", "arguments": {"text": "Verified", "done": True}}
+
+    with (
+        patch.object(agent, "get_desktop_action", side_effect=decide) as choose,
+        patch.object(agent, "_observe", return_value=reading),
+        patch.object(agent, "type_text") as type_field,
+        patch.object(agent, "read_text", return_value="private second value"),
+    ):
+        assert agent.run_desktop_agent("Fill both fields", {"window": object()}) == "Verified"
+    assert choose.call_count == 2 and type_field.call_count == 2
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
@@ -702,6 +731,7 @@ def load_tests(loader, tests, pattern):
         test_field_group_stops_before_a_replaced_target,
         test_windows_agent_can_offer_one_group_for_multiple_fields,
         test_partial_field_group_cannot_claim_verified_completion,
+        test_desktop_group_keeps_private_values_out_of_history,
         test_desktop_counts_model_calls_without_recording_requests,
         test_compact_view_rejects_ids_it_did_not_show,
         test_desktop_search_executes_on_the_full_fresh_reading,
