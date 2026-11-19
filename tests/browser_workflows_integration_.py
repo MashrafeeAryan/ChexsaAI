@@ -763,6 +763,7 @@ def main():
         action="store_true",
         help="For an archived baseline only: reissue the lost original request.",
     )
+    parser.add_argument("--quiet", action="store_true", help="Run checks without printing benchmark measurements.")
     args = parser.parse_args()
     if args.legacy_recovery and not args.recovery_only:
         parser.error("Use --legacy-recovery only with --recovery-only.")
@@ -785,21 +786,11 @@ def main():
             if args.recovery_only:
                 for iteration in range(args.repeat):
                     for mode in ("normal", "replace", "delayed"):
-                        print(
-                            json.dumps(
-                                {
-                                    "run": iteration + 1,
-                                    **run_recovery_case(
-                                        page,
-                                        runtime,
-                                        mode,
-                                        tokenizer,
-                                        args.legacy_recovery,
-                                    ),
-                                }
-                            ),
-                            flush=True,
+                        stats = run_recovery_case(
+                            page, runtime, mode, tokenizer, args.legacy_recovery,
                         )
+                        if not args.quiet:
+                            print(json.dumps({"run": iteration + 1, **stats}), flush=True)
                 if not args.legacy_recovery:
                     run_recovery_case(page, runtime, "normal", replay=True)
                     check_uncertain_recovery(page, runtime)
@@ -807,15 +798,9 @@ def main():
             for iteration in range(args.repeat):
                 for name in CASES:
                     for grouped in ((False,) if args.single_only else (False, True)):
-                        print(
-                            json.dumps(
-                                {
-                                    "run": iteration + 1,
-                                    **run_case(page, runtime, name, grouped, tokenizer),
-                                }
-                            ),
-                            flush=True,
-                        )
+                        stats = run_case(page, runtime, name, grouped, tokenizer)
+                        if not args.quiet:
+                            print(json.dumps({"run": iteration + 1, **stats}), flush=True)
             if not args.single_only:
                 check_renamed_node(page)
                 check_selection(page)
