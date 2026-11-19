@@ -65,8 +65,11 @@ def browser_prompt(observation, history, descriptions):
         action = entry["action"]
         if action.get("action") == "discover":
             groups.add(action["group"])
-        elif action.get("action") == "list_tabs":
-            groups.add("navigation")
+        else:
+            kind = action.get("action")
+            for group, instructions in _EXTRA_ACTIONS.items():
+                if kind and f'"action":"{kind}"' in instructions:
+                    groups.add(group)
     # Read the role right after the ID. Words in a control name do not add tools.
     roles = {line.partition("] ")[2].partition(" ")[0] for line in descriptions.split("\n")}
     if roles.intersection(("checkbox", "switch")):

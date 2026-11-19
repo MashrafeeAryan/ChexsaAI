@@ -388,6 +388,8 @@ class AgentLoopTests(unittest.TestCase):
         discovered = llm_.browser_prompt({}, history, "")
         assert '"action":"switch_tab"' in discovered
         assert '"action":"switch_tab"' not in plain
+        recent = [{"action": {"action": "go_forward"}}]
+        assert '"action":"go_back"' in llm_.browser_prompt({}, recent, "")
 
     def test_list_tabs_keeps_objects_and_private_url_parts_local(self):
         """Only live web tabs are listed, with a short URL for disambiguation."""
