@@ -40,6 +40,35 @@ class AppWorkerTests(unittest.TestCase):
             worker.join(timeout=3)
         self.assertFalse(worker.is_alive())
 
+    def test_auto_requests_run_on_the_automation_worker(self):
+        """Auto uses the same queue and worker as the explicit engine choices."""
+        jobs, events = Queue(), Queue()
+        cancel, shutdown = Event(), Event()
+        calls = []
+
+        def run(text, state):
+            calls.append((text, state["_cancel"], get_ident()))
+            return "Answered"
+
+        worker = Thread(
+            target=run_worker,
+            args=(jobs, events, cancel, shutdown),
+            kwargs={"handlers": {"auto": run}},
+        )
+        worker.start()
+        try:
+            self.assertEqual(events.get(timeout=3)["kind"], "ready")
+            jobs.put({"kind": "task", "mode": "auto", "text": "Read a page"})
+            self.assertEqual(events.get(timeout=3)["kind"], "started")
+            result = events.get(timeout=3)
+            self.assertEqual(result["text"], "Answered")
+            self.assertEqual(result["mode"], "auto")
+            self.assertEqual(calls[0][:2], ("Read a page", cancel))
+            self.assertNotEqual(calls[0][2], get_ident())
+        finally:
+            shutdown.set()
+            worker.join(timeout=3)
+
     def test_stop_before_queued_action(self):
         """Stop cannot be lost when pressed just before the worker takes a job."""
         jobs, events = Queue(), Queue()

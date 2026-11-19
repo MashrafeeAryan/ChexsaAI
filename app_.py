@@ -30,6 +30,7 @@ MODE_LABELS = {
     "browser": "🌐︎ Browser",
     "gmail": "✉︎ Gmail",
     "visual": "◉ Visual desktop",
+    "auto": "Auto",
 }
 
 

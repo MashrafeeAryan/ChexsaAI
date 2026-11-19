@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 SETTING_KEYS = ("LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "VISION_MODEL")
-APP_MODES = ("desktop", "browser", "gmail", "visual")
+APP_MODES = ("desktop", "browser", "gmail", "visual", "auto")
 MASCOTS = ("Foxy", "Fluffy", "Bruhhh")
 
 
@@ -227,7 +227,12 @@ def _load_engines(states):
     original_output = files_.OUTPUT_DIR
     files_.OUTPUT_DIR = settings_path().parent / "output"
 
+    def run_auto(text, state):
+        """Use existing browser and Windows sessions on this same worker."""
+        return agent_.run_auto_agent(text, state, states["browser"], states["desktop"])
+
     handlers = {
+        "auto": run_auto,
         "browser": agent_.run_agent,
         "desktop": desktop_agent_.run_desktop_agent,
         "gmail": gmail_agent_.run_gmail_agent,
@@ -329,6 +334,7 @@ def run_worker(jobs, events, cancel, shutdown, initial_settings=None, handlers=N
                     # Keep live connections, but discard the previous chat's selected targets.
                     states["desktop"].clear()
                     states["visual"].clear()
+                    states["auto"].clear()
                     for key in ("_browser_task", "_canvas_review", "_canvas_link"):
                         states["browser"].pop(key, None)
                     gmail = states["gmail"]
