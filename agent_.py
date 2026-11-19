@@ -434,6 +434,11 @@ def _run_browser_task(task, browser, resuming=False):
     # Each turn can make one model call. This fixed limit prevents endless API calls.
     for step in range(10):
         check_cancelled(browser)
+        used = task.get("decisions_used", 0)
+        if used >= 40:
+            task["status"] = "paused"
+            return "This task reached its total model decision limit. Check the page before starting another request."
+        task["decisions_used"] = used + 1
         action = get_reply(message, observation, history, previous)
         # Stop may have been pressed while the model was replying.
         check_cancelled(browser)

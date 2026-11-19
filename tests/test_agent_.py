@@ -112,6 +112,18 @@ class AgentLoopTests(unittest.TestCase):
                 raise InterruptedError("Stop")
         assert state["last_metrics"]["outcome"] == "cancelled"
 
+    def test_browser_resume_cannot_reset_the_task_budget(self):
+        """An in-session retry keeps the earlier decisions in the task budget."""
+        state = {"playwright": object(), "page": self.page}
+        task = {
+            "request": "Continue the job", "status": "paused", "history": [],
+            "in_flight": None, "decisions_used": 40, "scope": (None, None, None),
+        }
+        state["_browser_task"] = task
+        result = agent_.run_agent("/continue", state)
+        assert "total model decision limit" in result
+        self.tools["get_reply"].assert_not_called()
+
     def test_saved_task_records_input_intent_before_clicking(self):
         """An interruption during a click leaves the disk record uncertain."""
         state = {"playwright": object(), "page": self.page}
