@@ -33,6 +33,7 @@ from files_ import copy_file_text, edit_file, read_file, read_file_section, writ
 from desktop_ import (
     click_control,
     find_app,
+    find_open_app,
     inspect_control,
     expand_control,
     focus_control,
@@ -383,6 +384,11 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
             "Set keyboard focus on an exact shown field and verify it.",
             {"node_id": _ID},
         )]
+    tools = [*tools, _tool(
+        "use_open_app",
+        "Use a single already-open window by installed executable name. Never launches an app.",
+        {"executable": {"type": "string"}},
+    )]
     search_tip = ""
     if observation is not None and "view" in observation:
         payload["window"]["view"] = observation["view"]
@@ -513,7 +519,7 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
             raise RuntimeError("The model returned invalid tool argument types. Nothing was run.")
 
     # An app name or reply cannot be empty or just spaces.
-    if name in ("open_app", "reply") and not next(
+    if name in ("open_app", "use_open_app", "reply") and not next(
         value for value in arguments.values() if isinstance(value, str)
     ).strip():
         raise RuntimeError("The model returned an empty app name or reply.")
@@ -781,15 +787,17 @@ def _run_desktop_request(request, state):
                 if entry["tool"] == "read_file_section" and entry["result"]["path"] == path:
                     entry["result"].pop("text", None)
 
-        elif name == "open_app":
+        elif name in ("open_app", "use_open_app"):
             # Find the installed app, then remember its window and process.
             path = find_app(arguments["executable"])
-            state["window"] = open_app('"' + path + '"')
+            state["window"] = (
+                find_open_app(path) if name == "use_open_app" else open_app('"' + path + '"')
+            )
             state["process_id"] = state["window"].process_id()
             state["executable"] = arguments["executable"]
             if not state["process_id"]:
                 raise RuntimeError("The app changed during startup. Read its window before continuing.")
-            result = "App opened; inspect the current window before acting."
+            result = "App selected; inspect the current window before acting."
             verified_write = None
 
         elif observation is None:

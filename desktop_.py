@@ -75,6 +75,22 @@ _READABLE_TYPES = {
 _observations = {}
 
 
+def find_open_app(executable):
+    """Return one visible window belonging to the exact installed program."""
+    expected = Path(executable).resolve()
+    matched = []
+    for window in Desktop(backend="uia").windows(visible_only=True):
+        try:
+            path = Path(process_module(window.process_id())).resolve()
+            if path == expected:
+                matched.append(window)
+        except (OSError, ProcessNotFoundError, COMError):
+            continue  # An app might close while listing windows.
+    if len(matched) != 1:
+        raise RuntimeError("Expected one open window for this app. Open or choose the intended window.")
+    return matched[0]
+
+
 @time_step("observation")
 def read_window(window):
     """Describe the visible controls inside this window without changing anything.

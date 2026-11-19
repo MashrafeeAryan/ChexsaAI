@@ -334,11 +334,26 @@ def test_focus_control_requires_the_exact_focused_id():
     control.set_focus.assert_called_once_with()
 
 
+def test_find_open_app_matches_full_program_path():
+    """Same-named executables and duplicate windows cannot be guessed."""
+    target, other = Mock(), Mock()
+    target.process_id.return_value = 10
+    other.process_id.return_value = 20
+    windows = {10: r"C:\Apps\editor.exe", 20: r"C:\Elsewhere\editor.exe"}
+    with patch.object(desktop_, "Desktop") as ui, patch.object(desktop_, "process_module", side_effect=windows.__getitem__):
+        ui.return_value.windows.return_value = [target, other]
+        assert desktop_.find_open_app(windows[10]) is target
+        ui.return_value.windows.return_value = [target, target]
+        with unittest.TestCase().assertRaises(RuntimeError):
+            desktop_.find_open_app(windows[10])
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_window_selection, test_invalid_launches,
         test_read_window_controls, test_read_window_unavailable,
         test_toggle_control_verifies_a_known_state, test_select_control_verifies_the_exact_item,
+        test_find_open_app_matches_full_program_path,
         test_expand_control_checks_the_pattern_state, test_inspect_disabled_control_without_sending_input,
         test_read_selection_keeps_password_fields_private, test_focus_control_requires_the_exact_focused_id,
         test_click_exact_control_and_refresh, test_action_target_guards,

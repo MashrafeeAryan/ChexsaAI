@@ -380,7 +380,7 @@ def test_tools_require_a_window_reading():
         create.return_value = _response("open_app", {"executable": "notepad.exe"})
         assert agent.get_desktop_action("Open Notepad")["tool"] == "open_app"
         names = {tool["function"]["name"] for tool in create.call_args.kwargs["tools"]}
-        assert names == {"open_app", "write_file", "reply"}
+        assert names == {"open_app", "use_open_app", "write_file", "reply"}
 
         create.return_value = _response("press_key", {"keys": ["ENTER"]})
         with unittest.TestCase().assertRaises(RuntimeError):
