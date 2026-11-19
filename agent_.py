@@ -15,6 +15,7 @@ from browser_ import (
     list_tabs,
     select_tab,
     select_option,
+    selected_page_text,
     set_checked,
     open_browser,
     read_page,
@@ -515,6 +516,7 @@ def _run_browser_task(task, browser, resuming=False):
             "read_options",
             "inspect_control",
             "capture_page_text",
+            "capture_selection",
             "wait_for",
             "observe",
         ):
@@ -561,6 +563,8 @@ def _run_browser_task(task, browser, resuming=False):
             result = _save_capture(task, action)
         elif action["action"] == "capture_page_text":
             result = _capture_text(task, observation.get("content", ""))
+        elif action["action"] == "capture_selection":
+            result = _capture_text(task, selected_page_text(page))
         elif action["action"] == "inspect_control":
             result = inspect_control(page, observation, action["backend_node_id"])
         elif action["action"] == "read_options":

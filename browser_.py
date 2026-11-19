@@ -273,6 +273,12 @@ def read_page(page):
         raise
 
 
+@time_step("observation")
+def selected_page_text(page):
+    """Return selected regular page text without reading a field or clipboard."""
+    return page.evaluate("() => window.getSelection()?.toString() || ''")
+
+
 @time_step("action")
 def scroll_page(page, direction):
     """Move about one screen in the active page and return whether it moved."""

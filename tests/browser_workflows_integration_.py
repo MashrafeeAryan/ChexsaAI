@@ -167,6 +167,18 @@ def run_case(page, runtime, name, grouped=False, tokenizer=None, delay=0):
     return metrics
 
 
+def check_selection(page):
+    """Read selected text without copying the rest of the page or using the clipboard."""
+    page.set_content("<p id='selected'>Chosen text</p><p>Other text</p>")
+    page.evaluate("""() => {
+        const range = document.createRange();
+        range.selectNodeContents(document.querySelector('#selected'));
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+    }""")
+    assert browser_.selected_page_text(page) == "Chosen text"
+
+
 def check_file_attachment(page):
     """Attach only a disposable file and verify the page holds it."""
     with TemporaryDirectory(prefix="chexsa-attach-") as folder:
@@ -765,6 +777,7 @@ def main():
                             flush=True,
                         )
             if not args.single_only:
+                check_selection(page)
                 check_file_attachment(page)
                 check_options(page)
                 check_checkbox(page)
