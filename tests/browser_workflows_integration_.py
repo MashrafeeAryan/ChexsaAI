@@ -247,6 +247,43 @@ def check_form_on_an_unfamiliar_layout(page, runtime):
         page.goto("about:blank")
 
 
+def check_export_from_another_tab(page, runtime):
+    """Choose a listed tab, then save its text directly without another reply."""
+    other = page.context.new_page()
+    try:
+        page.set_content("<main>Original tab</main>")
+        other.set_content("<main>Fixture document text</main>")
+        choices = iter(("list_tabs", "switch_tab", "capture_page_text", "save_capture"))
+
+        def choose(**kwargs):
+            payload = json.loads(kwargs["messages"][-1]["content"])
+            action = {"action": next(choices)}
+            if action["action"] == "switch_tab":
+                tabs = payload["previous_actions"][-1]["result"]["tabs"]
+                # This disposable profile has more than one blank page. Use the exact
+                # slot that the fixture opened last rather than relying on a label.
+                action["tab"] = tabs[-1]["tab"]
+            if action["action"] == "save_capture":
+                action.update(capture=1, path="excerpt.txt", finish=True)
+            return SimpleNamespace(choices=[SimpleNamespace(
+                message=SimpleNamespace(content=json.dumps(action))
+            )])
+
+        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=choose)))
+        with (
+            TemporaryDirectory(prefix="chexsa-export-") as folder,
+            patch("files_.OUTPUT_DIR", Path(folder)),
+            patch.object(llm_, "model_client", return_value=(client, "fixture")),
+        ):
+            state = {"playwright": runtime, "page": page}
+            answer = agent_.run_agent("Export the other tab to excerpt.txt", state)
+            assert "Created and verified file" in answer
+            assert state["page"] is other and state["last_metrics"]["model_calls"] == 4
+            assert (Path(folder) / "excerpt.txt").read_text(encoding="utf-8") == "Fixture document text"
+    finally:
+        other.close()
+
+
 def check_renamed_node(page):
     """A still-attached button whose meaning changed must not receive the old click."""
     page.set_content('<button onclick="window.wrong = true">Preview</button>')
@@ -883,6 +920,7 @@ def main():
                             print(json.dumps({"run": iteration + 1, **stats}), flush=True)
             if not args.single_only:
                 check_form_on_an_unfamiliar_layout(page, runtime)
+                check_export_from_another_tab(page, runtime)
                 check_renamed_node(page)
                 check_selection(page)
                 check_file_attachment(page)
