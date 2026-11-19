@@ -8,6 +8,7 @@ from time import perf_counter
 
 # Keep simultaneous requests separate, even when they use the same API client.
 _current = ContextVar("chexsa_task_metrics", default=None)
+_timing = ContextVar("chexsa_timed_step", default=None)
 
 
 @contextmanager
@@ -54,12 +55,20 @@ def time_step(phase):
             counters = _current.get()
             if counters is None:
                 return function(*args, **kwargs)
+            parent = _timing.get()
+            step = {"counters": counters, "children": 0}
+            token = _timing.set(step)
             started = perf_counter()
             try:
                 return function(*args, **kwargs)
             finally:
+                elapsed = perf_counter() - started
+                _timing.reset(token)
                 seconds = counters["seconds"]
-                seconds[phase] = seconds.get(phase, 0) + perf_counter() - started
+                seconds[phase] = seconds.get(phase, 0) + elapsed - step["children"]
+                if parent is not None and parent["counters"] is counters:
+                    # A checkbox action can include another click and two observations.
+                    parent["children"] += elapsed
         return timed
     return wrap
 

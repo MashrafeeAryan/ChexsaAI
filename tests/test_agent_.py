@@ -10,6 +10,7 @@ from unittest.mock import DEFAULT, Mock, patch
 import agent_
 import browser_
 import llm_
+import task_metrics_
 
 
 class AgentLoopTests(unittest.TestCase):
@@ -51,6 +52,15 @@ class AgentLoopTests(unittest.TestCase):
         assert state["last_metrics"]["model_calls"] == 1
         assert state["last_metrics"]["failed_model_calls"] == 1
         assert create.call_count == 3
+
+    def test_nested_ui_timings_only_count_each_interval_once(self):
+        """A read inside an action is counted as observation time."""
+        observe = task_metrics_.time_step("observation")(lambda: None)
+        act = task_metrics_.time_step("action")(observe)
+        with patch.object(task_metrics_, "perf_counter", side_effect=[0, 1, 2, 4, 5, 6]):
+            with task_metrics_.measure_task({}) as metrics:
+                act()
+        assert metrics["seconds"] == {"observation": 2, "action": 2, "task": 6}
 
     def test_list_tabs_keeps_objects_and_private_url_parts_local(self):
         """Only live web tabs are listed, with a short URL for disambiguation."""
