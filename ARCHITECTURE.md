@@ -4,7 +4,10 @@ Chexsa uses plain functions and dictionaries. Select a manual engine or use
 Auto in the desktop app or with `python cli_.py auto`. In Auto, one model
 decision selects the browser or Windows engine. Both engines retain their
 own state. A request uses one engine at a time. In manual modes, the request
-goes directly to the selected engine. `voice_.py` accepts spoken requests,
+goes directly to the selected engine. The browser engine can pass captured
+page text to the local file engine without sending the full export through
+the model. Auto keeps verified export paths available to the Windows engine
+for a follow-up request. `voice_.py` accepts spoken requests,
 calls the selected agent, and speaks its response.
 
 ```text
@@ -62,7 +65,10 @@ decision. Autocomplete choices and dependent fields should be handled separately
 - Uncertain input, a sent click followed by interruption, or a changed document makes recovery **inspection only**. It can read, search, and wait; it cannot send more input.
 - Closing the saved tab cannot silently open a replacement during recovery. Start a new request to use another tab.
 - A different request starts a new task. An identical request with an uncertain previous outcome is redirected to inspection first.
-- Closing Chexsa clears this checkpoint. This is session recovery, not disk persistence or automatic replay.
+- In-session history disappears when Chexsa closes unless you opt in to a local checkpoint.
+- Enter `/checkpoint` to save existing progress, or start a request with `/remember` to save progress as it happens.
+- Use `/restore ID` to find one open tab at the saved URL, then `/continue` to inspect it. A restored checkpoint can only read, search, and wait.
+- Use `/forget_task ID` to delete the local checkpoint. The checkpoint keeps the request, page URL, and progress counts under Windows encryption.
 
 Example: a group fills Name, then Stop is pressed. `/continue` keeps Name as
 completed, reads the current form, and asks for the unfinished Email/Notes/Save
@@ -98,4 +104,4 @@ scripted action/reply text; they are not provider-reported total API usage.
 - **More browser tools:** add tabs, scrolling, uploads, and other actions.
 - **Screenshots:** let the model use page images when needed.
 - **Better result checks:** confirm that the whole task succeeded.
-- **Saved progress across restarts:** reconcile a task after closing the app.
+- **Resume verified steps across restarts:** extend restart inspection into continuation when current evidence proves which steps are safe to take.
