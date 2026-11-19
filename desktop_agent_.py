@@ -38,6 +38,7 @@ from desktop_ import (
     read_text,
     read_window,
     type_text,
+    toggle_control,
 )
 
 load_dotenv(Path(__file__).with_name(".env"))  # Reuse the existing API settings.
@@ -342,10 +343,16 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
             tool for tool in _TOOLS
             if tool["function"]["name"] in ("open_app", "write_file", "reply")
         ]
+    if observation and re.search(r"\] (CheckBox|Button) ", observation["elements"]):
+        tools = [*tools, _tool(
+            "toggle_control",
+            "Set a Windows control that supports Toggle and verify the state.",
+            {"node_id": _ID, "checked": {"type": "boolean"}},
+        )]
     search_tip = ""
     if observation is not None and "view" in observation:
         payload["window"]["view"] = observation["view"]
-        tools = [*_TOOLS, _SEARCH_TOOL]
+        tools = [*tools, _SEARCH_TOOL]
         search_tip = (
             "Use find_controls if a target is missing or unclear. "
             "Compare context for duplicate labels. If still ambiguous, ask the user. "
@@ -477,7 +484,7 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
     ).strip():
         raise RuntimeError("The model returned an empty app name or reply.")
 
-    if name in ("click_control", "type_text"):
+    if name in ("click_control", "type_text", "toggle_control"):
         if (
             observation is None
             or tuple(arguments["node_id"]) not in shown_control_ids(observation["elements"])
@@ -761,6 +768,9 @@ def _run_desktop_request(request, state):
 
         elif name == "click_control":
             result = click_control(observation, arguments["node_id"])
+
+        elif name == "toggle_control":
+            result = toggle_control(observation, arguments["node_id"], arguments["checked"])
 
         elif name == "press_key":
             result = press_key(observation, arguments["keys"])

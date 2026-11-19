@@ -263,6 +263,35 @@ def click_control(observation, node_id):
 
 
 @time_step("action")
+def toggle_control(observation, node_id, checked):
+    """Set a Windows toggle through its accessibility pattern and verify it."""
+    if type(checked) is not bool:
+        raise ValueError("Choose true or false for checked.")
+    control = _get_control(observation, node_id)
+    try:
+        toggle = control.iface_toggle
+        before = toggle.CurrentToggleState
+    except (NoPatternInterfaceError, COMError, OSError):
+        raise RuntimeError("This control does not expose its toggle state.") from None
+
+    desired = int(checked)
+    if before == desired:
+        return {"checked": checked, "verified": True}
+    if before not in (0, 1):
+        raise RuntimeError("This toggle has an indeterminate state. Read the window again.")
+
+    # Another input can use the target only after a fresh reading.
+    _observations.pop(observation["window_id"], None)
+    try:
+        toggle.Toggle()
+        if toggle.CurrentToggleState == desired:
+            return {"checked": checked, "verified": True}
+    except (COMError, OSError):
+        pass
+    raise RuntimeError("The toggle outcome could not be verified. Read the window before trying again.")
+
+
+@time_step("action")
 def type_text(observation, node_id, text):
     """Replace the chosen field or document's text and check what was entered.
 

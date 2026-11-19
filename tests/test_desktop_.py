@@ -253,10 +253,25 @@ def test_transient_text_match_is_not_success():
 
 
 # Let the existing unittest command run these plain test functions without new classes.
+def test_toggle_control_verifies_a_known_state():
+    """UI Automation can set a Windows toggle without physical input."""
+    reading, control = _reading()
+    toggle = control.iface_toggle
+    toggle.CurrentToggleState = 0
+    toggle.Toggle.side_effect = lambda: setattr(toggle, "CurrentToggleState", 1)
+    node = next(iter(reading["controls"]))
+    assert desktop_.toggle_control(reading, node, False)["verified"]
+    toggle.Toggle.assert_not_called()
+    assert desktop_.toggle_control(reading, node, True)["verified"]
+    toggle.Toggle.assert_called_once_with()
+    with unittest.TestCase().assertRaisesRegex(RuntimeError, "old or already used"):
+        desktop_.toggle_control(reading, node, False)
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_window_selection, test_invalid_launches,
-        test_read_window_controls, test_read_window_unavailable,
+        test_read_window_controls, test_read_window_unavailable, test_toggle_control_verifies_a_known_state,
         test_click_exact_control_and_refresh, test_action_target_guards,
         test_click_failure_is_not_retried, test_type_field_verification,
         test_type_document_focus_and_verification, test_click_covered_target,
