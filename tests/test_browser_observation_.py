@@ -86,6 +86,9 @@ class BrowserObservationTests(unittest.TestCase):
         self.assertEqual(details["actions"], ["click", "type"])
         self.assertEqual(details["role"], "textbox")
         self.assertNotIn("Old subject", str(details))
+        browser_.read_page(self.page)
+        with self.assertRaisesRegex(RuntimeError, "old or already used"):
+            browser_.inspect_control(self.page, observation, 113)
 
     def test_region_inspection_separates_identically_named_sections(self):
         """Two regions can look the same and still have different members."""

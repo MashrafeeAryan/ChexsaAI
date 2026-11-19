@@ -449,6 +449,8 @@ def click_node(page, backend_node_id):
 
 def inspect_control(page, observation, target):
     """Describe the state and useful operations of an exact observed browser control."""
+    if _observations.get(page, {}).get("observation") is not observation:
+        raise RuntimeError("This reading is old or already used. Read the page again.")
     resolve_node(page, target)
     control = observation["controls"][target]
     role = control["role"]
