@@ -154,6 +154,7 @@ def read_page(page):
         by_id = {node["nodeId"]: node for node in nodes}
         targets, lines, text_lines = set(), [], []
         controls, text_nodes = {}, {}
+        headings = []
 
         for node in nodes:
             if node.get("ignored"):
@@ -179,6 +180,14 @@ def read_page(page):
                     text_lines.append(name)
                     text_id = node.get("backendDOMNodeId", "ax:" + node["nodeId"])
                     text_nodes[text_id] = name
+
+            if role == "heading" and name.strip():
+                level = next(
+                    (prop.get("value", {}).get("value") for prop in node.get("properties", [])
+                     if prop["name"] == "level"),
+                    None,
+                )
+                headings.append({"level": level, "title": name[:240]})
 
             target = node.get("backendDOMNodeId")
             if role not in _CONTROL_ROLES or not target:
@@ -254,6 +263,7 @@ def read_page(page):
             "document_id": document,
             "controls": controls,
             "text_nodes": text_nodes,
+            "headings": headings,
             "elements": "\n".join(lines),
             # Plain accessible text, rather than a second formatted tree snapshot.
             "content": "\n".join(text_lines),

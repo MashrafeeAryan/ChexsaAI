@@ -49,7 +49,7 @@ Keep progress from previous_actions. Report success only with fresh evidence. Ne
 
 _EXTRA_ACTIONS = {
     'navigation': '{"action":"go_back"} or {"action":"go_forward"} moves in this tab\'s history.\n{"action":"scroll","direction":"down"} scrolls one screen; direction may be up.\n{"action":"list_tabs"} lists open web tabs.\n{"action":"switch_tab","tab":2} selects a tab from the immediately preceding list.',
-    'inspection': '{"action":"find_text","query":"Receipt","offset":0} searches readable page text.\n{"action":"inspect_region","backend_node_id":18,"offset":0} reads nearby controls in its form or dialog.\n{"action":"inspect_control","backend_node_id":18} shows flags and available operations.',
+    'inspection': '{"action":"find_text","query":"Receipt","offset":0} searches readable page text.\n{"action":"inspect_region","backend_node_id":18,"offset":0} reads nearby controls in its form or dialog.\n{"action":"inspect_control","backend_node_id":18} shows flags and available operations.\n{"action":"outline","offset":0} reads headings without exposing action IDs.',
     'checkboxes': '{"action":"set_checked","backend_node_id":12,"checked":true} sets a checkbox or switch.',
     'choices': '{"action":"read_options","backend_node_id":12,"offset":0} lists choices from a native select.\n{"action":"select_option","backend_node_id":12,"label":"First choice"} selects an exact label.',
     'files': '{"action":"upload_file","backend_node_id":12,"path":"full path from request"} attaches one file to an exact native input. The request must name the site and quote the full path.\n{"action":"capture_page_text"} keeps the current readable page text as a local capture.\n{"action":"save_capture","capture":1,"path":"notes.docx"} writes captured text directly to a new file.\n{"action":"capture_selection"} captures only the page text the user selected.',
@@ -339,6 +339,9 @@ def get_reply(message, observation=None, history=None, previous=None):
             and last.get("action", {}).get("action") == "list_tabs"
             and any(tab["tab"] == action["tab"] for tab in last["result"]["tabs"])
         ):
+            return action
+    elif action.get("action") == "outline" and set(action) == {"action", "offset"}:
+        if observation is not None and type(action["offset"]) is int and action["offset"] >= 0:
             return action
     elif action.get("action") == "discover" and set(action) == {"action", "group"}:
         group = action["group"]

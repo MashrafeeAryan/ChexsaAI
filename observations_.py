@@ -232,6 +232,16 @@ def find_elements(observation, query, offset=0):
     }
 
 
+def page_outline(observation, offset):
+    """Read a portion of the heading outline. Headings grant no action IDs."""
+    headings = observation.get("headings", [])
+    end = offset + 20
+    return {
+        "headings": headings[offset:end],
+        "next_offset": end if end < len(headings) else None,
+    }
+
+
 def inspect_region(observation, anchor_id, offset=0):
     """Show controls in the anchor's real form or dialog.
 

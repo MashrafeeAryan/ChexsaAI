@@ -27,7 +27,7 @@ from browser_ import (
     wait_for_page,
 )
 from llm_ import choose_engine, get_reply
-from observations_ import find_page_text
+from observations_ import find_page_text, page_outline
 from files_ import write_file
 from app_runtime_ import (
     check_cancelled,
@@ -516,6 +516,7 @@ def _run_browser_task(task, browser, resuming=False):
             "discover",
             "find_text",
             "inspect_region",
+            "outline",
             "list_tabs",
             "read_options",
             "inspect_control",
@@ -555,6 +556,8 @@ def _run_browser_task(task, browser, resuming=False):
             result = "Local search requested; fresh matches are supplied with the next observation."
         elif action["action"] in ("navigate", "go_back", "go_forward"):
             result = _navigate(page, action)
+        elif action["action"] == "outline":
+            result = page_outline(observation, action["offset"])
         elif action["action"] == "list_tabs":
             tabs, listed_tabs = list_tabs(page)
             result = {"tabs": tabs}

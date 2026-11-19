@@ -86,6 +86,10 @@ class BrowserObservationTests(unittest.TestCase):
         self.assertIn('[19] button "Send" | context: dialog "New Message"', observation["elements"])
         self.assertIn('[113] textbox "Subject"', observation["elements"])
         self.assertNotIn("heading", observation["elements"])
+        self.assertEqual(
+            observations_.page_outline(observation, 0)["headings"],
+            [{"title": "Inbox", "level": None}],
+        )
         self.assertEqual(browser_._observations[self.page]["nodes"], {16, 19, 113})
 
     def test_control_details_do_not_send_field_contents(self):
