@@ -48,7 +48,7 @@ Keep progress from previous_actions. Report success only with fresh evidence. Ne
 """
 
 _EXTRA_ACTIONS = {
-    'navigation': '{"action":"go_back"} or {"action":"go_forward"} moves in this tab\'s history.\n{"action":"scroll","direction":"down"} scrolls one screen up or down; include a shown backend_node_id to scroll its panel.\n{"action":"list_tabs"} lists open web tabs.\n{"action":"switch_tab","tab":2} selects a tab from the immediately preceding list.',
+    'navigation': '{"action":"go_back"} or {"action":"go_forward"} moves in this tab\'s history.\n{"action":"scroll","direction":"down"} scrolls one screen up or down; include a shown backend_node_id to scroll its panel.\n{"action":"list_tabs"} lists open web tabs.\n{"action":"switch_tab","tab":2} selects a tab from the immediately preceding list.\n{"action":"new_tab","url":"https://example.com"} opens and reads another tab.',
     'inspection': '{"action":"find_text","query":"Receipt","offset":0} searches readable page text.\n{"action":"inspect_region","backend_node_id":18,"offset":0} reads nearby controls in its form or dialog.\n{"action":"inspect_control","backend_node_id":18} shows flags and available operations.\n{"action":"outline","offset":0} reads headings without exposing action IDs.',
     'checkboxes': '{"action":"set_checked","backend_node_id":12,"checked":true} sets a checkbox or switch.',
     'choices': '{"action":"read_options","backend_node_id":12,"offset":0} lists choices from a native select.\n{"action":"select_option","backend_node_id":12,"label":"First choice"} selects an exact label.',
@@ -247,7 +247,9 @@ def get_reply(message, observation=None, history=None, previous=None):
     if not isinstance(action, dict):
         raise RuntimeError("The AI returned an invalid action. Nothing was run.")
 
-    if action.get("action") == "navigate" and set(action) == {"action", "url"}:
+    if action.get("action") in ("navigate", "new_tab") and set(action) == {"action", "url"}:
+        if action["action"] == "new_tab" and observation is None:
+            raise RuntimeError("Connect to Chrome before opening another tab.")
         url = action["url"]
         if isinstance(url, str) and not any(char.isspace() for char in url):
             try:

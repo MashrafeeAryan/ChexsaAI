@@ -454,7 +454,7 @@ def _navigate(page, action):
     """Navigate within the selected tab and report whether history was available."""
     kind = action["action"]
     options = {"wait_until": "domcontentloaded", "timeout": 30000}
-    if kind == "navigate":
+    if kind in ("navigate", "new_tab"):
         page.goto(action["url"], **options)
         return "Navigation finished."
     move = page.go_back if kind == "go_back" else page.go_forward
@@ -555,7 +555,10 @@ def _run_browser_task(task, browser, resuming=False):
             result = "See the requested group's tool descriptions in the next decision."
         elif action["action"] in ("find_elements", "find_text", "inspect_region"):
             result = "Local search requested; fresh matches are supplied with the next observation."
-        elif action["action"] in ("navigate", "go_back", "go_forward"):
+        elif action["action"] in ("navigate", "go_back", "go_forward", "new_tab"):
+            if action["action"] == "new_tab":
+                page = page.context.new_page()
+                browser["page"] = page
             result = _navigate(page, action)
         elif action["action"] == "outline":
             result = page_outline(observation, action["offset"])

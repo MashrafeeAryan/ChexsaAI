@@ -347,6 +347,19 @@ class AgentLoopTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "closed or changed"):
             browser_.select_tab({2: (other, "https://example.test/past")}, 2)
 
+    def test_new_tab_reads_the_new_page_without_replacing_the_original(self):
+        """An extra page opens only when requested by the chosen action."""
+        state = {"playwright": object(), "page": self.page}
+        other = self.page.context.new_page.return_value
+        self.tools["get_reply"].side_effect = [
+            {"action": "new_tab", "url": "https://example.test/details"},
+            {"action": "reply", "text": "Done"},
+        ]
+        assert agent_.run_agent("Open a new page", state) == "Done"
+        self.page.goto.assert_not_called()
+        assert state["page"] is other
+        self.tools["read_page"].assert_called_with(other)
+
     def test_history_navigation_uses_the_selected_tab(self):
         """A history action uses the current page and then gets a new reading."""
         browser = {"playwright": object(), "page": self.page}
