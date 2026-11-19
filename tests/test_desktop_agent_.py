@@ -722,6 +722,19 @@ def test_desktop_group_keeps_private_values_out_of_history():
     assert choose.call_count == 2 and type_field.call_count == 2
 
 
+def test_disabled_duplicate_stops_a_group_before_the_first_write():
+    """Extra labels on a duplicate do not hide its disabled state."""
+    reading = {
+        "window_id": (42,), "controls": {(1,): object(), (2,): object()},
+        "elements": '[1] Edit "First"\n[2] Edit "Second" | disabled | in "Other form"',
+    }
+    fields = [{"node_id": [1], "text": "A"}, {"node_id": [2], "text": "B"}]
+    with patch.object(agent, "type_text") as type_field:
+        completed, after = agent._type_field_group(fields, reading, {})
+    assert completed == [] and after is reading
+    type_field.assert_not_called()
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
@@ -732,6 +745,7 @@ def load_tests(loader, tests, pattern):
         test_windows_agent_can_offer_one_group_for_multiple_fields,
         test_partial_field_group_cannot_claim_verified_completion,
         test_desktop_group_keeps_private_values_out_of_history,
+        test_disabled_duplicate_stops_a_group_before_the_first_write,
         test_desktop_counts_model_calls_without_recording_requests,
         test_compact_view_rejects_ids_it_did_not_show,
         test_desktop_search_executes_on_the_full_fresh_reading,

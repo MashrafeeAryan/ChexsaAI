@@ -661,7 +661,7 @@ def _type_field_group(fields, initial, state):
         if any(
             not any(
                 line.startswith(json.dumps(remaining["node_id"]) + " ")
-                and line in lines and line.endswith(" | disabled") is False
+                and line in lines and " | disabled" not in line
                 and line.partition("] ")[2].startswith(("Edit ", "Document "))
                 for line in original_lines
             )
