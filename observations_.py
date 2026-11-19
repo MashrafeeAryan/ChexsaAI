@@ -386,9 +386,4 @@ def page_context(current, previous, request, history):
         view["search"] = inspect_region(
             current, last_action["backend_node_id"], last_action.get("offset", 0)
         )
-    if last_action.get("action") == "find_text":
-        view["text_search"] = find_page_text(
-            current, last_action["query"], last_action.get("offset", 0)
-        )
-
     return view

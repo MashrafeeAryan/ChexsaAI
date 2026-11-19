@@ -112,6 +112,21 @@ class AgentLoopTests(unittest.TestCase):
                 raise InterruptedError("Stop")
         assert state["last_metrics"]["outcome"] == "cancelled"
 
+    def test_text_search_saves_the_evidence_and_its_source(self):
+        """The match remains available on the next page as historical evidence."""
+        state = {"playwright": object(), "page": self.page}
+        self.tools["read_page"].return_value = {
+            "url": "https://example.test/receipt", "text_nodes": {7: "Receipt 100"},
+        }
+        self.tools["get_reply"].side_effect = [
+            {"action": "find_text", "query": "receipt"},
+            {"action": "reply", "text": "Found"},
+        ]
+        assert agent_.run_agent("Find a receipt", state) == "Found"
+        result = state["_browser_task"]["history"][0]["result"]
+        assert result["matches"] == ["Receipt 100"]
+        assert result["source"] == "https://example.test/receipt"
+
     def test_browser_resume_cannot_reset_the_task_budget(self):
         """An in-session retry keeps the earlier decisions in the task budget."""
         state = {"playwright": object(), "page": self.page}

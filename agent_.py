@@ -26,6 +26,7 @@ from browser_ import (
     wait_for_page,
 )
 from llm_ import choose_engine, get_reply
+from observations_ import find_page_text
 from files_ import write_file
 from app_runtime_ import (
     check_cancelled,
@@ -636,6 +637,11 @@ def _run_browser_task(task, browser, resuming=False):
             next_observation if next_observation is not None else read_page(page)
         )
         task["in_flight"] = None
+        if action["action"] == "find_text":
+            entry["result"] = {
+                "source": observation["url"],
+                **find_page_text(observation, action["query"], action.get("offset", 0)),
+            }
         task["_observation"] = observation
         task["scope"] = tuple(
             observation.get(key) for key in ("page_id", "document_id", "url")
