@@ -5,6 +5,7 @@ from task_metrics_ import time_step
 import json
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 from weakref import WeakKeyDictionary
 
 from playwright.sync_api import Error, sync_playwright
@@ -73,6 +74,35 @@ def open_browser():
         # Stop the connection if startup fails partway through.
         playwright.stop()
         raise
+
+
+def list_tabs(current):
+    """Return a bounded list of open web tabs and keep their objects separate."""
+    targets, descriptions = {}, []
+    for tab in current.context.pages:
+        if tab.is_closed():
+            continue
+
+        url = tab.url
+        address = urlsplit(url)
+        if address.scheme not in ("http", "https") and url != "about:blank":
+            continue
+        if len(targets) >= 20:
+            continue
+
+        number = len(targets) + 1
+        targets[number] = (tab, url)
+        # Keep URL credentials, query values, and fragments off the model request.
+        short_url = (
+            f"{address.scheme}://{address.hostname}{address.path}"
+            if address.hostname else url
+        )
+        descriptions.append({
+            "tab": number,
+            "url": short_url[:240],
+            "current": tab is current,
+        })
+    return descriptions, targets
 
 
 # Read controls using the exact node IDs Chrome already gives us.

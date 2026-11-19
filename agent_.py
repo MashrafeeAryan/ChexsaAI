@@ -8,6 +8,7 @@ from plugins.canvas_ import assignment_path, canvas_command, canvas_intent
 
 from browser_ import (
     click_node,
+    list_tabs,
     open_browser,
     read_page,
     scroll_page,
@@ -260,6 +261,7 @@ def _run_browser_task(task, browser, resuming=False):
             "find_elements",
             "find_text",
             "inspect_region",
+            "list_tabs",
             "wait_for",
             "observe",
         ):
@@ -291,6 +293,9 @@ def _run_browser_task(task, browser, resuming=False):
             result = "Local search requested; fresh matches are supplied with the next observation."
         elif action["action"] in ("navigate", "go_back", "go_forward"):
             result = _navigate(page, action)
+        elif action["action"] == "list_tabs":
+            tabs, _ = list_tabs(page)
+            result = {"tabs": tabs}
         elif action["action"] == "scroll":
             result = {"moved": scroll_page(page, action["direction"])}
         elif action["action"] == "click":

@@ -37,6 +37,7 @@ Actions:
 {"action":"observe"} only when no page was supplied.
 {"action":"go_back"} or {"action":"go_forward"} moves in this tab's history.
 {"action":"scroll","direction":"down"} scrolls one screen; direction may be up.
+{"action":"list_tabs"} lists open web tabs.
 {"action":"click","backend_node_id":18}
 {"action":"type","backend_node_id":12,"text":"Hello"} replaces the whole field, without submitting.
 {"action":"find_elements","query":"Send","offset":0} searches all locally collected controls; empty query lists them. Use next_offset for more.
@@ -250,7 +251,9 @@ def get_reply(message, observation=None, history=None, previous=None):
     elif action.get("action") == "scroll" and set(action) == {"action", "direction"}:
         if observation is not None and action["direction"] in ("up", "down"):
             return action
-    elif action in ({"action": "go_back"}, {"action": "go_forward"}) and observation is not None:
+    elif action in (
+        {"action": "go_back"}, {"action": "go_forward"}, {"action": "list_tabs"}
+    ) and observation is not None:
         return action
     elif action == {"action": "observe"} and observation is None:
         return action

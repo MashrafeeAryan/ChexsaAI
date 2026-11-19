@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import DEFAULT, Mock, patch
 
 import agent_
+import browser_
 import llm_
 
 
@@ -50,6 +51,23 @@ class AgentLoopTests(unittest.TestCase):
         assert state["last_metrics"]["model_calls"] == 1
         assert state["last_metrics"]["failed_model_calls"] == 1
         assert create.call_count == 3
+
+    def test_list_tabs_keeps_objects_and_private_url_parts_local(self):
+        """Only live web tabs are listed, with a short URL for disambiguation."""
+        other = Mock(url="https://person:secret@example.test/form?key=secret#private")
+        other.is_closed.return_value = False
+        closed = Mock()
+        closed.is_closed.return_value = True
+        settings = Mock(url="chrome://settings")
+        settings.is_closed.return_value = False
+        self.page.url = "https://example.test/"
+        self.page.context.pages = [self.page, other, closed, settings]
+        summaries, targets = browser_.list_tabs(self.page)
+        assert summaries == [
+            {"tab": 1, "url": "https://example.test/", "current": True},
+            {"tab": 2, "url": "https://example.test/form", "current": False},
+        ]
+        assert targets[2][0] is other
 
     def test_history_navigation_uses_the_selected_tab(self):
         """A history action uses the current page and then gets a new reading."""
