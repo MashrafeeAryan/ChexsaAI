@@ -16,7 +16,7 @@ from browser_ import (
 )
 from llm_ import get_reply
 from app_runtime_ import check_cancelled
-from task_metrics_ import measure_task
+from task_metrics_ import measure_task, time_step
 
 
 # Keep one request and its action history together while working in the browser.
@@ -202,6 +202,21 @@ def _open_assignment(browser, url):
     check_cancelled(browser)
 
 
+@time_step("action")
+def _navigate(page, action):
+    """Navigate within the selected tab and report whether history was available."""
+    kind = action["action"]
+    options = {"wait_until": "domcontentloaded", "timeout": 30000}
+    if kind == "navigate":
+        page.goto(action["url"], **options)
+        return "Navigation finished."
+    move = page.go_back if kind == "go_back" else page.go_forward
+    old_url = page.url
+    response = move(**options)
+    moved = response is not None or page.url != old_url
+    return "History navigation finished." if moved else "No URL change observed. Read the current page."
+
+
 def _run_browser_task(task, browser, resuming=False):
     """Use saved results for planning, while getting all executable IDs afresh."""
     message, history = task["request"], task["history"]
@@ -273,9 +288,8 @@ def _run_browser_task(task, browser, resuming=False):
             result = "Browser connected; current page will be read."
         elif action["action"] in ("find_elements", "find_text", "inspect_region"):
             result = "Local search requested; fresh matches are supplied with the next observation."
-        elif action["action"] == "navigate":
-            page.goto(action["url"], wait_until="domcontentloaded", timeout=30000)
-            result = "Navigation finished."
+        elif action["action"] in ("navigate", "go_back", "go_forward"):
+            result = _navigate(page, action)
         elif action["action"] == "click":
             click_node(page, action["backend_node_id"])
             result = "Click sent. Check the new observation for its outcome."

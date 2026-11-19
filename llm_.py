@@ -35,6 +35,7 @@ SYSTEM_PROMPT = """You are ChexsaAI. Return one JSON object, no extra text.
 Actions:
 {"action":"navigate","url":"https://example.com"}
 {"action":"observe"} only when no page was supplied.
+{"action":"go_back"} or {"action":"go_forward"} moves in this tab's history.
 {"action":"click","backend_node_id":18}
 {"action":"type","backend_node_id":12,"text":"Hello"} replaces the whole field, without submitting.
 {"action":"find_elements","query":"Send","offset":0} searches all locally collected controls; empty query lists them. Use next_offset for more.
@@ -245,6 +246,8 @@ def get_reply(message, observation=None, history=None, previous=None):
             and type(offset) is int and offset >= 0
         ):
             return action
+    elif action in ({"action": "go_back"}, {"action": "go_forward"}) and observation is not None:
+        return action
     elif action == {"action": "observe"} and observation is None:
         return action
     elif (

@@ -51,6 +51,19 @@ class AgentLoopTests(unittest.TestCase):
         assert state["last_metrics"]["failed_model_calls"] == 1
         assert create.call_count == 3
 
+    def test_history_navigation_uses_the_selected_tab(self):
+        """A history action uses the current page and then gets a new reading."""
+        browser = {"playwright": object(), "page": self.page}
+        self.tools["get_reply"].side_effect = [
+            {"action": "go_back"},
+            {"action": "go_forward"},
+            {"action": "reply", "text": "Done"},
+        ]
+        assert agent_.run_agent("Go back then forward", browser) == "Done"
+        self.page.go_back.assert_called_once_with(wait_until="domcontentloaded", timeout=30000)
+        self.page.go_forward.assert_called_once_with(wait_until="domcontentloaded", timeout=30000)
+        assert self.tools["read_page"].call_count == 3
+
     def setUp(self):
         replacements = patch.multiple(
             agent_,
