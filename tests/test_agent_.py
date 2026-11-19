@@ -347,6 +347,24 @@ class AgentLoopTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "closed or changed"):
             browser_.select_tab({2: (other, "https://example.test/past")}, 2)
 
+    def test_close_current_tab_requires_chexsa_ownership(self):
+        """Chexsa can close its own tab, but never an existing user tab."""
+        parent = Mock()
+        parent.is_closed.return_value = False
+        state = {"playwright": object(), "page": self.page, "owned_tabs": {self.page: parent}}
+        self.tools["get_reply"].side_effect = [
+            {"action": "close_tab"}, {"action": "reply", "text": "Done"},
+        ]
+        self.page.close.side_effect = lambda **options: setattr(self.page.is_closed, "return_value", True)
+        assert agent_.run_agent("Close this new tab", state) == "Done"
+        assert state["page"] is parent
+        self.page.close.assert_called_once_with(run_before_unload=True)
+        self.tools["get_reply"].side_effect = None
+        self.tools["get_reply"].return_value = {"action": "close_tab"}
+        with self.assertRaisesRegex(RuntimeError, "not opened"):
+            agent_.run_agent("Close another tab", state)
+        parent.close.assert_not_called()
+
     def test_new_tab_reads_the_new_page_without_replacing_the_original(self):
         """An extra page opens only when requested by the chosen action."""
         state = {"playwright": object(), "page": self.page}

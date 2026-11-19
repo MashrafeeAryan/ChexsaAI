@@ -557,9 +557,22 @@ def _run_browser_task(task, browser, resuming=False):
             result = "Local search requested; fresh matches are supplied with the next observation."
         elif action["action"] in ("navigate", "go_back", "go_forward", "new_tab"):
             if action["action"] == "new_tab":
+                previous_page = page
                 page = page.context.new_page()
+                browser.setdefault("owned_tabs", {})[page] = previous_page
                 browser["page"] = page
             result = _navigate(page, action)
+        elif action["action"] == "close_tab":
+            previous_page = browser.get("owned_tabs", {}).get(page)
+            if previous_page is None or previous_page.is_closed():
+                raise RuntimeError("The current tab was not opened by Chexsa or its original tab is closed.")
+            # Let the site handle its own unsaved-change prompts.
+            page.close(run_before_unload=True)
+            if not page.is_closed():
+                raise RuntimeError("Chrome did not confirm the tab closed. Check it before continuing.")
+            browser["owned_tabs"].pop(page)
+            page = browser["page"] = previous_page
+            result = "Closed the Chexsa tab and returned to the original tab."
         elif action["action"] == "outline":
             result = page_outline(observation, action["offset"])
         elif action["action"] == "list_tabs":
