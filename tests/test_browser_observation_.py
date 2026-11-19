@@ -44,6 +44,17 @@ class BrowserObservationTests(unittest.TestCase):
             return {"nodes": self.nodes}
         raise AssertionError(f"Unexpected Chrome command: {command}")
 
+    def test_history_drops_old_lookups_but_keeps_evidence(self):
+        """A past tab list grants no targets; an earlier text match stays available."""
+        history = [
+            {"action": {"action": "list_tabs"}, "result": {"tabs": [{"tab": 1}]}},
+            {"action": {"action": "find_text", "query": "receipt"}, "result": {"matches": ["receipt"]}},
+            {"action": {"action": "find_elements", "query": "Next"}, "result": "Search"},
+        ]
+        compact = observations_.compact_history("Find the receipt", history)
+        self.assertEqual([entry["action"]["action"] for entry in compact], ["find_text", "find_elements"])
+        self.assertEqual(len(history), 3)
+
     def test_page_text_search_stays_bounded(self):
         """A search finds text beyond the first view without inventing action IDs."""
         observation = {"text_nodes": {i: f"Receipt {i}" for i in range(15)}}

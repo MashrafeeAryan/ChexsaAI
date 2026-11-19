@@ -184,8 +184,14 @@ def compact_history(request, history):
         return summary
 
     compact = []
-    for entry in history:
-        summary = {**entry, "action": summarize(entry["action"])}
+    for index, entry in enumerate(history):
+        action = entry["action"]
+        # Old searches and menus help discovery, but they contain no completed work.
+        if index < len(history) - 1 and action.get("action") in (
+            "discover", "find_elements", "inspect_region", "list_tabs",
+        ):
+            continue
+        summary = {**entry, "action": summarize(action)}
         action, result = entry["action"], entry["result"]
         if action.get("action") == "batch" and isinstance(result, dict):
             completed = result.get("completed")
