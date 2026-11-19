@@ -314,6 +314,25 @@ def _window_view(observation, previous, request, search=None):
     return view
 
 
+def _validate_field_group(fields, shown_ids):
+    """Accept only different shown IDs and literal text for each field."""
+    if not isinstance(fields, list) or not 2 <= len(fields) <= 4:
+        raise ValueError("Give between two and four independent text fields.")
+    used = set()
+    for field in fields:
+        if not isinstance(field, dict) or set(field) != {"node_id", "text"}:
+            raise ValueError("Each field needs its shown ID and text.")
+        node = field["node_id"]
+        if (
+            not isinstance(node, list) or not node
+            or any(type(part) is not int for part in node)
+            or tuple(node) not in shown_ids or tuple(node) in used
+            or not isinstance(field["text"], str)
+        ):
+            raise ValueError("Use distinct shown Windows fields and literal text.")
+        used.add(tuple(node))
+
+
 # Ask for one native tool call, then check its arguments before executing anything.
 def get_desktop_action(request, observation=None, history=None, *, recent_files=None):
     """Send the task and currently usable tools, then validate the chosen action."""

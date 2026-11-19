@@ -625,11 +625,24 @@ def test_csv_continuation_rejects_a_changed_file():
                 agent.run_desktop_agent(f'Read "{path}"', {})
 
 
+def test_field_group_rejects_unseen_duplicate_and_noninteger_ids():
+    """Validations are complete before the first group write can run."""
+    one = {"node_id": [3, 10], "text": "Name"}
+    two = {"node_id": [3, 20], "text": "Example"}
+    ids = {(3, 10), (3, 20)}
+    agent._validate_field_group([one, two], ids)
+    for bad in ([one], [one, one], [one, dict(two, node_id=[3, 30])],
+                [one, dict(two, node_id=[True, 20])], [one, dict(two, text=12)]):
+        with unittest.TestCase().assertRaises(ValueError):
+            agent._validate_field_group(bad, ids)
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
         test_csv_tool_reads_a_named_file_without_opening_a_window,
         test_csv_continuation_rejects_a_changed_file,
+        test_field_group_rejects_unseen_duplicate_and_noninteger_ids,
         test_desktop_counts_model_calls_without_recording_requests,
         test_compact_view_rejects_ids_it_did_not_show,
         test_desktop_search_executes_on_the_full_fresh_reading,
