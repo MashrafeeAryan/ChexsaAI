@@ -87,6 +87,23 @@ class AgentLoopTests(unittest.TestCase):
         assert "991" not in str(checkpoint) and "992" not in str(checkpoint)
         self.tools["get_reply"].assert_not_called()
 
+    def test_remember_saves_from_the_first_decision(self):
+        """Opting in saves the original goal before the model can propose input."""
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "tasks.sqlite3"
+            state = {"_checkpoint_path": path}
+
+            def decide(goal, *args):
+                task = state["_browser_task"]
+                record = agent_.read_browser_checkpoint(task["checkpoint_id"], path)
+                assert record["request"] == goal == "Read something"
+                return {"action": "reply", "text": "Done"}
+
+            self.tools["get_reply"].side_effect = decide
+            assert "Checkpoint:" in agent_.run_agent("/remember Read something", state)
+            task_id = state["_browser_task"]["checkpoint_id"]
+            assert agent_.read_browser_checkpoint(task_id, path)["status"] == "finished"
+
     def test_saved_task_records_input_intent_before_clicking(self):
         """An interruption during a click leaves the disk record uncertain."""
         state = {"playwright": object(), "page": self.page}

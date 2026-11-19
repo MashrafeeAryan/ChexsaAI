@@ -43,7 +43,7 @@ def run_auto_agent(message, state, browser, desktop):
         check_cancelled(state)
         saved = browser.get("_browser_task", {})
         resuming = message.strip().casefold() in ("continue", "resume", "/continue", "/resume")
-        is_checkpoint = message.strip().split(maxsplit=1)[:1] in (["/checkpoint"], ["/restore"], ["/forget_task"])
+        is_checkpoint = message.strip().split(maxsplit=1)[:1] in (["/checkpoint"], ["/restore"], ["/forget_task"], ["/remember"])
         if is_checkpoint or (resuming and saved.get("status") == "paused"):
             choice = {"mode": "browser"}
         else:
@@ -150,6 +150,11 @@ def _run_request(message, browser):
     """
     check_cancelled(browser)
     parts = message.strip().split(maxsplit=1)
+    remember = bool(parts and parts[0].casefold() == "/remember")
+    if remember:
+        if len(parts) != 2:
+            return "Enter /remember followed by a browser request."
+        message = parts[1]
     if parts and parts[0].casefold() == "/checkpoint":
         task = browser.get("_browser_task")
         if task is None:
@@ -175,15 +180,14 @@ def _run_request(message, browser):
             lambda: check_cancelled(browser),
             lambda url: _open_assignment(browser, url),
         )
-    route = _canvas_route(message, browser)
+    route = None if remember else _canvas_route(message, browser)
     if route is not None:
         return _run_canvas_request(route, browser)
     command = message.strip().casefold()
     saved = browser.get("_browser_task")
-    resuming = command in ("/continue", "/resume") or (
-        command in ("continue", "resume")
-        and saved is not None
-        and saved["status"] != "finished"
+    resuming = not remember and (
+        command in ("/continue", "/resume")
+        or (command in ("continue", "resume") and saved is not None and saved["status"] != "finished")
     )
     if resuming:
         task = saved
@@ -206,12 +210,17 @@ def _run_request(message, browser):
             "in_flight": None,
         }
         browser["_browser_task"] = task
+        if remember:
+            _save_checkpoint(task, browser)
 
     if resuming and (browser.get("page") is None or browser["page"].is_closed()):
         return "The saved browser tab is closed. Start a new request; old targets will not be reused."
     task["status"] = "running"
     try:
-        return _run_browser_task(task, browser, resuming)
+        answer = _run_browser_task(task, browser, resuming)
+        if remember:
+            return f"{answer}\nCheckpoint: {task['checkpoint_id']}"
+        return answer
     except (Exception, KeyboardInterrupt):
         # Keep progress, but let the CLI or app display the original error or Stop.
         task["status"] = "paused"
