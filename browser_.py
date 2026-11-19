@@ -569,6 +569,8 @@ def _node_call(page, target, script, *values):
 @time_step("action")
 def upload_file(page, target, path):
     """Attach a checked local file to one exact native input and verify selection."""
+    session, target = resolve_node(page, target)
+    _verify_label(page, session, target)
     path = Path(path)
     file_info = path.stat()
     usable = _node_call(page, target, """function() {
@@ -631,6 +633,8 @@ def select_option(page, target, label):
     """Choose one exact native option and check what the select kept."""
     if not isinstance(label, str) or not label.strip() or len(label) > 240:
         raise ValueError("Provide one exact option label.")
+    session, target = resolve_node(page, target)
+    _verify_label(page, session, target)
     try:
         result = _node_call(page, target, """function(label) {
             if (!this.isConnected || this.tagName !== 'SELECT' || this.multiple)

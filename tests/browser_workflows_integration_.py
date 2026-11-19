@@ -361,6 +361,15 @@ def check_options(page):
     else:
         raise AssertionError("A disabled option was selected.")
     assert page.locator("select").input_value() == "A"
+    browser_.read_page(page)
+    page.locator("select").evaluate("node => node.setAttribute('aria-label', 'Changed')")
+    try:
+        browser_.select_option(page, target, "C")
+    except RuntimeError as error:
+        assert "label changed" in str(error)
+    else:
+        raise AssertionError("A renamed dropdown received the old selection.")
+    assert page.locator("select").input_value() == "A"
 
 
 def check_checkbox(page):
