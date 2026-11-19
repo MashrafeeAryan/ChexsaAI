@@ -104,6 +104,14 @@ class AgentLoopTests(unittest.TestCase):
             task_id = state["_browser_task"]["checkpoint_id"]
             assert agent_.read_browser_checkpoint(task_id, path)["status"] == "finished"
 
+    def test_stop_counts_as_cancellation(self):
+        """Stopping a task differs from an HTTP or tool failure in metrics."""
+        state = {}
+        with unittest.TestCase().assertRaises(InterruptedError):
+            with task_metrics_.measure_task(state):
+                raise InterruptedError("Stop")
+        assert state["last_metrics"]["outcome"] == "cancelled"
+
     def test_saved_task_records_input_intent_before_clicking(self):
         """An interruption during a click leaves the disk record uncertain."""
         state = {"playwright": object(), "page": self.page}

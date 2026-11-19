@@ -34,8 +34,9 @@ def measure_task(state, *, share=False):
     started = perf_counter()
     try:
         yield counters
-    except KeyboardInterrupt:
-        counters["outcome"] = "cancelled"
+    except (InterruptedError, KeyboardInterrupt):
+        if counters["outcome"] != "uncertain":
+            counters["outcome"] = "cancelled"
         raise
     except Exception:
         if counters["outcome"] != "uncertain":
