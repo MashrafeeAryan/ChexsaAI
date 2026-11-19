@@ -637,12 +637,34 @@ def test_field_group_rejects_unseen_duplicate_and_noninteger_ids():
             agent._validate_field_group(bad, ids)
 
 
+def test_field_group_stops_before_a_replaced_target():
+    """A change after the first write never sends input to the old second field."""
+    original = {
+        "window_id": (42,),
+        "controls": {(1,): object(), (2,): object()},
+        "elements": '[1] Edit "First"\n[2] Edit "Second"',
+    }
+    changed = {**original, "controls": {(1,): object(), (3,): object()}}
+    fields = [
+        {"node_id": [1], "text": "A"},
+        {"node_id": [2], "text": "B"},
+    ]
+    with (
+        patch.object(agent, "type_text") as type_field,
+        patch.object(agent, "_observe", return_value=changed),
+    ):
+        completed, after = agent._type_field_group(fields, original, {})
+    assert completed == fields[:1] and after is changed
+    type_field.assert_called_once_with(original, [1], "A")
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
         test_csv_tool_reads_a_named_file_without_opening_a_window,
         test_csv_continuation_rejects_a_changed_file,
         test_field_group_rejects_unseen_duplicate_and_noninteger_ids,
+        test_field_group_stops_before_a_replaced_target,
         test_desktop_counts_model_calls_without_recording_requests,
         test_compact_view_rejects_ids_it_did_not_show,
         test_desktop_search_executes_on_the_full_fresh_reading,

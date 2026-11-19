@@ -620,6 +620,38 @@ def _observe(state):
         sleep(0.2)
 
 
+def _type_field_group(fields, initial, state):
+    """Fill independent fields and stop when later targets or the window change."""
+    _validate_field_group(fields, initial["controls"])
+    current = initial
+    completed = []
+    for index, field in enumerate(fields):
+        check_cancelled(state)
+        if (
+            current["window_id"] != initial["window_id"]
+            or set(current["controls"]) != set(initial["controls"])
+        ):
+            break
+        # Remaining targets must have the same enabled state and label.
+        lines = set(current["elements"].split("\n"))
+        original_lines = initial["elements"].split("\n")
+        if any(
+            not any(
+                line.startswith(json.dumps(remaining["node_id"]) + " ")
+                and line in lines and line.endswith(" | disabled") is False
+                and line.partition("] ")[2].startswith(("Edit ", "Document "))
+                for line in original_lines
+            )
+            for remaining in fields[index:]
+        ):
+            break
+
+        type_text(current, field["node_id"], field["text"])
+        completed.append(field)
+        current = _observe(state)
+    return completed, current
+
+
 # Keep the goal, tool results, and fresh window readings together until the task ends.
 def run_desktop_agent(request, state):
     """Run one desktop request and keep its local model call count."""
