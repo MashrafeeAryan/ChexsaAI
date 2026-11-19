@@ -127,6 +127,16 @@ class AgentLoopTests(unittest.TestCase):
         assert result["matches"] == ["Receipt 100"]
         assert result["source"] == "https://example.test/receipt"
 
+    def test_browsing_time_limit_blocks_a_late_model_action(self):
+        """A model reply that arrives after the deadline cannot send input."""
+        state = {"playwright": object(), "page": self.page}
+        self.tools["get_reply"].return_value = {"action": "click", "backend_node_id": 42}
+        with patch.object(agent_, "monotonic", side_effect=[0, 1, 601, 602]):
+            reply = agent_.run_agent("Click the control", state)
+        assert "active time limit" in reply
+        self.tools["click_node"].assert_not_called()
+        assert state["_browser_task"]["active_seconds"] == 602
+
     def test_browser_resume_cannot_reset_the_task_budget(self):
         """An in-session retry keeps the earlier decisions in the task budget."""
         state = {"playwright": object(), "page": self.page}

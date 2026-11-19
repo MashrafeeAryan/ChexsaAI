@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from time import monotonic
 import re
 from urllib.parse import urlsplit
 
@@ -240,6 +241,8 @@ def _run_request(message, browser):
     if resuming and (browser.get("page") is None or browser["page"].is_closed()):
         return "The saved browser tab is closed. Start a new request; old targets will not be reused."
     task["status"] = "running"
+    started = monotonic()
+    task["deadline"] = started + max(0, 600 - task.get("active_seconds", 0))
     try:
         answer = _run_browser_task(task, browser, resuming)
         if remember:
@@ -250,6 +253,8 @@ def _run_request(message, browser):
         task["status"] = "paused"
         raise
     finally:
+        task["active_seconds"] = task.get("active_seconds", 0) + (monotonic() - started)
+        task.pop("deadline", None)
         # Limits and repeated-action stops must protect prior input too.
         if task["status"] == "paused":
             task["review_only"] = (
@@ -498,14 +503,20 @@ def _run_browser_task(task, browser, resuming=False):
     # Each turn can make one model call. This fixed limit prevents endless API calls.
     for step in range(10):
         check_cancelled(browser)
+        if monotonic() >= task["deadline"]:
+            task["status"] = "paused"
+            return "This task reached its active time limit. Check the page before continuing."
         used = task.get("decisions_used", 0)
         if used >= 40:
             task["status"] = "paused"
             return "This task reached its total model decision limit. Check the page before starting another request."
         task["decisions_used"] = used + 1
         action = get_reply(message, observation, history, previous)
-        # Stop may have been pressed while the model was replying.
+        # Stop or the deadline may have arrived while the model was replying.
         check_cancelled(browser)
+        if monotonic() >= task["deadline"]:
+            task["status"] = "paused"
+            return "This task reached its active time limit before the next action."
         if action["action"] not in ("switch_tab", "list_tabs"):
             listed_tabs = {}
         if action["action"] == "reply":
