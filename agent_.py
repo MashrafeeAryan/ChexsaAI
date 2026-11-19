@@ -9,6 +9,7 @@ from plugins.canvas_ import assignment_path, canvas_command, canvas_intent
 from browser_ import (
     click_node,
     list_tabs,
+    select_tab,
     open_browser,
     read_page,
     scroll_page,
@@ -243,6 +244,7 @@ def _run_browser_task(task, browser, resuming=False):
     task["scope"] = scope
     last_action = None
     last_observation = None
+    listed_tabs = {}
     # Old snapshots are comparison data only. All action IDs come from the new reading.
     previous = task.get("_observation") if resuming and same_document else None
     task["_observation"] = observation
@@ -253,6 +255,8 @@ def _run_browser_task(task, browser, resuming=False):
         action = get_reply(message, observation, history, previous)
         # Stop may have been pressed while the model was replying.
         check_cancelled(browser)
+        if action["action"] not in ("switch_tab", "list_tabs"):
+            listed_tabs = {}
         if action["action"] == "reply":
             # A reply ends the run: an answer, missing information, or a final report.
             task["status"] = "finished"
@@ -294,8 +298,13 @@ def _run_browser_task(task, browser, resuming=False):
         elif action["action"] in ("navigate", "go_back", "go_forward"):
             result = _navigate(page, action)
         elif action["action"] == "list_tabs":
-            tabs, _ = list_tabs(page)
+            tabs, listed_tabs = list_tabs(page)
             result = {"tabs": tabs}
+        elif action["action"] == "switch_tab":
+            page = select_tab(listed_tabs, action["tab"])
+            browser["page"] = page
+            listed_tabs = {}
+            result = "Selected the listed tab. Read its current page."
         elif action["action"] == "scroll":
             result = {"moved": scroll_page(page, action["direction"])}
         elif action["action"] == "click":

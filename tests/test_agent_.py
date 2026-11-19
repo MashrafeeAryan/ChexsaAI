@@ -69,6 +69,23 @@ class AgentLoopTests(unittest.TestCase):
         ]
         assert targets[2][0] is other
 
+    def test_switch_tab_uses_listed_object_and_fresh_observation(self):
+        """Selecting a tab reads that exact tab instead of reusing the old controls."""
+        other = Mock(url="https://example.test/other")
+        other.is_closed.return_value = False
+        self.page.url = "https://example.test/first"
+        self.page.context.pages = [self.page, other]
+        state = {"playwright": object(), "page": self.page}
+        self.tools["get_reply"].side_effect = [
+            {"action": "list_tabs"}, {"action": "switch_tab", "tab": 2},
+            {"action": "reply", "text": "Done"},
+        ]
+        assert agent_.run_agent("Look at the other tab", state) == "Done"
+        assert state["page"] is other
+        self.tools["read_page"].assert_called_with(other)
+        with self.assertRaisesRegex(RuntimeError, "closed or changed"):
+            browser_.select_tab({2: (other, "https://example.test/past")}, 2)
+
     def test_history_navigation_uses_the_selected_tab(self):
         """A history action uses the current page and then gets a new reading."""
         browser = {"playwright": object(), "page": self.page}

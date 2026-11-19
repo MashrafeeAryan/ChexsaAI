@@ -105,6 +105,17 @@ def list_tabs(current):
     return descriptions, targets
 
 
+def select_tab(listed, number):
+    """Select the same still-open tab that was listed, even if tabs were reordered."""
+    entry = listed.get(number)
+    if entry is None:
+        raise RuntimeError("List current tabs before choosing one.")
+    tab, url = entry
+    if tab.is_closed() or tab.url != url:
+        raise RuntimeError("The listed tab closed or changed. List tabs again.")
+    return tab
+
+
 # Read controls using the exact node IDs Chrome already gives us.
 # Readable return fields (extra local fields keep identities, controls, and text nodes):
 # {
