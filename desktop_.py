@@ -1,6 +1,7 @@
 """Open Windows apps and read their visible controls."""
 
 from task_metrics_ import time_step
+from observations_ import control_details
 
 from collections import Counter
 import json  # Keeps names readable when they contain quotes or line breaks.
@@ -185,7 +186,7 @@ def read_window(window):
     return observation
 
 
-def _get_control(observation, node_id):
+def _get_control(observation, node_id, *, require_enabled=True):
     """Find the exact control from the latest reading and check it is still usable."""
 
     if not isinstance(node_id, (list, tuple)) or not node_id or any(type(part) is not int for part in node_id):
@@ -212,11 +213,39 @@ def _get_control(observation, node_id):
         if tuple(control.top_level_parent().element_info.runtime_id or ()) != observation["window_id"]:
             raise RuntimeError("The control no longer belongs to this window.")
 
-        if not control.is_visible() or not control.is_enabled():
+        if not control.is_visible() or (require_enabled and not control.is_enabled()):
             raise RuntimeError("This control is hidden or disabled.")
     except (COMError, OSError):
         raise RuntimeError("The control disappeared. Read the window again.") from None
     return control
+
+
+@time_step("observation")
+def inspect_control(observation, node_id):
+    """Use the actual UI Automation patterns to describe what a control can do."""
+    control = _get_control(observation, node_id, require_enabled=False)
+    info = control.element_info
+    state = {"disabled": not control.is_enabled()}
+    actions = []
+    if not state["disabled"]:
+        patterns = (
+            ("iface_invoke", "click_control", None, None),
+            ("iface_toggle", "toggle_control", "checked", "CurrentToggleState"),
+            ("iface_selection_item", "select_control", "selected", "CurrentIsSelected"),
+            ("iface_expand_collapse", "expand_control", "expanded", "CurrentExpandCollapseState"),
+        )
+        for interface, action, flag, prop in patterns:
+            try:
+                pattern = getattr(control, interface)
+                if flag:
+                    value = getattr(pattern, prop)
+                    if value not in (0, 1):
+                        continue
+                    state[flag] = bool(value)
+                actions.append(action)
+            except (NoPatternInterfaceError, COMError, OSError):
+                continue
+    return control_details(tuple(node_id), info.control_type, info.name or "", state, actions)
 
 
 @time_step("action")

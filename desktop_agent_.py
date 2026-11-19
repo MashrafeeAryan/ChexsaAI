@@ -33,6 +33,7 @@ from files_ import copy_file_text, edit_file, read_file, read_file_section, writ
 from desktop_ import (
     click_control,
     find_app,
+    inspect_control,
     expand_control,
     open_app,
     press_key,
@@ -364,6 +365,12 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
             "Expand or collapse a shown group that supports ExpandCollapse.",
             {"node_id": _ID, "expanded": {"type": "boolean"}},
         )]
+    if observation is not None:
+        tools = [*tools, _tool(
+            "inspect_control",
+            "Read a shown control's native operations and state flags.",
+            {"node_id": _ID},
+        )]
     search_tip = ""
     if observation is not None and "view" in observation:
         payload["window"]["view"] = observation["view"]
@@ -499,7 +506,10 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
     ).strip():
         raise RuntimeError("The model returned an empty app name or reply.")
 
-    if name in ("click_control", "type_text", "toggle_control", "select_control", "expand_control"):
+    if name in (
+        "click_control", "type_text", "toggle_control", "select_control",
+        "expand_control", "inspect_control",
+    ):
         if (
             observation is None
             or tuple(arguments["node_id"]) not in shown_control_ids(observation["elements"])
@@ -792,6 +802,9 @@ def _run_desktop_request(request, state):
 
         elif name == "expand_control":
             result = expand_control(observation, arguments["node_id"], arguments["expanded"])
+
+        elif name == "inspect_control":
+            result = inspect_control(observation, arguments["node_id"])
 
         elif name == "press_key":
             result = press_key(observation, arguments["keys"])

@@ -294,12 +294,25 @@ def test_expand_control_checks_the_pattern_state():
     assert desktop_.expand_control(reading, node, True)["verified"]
 
 
+def test_inspect_disabled_control_without_sending_input():
+    """A disabled control can be described, and grants no actions."""
+    reading, control = _reading("CheckBox")
+    control.is_enabled.return_value = False
+    node = next(iter(reading["controls"]))
+    details = desktop_.inspect_control(reading, node)
+    assert details["target"] == list(node)
+    assert details["role"] == "checkbox"
+    assert details["state"] == {"disabled": True}
+    assert details["actions"] == []
+    control.click_input.assert_not_called()
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_window_selection, test_invalid_launches,
         test_read_window_controls, test_read_window_unavailable,
         test_toggle_control_verifies_a_known_state, test_select_control_verifies_the_exact_item,
-        test_expand_control_checks_the_pattern_state,
+        test_expand_control_checks_the_pattern_state, test_inspect_disabled_control_without_sending_input,
         test_click_exact_control_and_refresh, test_action_target_guards,
         test_click_failure_is_not_retried, test_type_field_verification,
         test_type_document_focus_and_verification, test_click_covered_target,
