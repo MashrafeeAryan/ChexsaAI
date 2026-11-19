@@ -253,6 +253,13 @@ def check_scroll(page):
         pass
     assert browser_.scroll_page(page, "up") is True
 
+    page.set_content("""<section id="panel" style="height:100px;overflow:auto">
+        <button>Anchor</button><div style="height:1000px">End</div></section>""")
+    reading = browser_.read_page(page)
+    target = next(iter(reading["controls"]))
+    assert browser_.scroll_region(page, target, "down") is True
+    assert page.locator("#panel").evaluate("node => node.scrollTop") > 0
+
 
 def check_action_groups(page):
     """Exercise real node guards when a page changes between grouped actions."""

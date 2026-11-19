@@ -21,6 +21,7 @@ from browser_ import (
     read_page,
     read_options,
     scroll_page,
+    scroll_region,
     type_node,
     upload_file,
     run_action_group,
@@ -577,7 +578,11 @@ def _run_browser_task(task, browser, resuming=False):
         elif action["action"] == "read_options":
             result = read_options(page, action["backend_node_id"], action.get("offset", 0))
         elif action["action"] == "scroll":
-            result = {"moved": scroll_page(page, action["direction"])}
+            if "backend_node_id" in action:
+                moved = scroll_region(page, action["backend_node_id"], action["direction"])
+            else:
+                moved = scroll_page(page, action["direction"])
+            result = {"moved": moved}
         elif action["action"] == "click":
             click_node(page, action["backend_node_id"])
             result = "Click sent. Check the new observation for its outcome."

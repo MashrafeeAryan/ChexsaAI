@@ -48,7 +48,7 @@ Keep progress from previous_actions. Report success only with fresh evidence. Ne
 """
 
 _EXTRA_ACTIONS = {
-    'navigation': '{"action":"go_back"} or {"action":"go_forward"} moves in this tab\'s history.\n{"action":"scroll","direction":"down"} scrolls one screen; direction may be up.\n{"action":"list_tabs"} lists open web tabs.\n{"action":"switch_tab","tab":2} selects a tab from the immediately preceding list.',
+    'navigation': '{"action":"go_back"} or {"action":"go_forward"} moves in this tab\'s history.\n{"action":"scroll","direction":"down"} scrolls one screen up or down; include a shown backend_node_id to scroll its panel.\n{"action":"list_tabs"} lists open web tabs.\n{"action":"switch_tab","tab":2} selects a tab from the immediately preceding list.',
     'inspection': '{"action":"find_text","query":"Receipt","offset":0} searches readable page text.\n{"action":"inspect_region","backend_node_id":18,"offset":0} reads nearby controls in its form or dialog.\n{"action":"inspect_control","backend_node_id":18} shows flags and available operations.\n{"action":"outline","offset":0} reads headings without exposing action IDs.',
     'checkboxes': '{"action":"set_checked","backend_node_id":12,"checked":true} sets a checkbox or switch.',
     'choices': '{"action":"read_options","backend_node_id":12,"offset":0} lists choices from a native select.\n{"action":"select_option","backend_node_id":12,"label":"First choice"} selects an exact label.',
@@ -347,8 +347,14 @@ def get_reply(message, observation=None, history=None, previous=None):
         group = action["group"]
         if observation is not None and isinstance(group, str) and group in _EXTRA_ACTIONS:
             return action
-    elif action.get("action") == "scroll" and set(action) == {"action", "direction"}:
-        if observation is not None and action["direction"] in ("up", "down"):
+    elif action.get("action") == "scroll" and set(action) in (
+        {"action", "direction"}, {"action", "direction", "backend_node_id"},
+    ):
+        target = action.get("backend_node_id")
+        if (
+            observation is not None and action["direction"] in ("up", "down")
+            and ("backend_node_id" not in action or type(target) is int and target in visible_targets)
+        ):
             return action
     elif action in (
         {"action": "go_back"}, {"action": "go_forward"}, {"action": "list_tabs"}

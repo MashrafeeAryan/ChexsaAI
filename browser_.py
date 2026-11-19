@@ -314,6 +314,26 @@ def scroll_page(page, direction):
     )
 
 
+@time_step("action")
+def scroll_region(page, target, direction):
+    """Scroll the nearest scrollable ancestor of a shown control."""
+    if direction not in ("up", "down"):
+        raise ValueError("Choose up or down.")
+    return _node_call(page, target, """function(direction) {
+        if (!this.isConnected) return false;
+        for (let node = this; node; node = node.parentElement || node.getRootNode().host) {
+            const style = getComputedStyle(node);
+            if (!['auto', 'scroll'].includes(style.overflowY) ||
+                node.scrollHeight <= node.clientHeight) continue;
+            const before = node.scrollTop;
+            const distance = Math.round(node.clientHeight * 0.8);
+            node.scrollBy({top: direction === 'down' ? distance : -distance, behavior: 'instant'});
+            return node.scrollTop !== before;
+        }
+        return false;
+    }""", direction)
+
+
 # Check that a Chrome node was observed in this tab and is still on the page.
 def resolve_node(page, backend_node_id):
     observation = _observations.get(page)
