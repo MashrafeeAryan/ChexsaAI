@@ -78,6 +78,23 @@ class AppSettingsTests(unittest.TestCase):
 class ChatStorageTests(unittest.TestCase):
     """Saved conversations survive restarts without storing automation objects."""
 
+    def test_encrypted_task_round_trip_excludes_live_objects(self):
+        """The saved record keeps progress, without a window or cleartext goal."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "tasks.sqlite3"
+            checkpoint = {
+                "request": "Compare fake products", "url": "https://example.test/",
+                "status": "paused", "pending": True, "progress": {"verified_fields": 1},
+                "page": object(),
+            }
+            task_id = app_runtime_.save_browser_checkpoint(checkpoint, path)
+            record = app_runtime_.read_browser_checkpoint(task_id, path)
+            self.assertEqual(record["progress"], {"verified_fields": 1})
+            self.assertNotIn("page", record)
+            self.assertNotIn(b"Compare fake products", path.read_bytes())
+            with self.assertRaisesRegex(RuntimeError, "No saved browser task"):
+                app_runtime_.read_browser_checkpoint("unknown", path)
+
     def test_encrypted_chat_round_trip_and_delete(self):
         """Save, replace, and delete one chat without losing another conversation."""
         with tempfile.TemporaryDirectory() as directory:

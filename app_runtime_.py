@@ -192,6 +192,62 @@ def delete_chat(chat_id, path=None):
         connection.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
 
 
+def _task_database(path):
+    """Open the local task store. Only encrypted task bodies are saved."""
+    import sqlite3
+
+    path = Path(path) if path is not None else settings_path().parent / "tasks.sqlite3"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(path, timeout=2)
+    connection.execute("CREATE TABLE IF NOT EXISTS browser_tasks (id TEXT PRIMARY KEY, data BLOB)")
+    return connection
+
+
+def save_browser_checkpoint(record, path=None, task_id=None):
+    """Save a browser progress record with the Windows user's encryption."""
+    from contextlib import closing
+    from uuid import uuid4
+    import win32crypt
+
+    task_id = task_id or uuid4().hex
+    # Copy plain task facts only. Old UI objects and approvals have no place here.
+    data = {
+        "version": 1,
+        "request": record["request"],
+        "url": record["url"],
+        "status": record["status"],
+        "pending": record["pending"],
+        "progress": record["progress"],
+    }
+    encrypted = win32crypt.CryptProtectData(
+        json.dumps(data, ensure_ascii=False).encode("utf-8"),
+        "Chexsa browser task",
+        None, None, None, 0,
+    )
+    with closing(_task_database(path)) as connection, connection:
+        connection.execute(
+            "INSERT OR REPLACE INTO browser_tasks (id, data) VALUES (?, ?)",
+            (task_id, encrypted),
+        )
+    return task_id
+
+
+def read_browser_checkpoint(task_id, path=None):
+    """Read one saved task only when the user supplies its ID."""
+    from contextlib import closing
+    import win32crypt
+
+    with closing(_task_database(path)) as connection:
+        row = connection.execute("SELECT data FROM browser_tasks WHERE id = ?", (task_id,)).fetchone()
+    if row is None:
+        raise RuntimeError("No saved browser task has that ID.")
+    raw = win32crypt.CryptUnprotectData(row[0], None, None, None, 0)[1]
+    record = json.loads(raw)
+    if not isinstance(record, dict) or record.get("version") != 1:
+        raise RuntimeError("This browser task uses an unsupported record format.")
+    return record
+
+
 def check_cancelled(state):
     """Stop at a safe boundary when the app's Stop button has been pressed.
 
