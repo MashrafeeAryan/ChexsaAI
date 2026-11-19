@@ -64,6 +64,23 @@ class AgentLoopTests(unittest.TestCase):
                 act()
         assert metrics["seconds"] == {"observation": 2, "action": 2, "task": 6}
 
+    def test_auto_route_only_accepts_supported_engines(self):
+        """A bare route can choose an engine or ask, and cannot launch an action."""
+        client = Mock()
+        message = SimpleNamespace(content="")
+        client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(message=message)]
+        )
+        with patch.object(llm_, "model_client", return_value=(client, "fake")):
+            message.content = '{"mode":"desktop"}'
+            assert llm_.choose_engine("Open an editor") == {"mode": "desktop"}
+            message.content = '{"reply":"Which window?"}'
+            assert llm_.choose_engine("Change it") == {"reply": "Which window?"}
+            for invalid in ('{"mode":"visual"}', '{"mode":"browser","action":"click"}'):
+                message.content = invalid
+                with self.assertRaises(RuntimeError):
+                    llm_.choose_engine("Test")
+
     def test_upload_needs_the_exact_user_file_and_site(self):
         """A choice from page text alone cannot name the file or destination."""
         with TemporaryDirectory() as folder:

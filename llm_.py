@@ -127,6 +127,42 @@ def model_client():
     return _client, model
 
 
+def choose_engine(request):
+    """Choose browser or desktop for an Auto request, or ask a short question."""
+    client, model = model_client()
+    try:
+        response = call_model(
+            client.chat.completions.create,
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        'Choose {"mode":"browser"} for websites or {"mode":"desktop"} for '
+                        'Windows apps and direct local file work. Use {"reply":"..."} for '
+                        'conversation or when the first task is unclear. Ask which part '
+                        'to start with if the request needs both engines. Return one JSON '
+                        'object. Do not claim an action has run.'
+                    ),
+                },
+                {"role": "user", "content": request},
+            ],
+            response_format={"type": "json_object"},
+            max_completion_tokens=512,
+        )
+        answer = json.loads(response.choices[0].message.content or "")
+    except RateLimitError:
+        raise RuntimeError("The API usage limit was reached. No action was sent.") from None
+    except (APIError, ValueError, IndexError, TypeError):
+        raise RuntimeError("Could not choose an engine. No action was sent.") from None
+    if isinstance(answer, dict):
+        if set(answer) == {"mode"} and answer["mode"] in ("browser", "desktop"):
+            return answer
+        if set(answer) == {"reply"} and isinstance(answer["reply"], str) and answer["reply"].strip():
+            return answer
+    raise RuntimeError("The AI returned an unsupported engine or reply. No action was sent.")
+
+
 # Give the AI the request and any page reading, then check its chosen action.
 def get_reply(message, observation=None, history=None, previous=None):
     client, model = model_client()
