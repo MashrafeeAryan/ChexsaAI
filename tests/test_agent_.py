@@ -147,9 +147,17 @@ class AgentLoopTests(unittest.TestCase):
             {"action": "save_capture", "capture": 1, "path": "example.txt"},
             {"action": "reply", "text": "Saved"},
         ]
-        with TemporaryDirectory() as folder, patch("files_.OUTPUT_DIR", Path(folder)):
-            assert agent_.run_agent("Save the page text as example.txt", state) == "Saved"
-            assert (Path(folder) / "example.txt").read_text(encoding="utf-8") == text
+        desktop = {}
+        with (
+            TemporaryDirectory() as folder,
+            patch("files_.OUTPUT_DIR", Path(folder)),
+            patch.object(agent_, "choose_engine", return_value={"mode": "browser"}),
+        ):
+            message = "Save the page text as example.txt"
+            assert agent_.run_auto_agent(message, {}, state, desktop) == "Saved"
+            saved = Path(folder) / "example.txt"
+            assert saved.read_text(encoding="utf-8") == text
+            assert desktop["recent_files"] == [str(saved.resolve())]
         history = state["_browser_task"]["history"]
         assert text not in str(history)
         assert history[1]["result"]["verified"] is True

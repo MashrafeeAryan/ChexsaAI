@@ -44,7 +44,8 @@ def run_auto_agent(message, state, browser, desktop):
         check_cancelled(state)
         saved = browser.get("_browser_task", {})
         resuming = message.strip().casefold() in ("continue", "resume", "/continue", "/resume")
-        is_checkpoint = message.strip().split(maxsplit=1)[:1] in (["/checkpoint"], ["/restore"], ["/forget_task"], ["/remember"])
+        first_word = message.strip().casefold().split(maxsplit=1)[:1]
+        is_checkpoint = first_word in (["/checkpoint"], ["/restore"], ["/forget_task"], ["/remember"])
         if is_checkpoint or (resuming and saved.get("status") == "paused"):
             choice = {"mode": "browser"}
         else:
@@ -55,7 +56,18 @@ def run_auto_agent(message, state, browser, desktop):
             return choice["reply"]
         if choice["mode"] == "browser":
             browser["_cancel"] = state.get("_cancel")
-            return run_agent(message, browser)
+            answer = run_agent(message, browser)
+            # Pass file references between engines, while keeping the file contents local.
+            task = browser.get("_browser_task") or {}
+            paths = [
+                item["result"]["saved_path"]
+                for item in task.get("history", [])
+                if item["action"]["action"] == "save_capture"
+                and isinstance(item["result"], dict) and item["result"].get("verified") is True
+            ]
+            if paths:
+                desktop["recent_files"] = list(dict.fromkeys(paths))
+            return answer
         desktop["_cancel"] = state.get("_cancel")
         return run_desktop_agent(message, desktop)
 
