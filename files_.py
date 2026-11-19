@@ -1,6 +1,8 @@
 """Create text, code, and Word files directly, without opening an editor or running the code."""
 
 import ast
+import csv
+from itertools import islice
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
@@ -55,6 +57,47 @@ def read_file(path):
 
         return "\n".join(paragraph.text for paragraph in Document(path).paragraphs)
     return path.read_text(encoding="utf-8")
+
+
+@time_step("file_read")
+def read_csv_rows(path, columns, offset=0):
+    """Read up to 15 rows from only the requested CSV columns.
+
+    Input columns such as ["Name", "Price"] must match the header exactly.
+    The offset counts data rows, starting at zero.
+    """
+    path = Path(path)
+    if path.suffix.casefold() != ".csv" or path.stat().st_size > 10_000_000:
+        raise ValueError("Choose a CSV file under 10 MB.")
+    if type(offset) is not int or not 0 <= offset <= 1_000_000:
+        raise ValueError("Choose a row offset from 0 to 1000000.")
+
+    with path.open(encoding="utf-8-sig", newline="") as file:
+        reader = csv.reader(file, strict=True)
+        header = next(reader, [])
+        if not header or any(not name for name in header) or len(set(header)) != len(header):
+            raise ValueError("CSV column names must be present and unique.")
+        names = columns or header[:12]
+        if len(names) > 12 or len(set(names)) != len(names) or any(name not in header for name in names):
+            raise ValueError("Choose up to twelve distinct CSV column names.")
+        positions = [header.index(column) for column in names]
+        sample = list(islice(reader, offset, offset + 16))
+
+    rows = []
+    clipped = 0
+    for row in sample[:15]:
+        if len(row) != len(header):
+            raise ValueError("A CSV row does not match its header.")
+        values = [row[index] for index in positions]
+        clipped += sum(len(value) > 240 for value in values)
+        rows.append([value[:240] for value in values])
+    return {
+        "columns": names,
+        "rows": rows,
+        "omitted_columns": len(header) - len(names),
+        "clipped_cells": clipped,
+        "next_offset": offset + len(rows) if len(sample) > len(rows) else None,
+    }
 
 
 @time_step("file_read")

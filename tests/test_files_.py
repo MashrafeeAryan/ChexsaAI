@@ -218,9 +218,25 @@ def test_copy_word_section_to_text():
         assert target.with_suffix(".md").read_text(encoding="utf-8") == "One paragraph"
 
 
+def test_csv_reads_selected_columns_and_pages_without_opening_an_app():
+    """Quoted text and a comma inside one cell stay in the same column."""
+    with TemporaryDirectory() as folder:
+        source = Path(folder) / "table.csv"
+        body = 'Name,Price,Notes\n' + '\n'.join(f'Item {index},12,"a,b"' for index in range(18))
+        source.write_text(body, encoding="utf-8")
+        first = files_.read_csv_rows(source, ["Notes", "Name"])
+        assert first["rows"][0] == ["a,b", "Item 0"]
+        assert first["omitted_columns"] == 1 and first["next_offset"] == 15
+        second = files_.read_csv_rows(source, ["Name"], first["next_offset"])
+        assert second["rows"] == [["Item 15"], ["Item 16"], ["Item 17"]]
+        assert second["next_offset"] is None
+        with unittest.TestCase().assertRaisesRegex(ValueError, "column names"):
+            files_.read_csv_rows(source, ["Missing"])
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
-        test_read_only_the_requested_section,
+        test_read_only_the_requested_section, test_csv_reads_selected_columns_and_pages_without_opening_an_app,
         test_copy_file_text_keeps_content_local,
         test_copy_one_markdown_section,
         test_copy_word_section_to_text,
