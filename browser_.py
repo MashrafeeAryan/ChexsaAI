@@ -447,6 +447,53 @@ def click_node(page, backend_node_id):
                 pass
 
 
+def _node_call(page, target, script, *values):
+    """Run one built-in operation on an exact live Chrome node."""
+    session, target = resolve_node(page, target)
+    node = None
+    try:
+        node = session.send("DOM.resolveNode", {"backendNodeId": target})["object"]["objectId"]
+        response = session.send("Runtime.callFunctionOn", {
+            "objectId": node,
+            "functionDeclaration": script,
+            "arguments": [{"value": value} for value in values],
+            "returnByValue": True,
+        })
+        if "exceptionDetails" not in response and "value" in response.get("result", {}):
+            return response["result"]["value"]
+    except Error:
+        pass
+    finally:
+        if node is not None:
+            try:
+                session.send("Runtime.releaseObject", {"objectId": node})
+            except Error:
+                pass  # The page may have navigated during the operation.
+    raise RuntimeError("Could not check the target result. Read the current page again.")
+
+
+@time_step("observation")
+def read_options(page, target, offset=0):
+    """Read a page of labels from a native single-choice select."""
+    result = _node_call(page, target, """function(offset) {
+        if (!this.isConnected || this.tagName !== 'SELECT' || this.multiple) return null;
+        const options = Array.from(this.options);
+        return {
+            options: options.slice(offset, offset + 30).map(option => ({
+                label: option.label.slice(0, 240),
+                selected: option.selected,
+                disabled: option.matches(':disabled')
+            })),
+            total: options.length
+        };
+    }""", offset)
+    if result is None:
+        return {"options": [], "note": "This is not a native single-choice select."}
+    end = offset + len(result["options"])
+    result["next_offset"] = end if end < result["total"] else None
+    return result
+
+
 @time_step("action")
 def set_checked(page, reading, target, checked):
     """Click a checkbox only if needed, then check the same node's new state."""

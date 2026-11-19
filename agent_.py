@@ -13,6 +13,7 @@ from browser_ import (
     set_checked,
     open_browser,
     read_page,
+    read_options,
     scroll_page,
     type_node,
     run_action_group,
@@ -267,6 +268,7 @@ def _run_browser_task(task, browser, resuming=False):
             "find_text",
             "inspect_region",
             "list_tabs",
+            "read_options",
             "wait_for",
             "observe",
         ):
@@ -306,6 +308,8 @@ def _run_browser_task(task, browser, resuming=False):
             browser["page"] = page
             listed_tabs = {}
             result = "Selected the listed tab. Read its current page."
+        elif action["action"] == "read_options":
+            result = read_options(page, action["backend_node_id"], action.get("offset", 0))
         elif action["action"] == "scroll":
             result = {"moved": scroll_page(page, action["direction"])}
         elif action["action"] == "click":

@@ -167,6 +167,21 @@ def run_case(page, runtime, name, grouped=False, tokenizer=None, delay=0):
     return metrics
 
 
+def check_options(page):
+    """Read visible native labels and selection using Chrome rather than pixels."""
+    page.set_content("""<label>Choice
+        <select><option>A</option><option disabled>B</option><option selected>C</option></select>
+    </label>""")
+    reading = browser_.read_page(page)
+    target = next(
+        node for node, control in reading["controls"].items() if control["role"] == "combobox"
+    )
+    result = browser_.read_options(page, target)
+    assert [(row["label"], row["selected"], row["disabled"]) for row in result["options"]] == [
+        ("A", False, False), ("B", False, True), ("C", True, False)
+    ]
+
+
 def check_checkbox(page):
     """Read and verify a real checkbox, skipping a second input when it is set."""
     page.set_content('<label><input type="checkbox"> Visible</label>')
@@ -718,6 +733,7 @@ def main():
                             flush=True,
                         )
             if not args.single_only:
+                check_options(page)
                 check_checkbox(page)
                 check_scroll(page)
                 check_action_groups(page)

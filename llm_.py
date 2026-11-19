@@ -41,6 +41,7 @@ Actions:
 {"action":"switch_tab","tab":2} selects a tab from the immediately preceding list.
 {"action":"click","backend_node_id":18}
 {"action":"set_checked","backend_node_id":12,"checked":true} sets a checkbox or switch.
+{"action":"read_options","backend_node_id":12,"offset":0} lists choices from a native select.
 {"action":"type","backend_node_id":12,"text":"Hello"} replaces the whole field, without submitting.
 {"action":"find_elements","query":"Send","offset":0} searches all locally collected controls; empty query lists them. Use next_offset for more.
 {"action":"find_text","query":"Receipt","offset":0} searches readable page text.
@@ -244,7 +245,7 @@ def get_reply(message, observation=None, history=None, previous=None):
             and offset >= 0
         ):
             return action
-    elif action.get("action") == "inspect_region" and set(action) in (
+    elif action.get("action") in ("inspect_region", "read_options") and set(action) in (
         {"action", "backend_node_id"},
         {"action", "backend_node_id", "offset"},
     ):
