@@ -93,10 +93,14 @@ def list_tabs(current):
         number = len(targets) + 1
         targets[number] = (tab, url)
         # Keep URL credentials, query values, and fragments off the model request.
-        short_url = (
-            f"{address.scheme}://{address.hostname}{address.path}"
-            if address.hostname else url
-        )
+        short_url = url
+        if address.hostname:
+            host = address.hostname
+            if ":" in host:
+                host = f"[{host}]"
+            if address.port is not None:
+                host += f":{address.port}"
+            short_url = f"{address.scheme}://{host}{address.path}"
         descriptions.append({
             "tab": number,
             "url": short_url[:240],

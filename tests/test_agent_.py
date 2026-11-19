@@ -315,7 +315,7 @@ class AgentLoopTests(unittest.TestCase):
 
     def test_list_tabs_keeps_objects_and_private_url_parts_local(self):
         """Only live web tabs are listed, with a short URL for disambiguation."""
-        other = Mock(url="https://person:secret@example.test/form?key=secret#private")
+        other = Mock(url="https://person:secret@example.test:8443/form?key=secret#private")
         other.is_closed.return_value = False
         closed = Mock()
         closed.is_closed.return_value = True
@@ -326,7 +326,7 @@ class AgentLoopTests(unittest.TestCase):
         summaries, targets = browser_.list_tabs(self.page)
         assert summaries == [
             {"tab": 1, "url": "https://example.test/", "current": True},
-            {"tab": 2, "url": "https://example.test/form", "current": False},
+            {"tab": 2, "url": "https://example.test:8443/form", "current": False},
         ]
         assert targets[2][0] is other
 
