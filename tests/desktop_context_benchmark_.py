@@ -80,7 +80,8 @@ def run_case(case, compact, tokenizer, path):
         assert path.read_text(encoding="utf-8") == "Hello"
     if case != "file":
         assert answer == "Verified" and clicked == [[181]]
-    return totals
+    assert state["last_metrics"]["model_calls"] == totals["calls"]
+    return {"verified": True, **totals}
 
 
 def run_handoff(tokenizer, folder, local):
