@@ -149,6 +149,21 @@ class AgentLoopTests(unittest.TestCase):
         assert "total model decision limit" in result
         self.tools["get_reply"].assert_not_called()
 
+    def test_verified_final_export_needs_no_extra_reply(self):
+        """The last file save can prove and finish an export in two decisions."""
+        state = {"playwright": object(), "page": self.page}
+        self.tools["read_page"].return_value = {"content": "Fixture value"}
+        self.tools["get_reply"].side_effect = [
+            {"action": "capture_page_text"},
+            {"action": "save_capture", "capture": 1, "path": "fixture.txt", "finish": True},
+        ]
+        with TemporaryDirectory() as folder, patch("files_.OUTPUT_DIR", Path(folder)):
+            result = agent_.run_agent("Save this page to fixture.txt", state)
+            assert "Created and verified file" in result
+            assert (Path(folder) / "fixture.txt").read_text(encoding="utf-8") == "Fixture value"
+        assert self.tools["get_reply"].call_count == 2
+        assert state["last_metrics"]["outcome"] == "verified"
+
     def test_page_text_can_stay_local_under_a_short_reference(self):
         """Capture returns only a reference, while the actual content stays in Python."""
         state = {"playwright": object(), "page": self.page}

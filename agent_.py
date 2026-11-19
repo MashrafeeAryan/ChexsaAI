@@ -610,6 +610,12 @@ def _run_browser_task(task, browser, resuming=False):
             result = "Selected the listed tab. Read its current page."
         elif action["action"] == "save_capture":
             result = _save_capture(task, action)
+            if action.get("finish"):
+                entry["result"] = result
+                task["status"] = "finished"
+                _save_if_enabled(task, browser)
+                record_outcome("verified")
+                return "Created and verified file: " + result["saved_path"]
         elif action["action"] == "capture_page_text":
             result = _capture_text(task, observation.get("content", ""))
         elif action["action"] == "capture_selection":
