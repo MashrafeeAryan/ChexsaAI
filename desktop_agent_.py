@@ -37,6 +37,7 @@ from desktop_ import (
     expand_control,
     open_app,
     press_key,
+    read_selection,
     read_text,
     read_window,
     type_text,
@@ -371,6 +372,12 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
             "Read a shown control's native operations and state flags.",
             {"node_id": _ID},
         )]
+    if observation and re.search(r"\] (Edit|Document) ", observation["elements"]):
+        tools = [*tools, _tool(
+            "read_selection",
+            "Read selected text from a shown Windows text control when the user asks.",
+            {"node_id": _ID},
+        )]
     search_tip = ""
     if observation is not None and "view" in observation:
         payload["window"]["view"] = observation["view"]
@@ -508,7 +515,7 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
 
     if name in (
         "click_control", "type_text", "toggle_control", "select_control",
-        "expand_control", "inspect_control",
+        "expand_control", "inspect_control", "read_selection",
     ):
         if (
             observation is None
@@ -802,6 +809,9 @@ def _run_desktop_request(request, state):
 
         elif name == "expand_control":
             result = expand_control(observation, arguments["node_id"], arguments["expanded"])
+
+        elif name == "read_selection":
+            result = read_selection(observation, arguments["node_id"])
 
         elif name == "inspect_control":
             result = inspect_control(observation, arguments["node_id"])

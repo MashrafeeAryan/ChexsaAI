@@ -221,6 +221,27 @@ def _get_control(observation, node_id, *, require_enabled=True):
 
 
 @time_step("observation")
+def read_selection(observation, node_id):
+    """Read actual selected text from a Windows text control, capped for the model."""
+    control = _get_control(observation, node_id)
+    try:
+        if control.element_info.element.CurrentIsPassword:
+            raise RuntimeError("Password field selections cannot be read.")
+        ranges = control.iface_text.GetSelection()
+        remaining, parts = 4001, []
+        for index in range(min(ranges.Length, 10)):
+            text = ranges.GetElement(index).GetText(remaining)
+            parts.append(text)
+            remaining -= len(text) + 1
+            if remaining <= 0:
+                break
+    except (AttributeError, NoPatternInterfaceError, COMError, OSError):
+        raise RuntimeError("This Windows control does not expose a text selection.") from None
+    text = "\n".join(parts)
+    return {"text": text[:4000], "more": len(text) > 4000 or len(parts) < ranges.Length}
+
+
+@time_step("observation")
 def inspect_control(observation, node_id):
     """Use the actual UI Automation patterns to describe what a control can do."""
     control = _get_control(observation, node_id, require_enabled=False)
