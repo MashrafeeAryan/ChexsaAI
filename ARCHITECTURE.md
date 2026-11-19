@@ -81,7 +81,7 @@ until its remaining fields are checked.
 - In-session history disappears when Chexsa closes unless you opt in to a local checkpoint.
 - Enter `/checkpoint` to save existing progress, or start a request with `/remember` to save progress as it happens.
 - Use `/tasks` to list the newest checkpoint IDs. Use `/restore ID` to find one open tab at the saved URL, then `/continue` to inspect it. A restored checkpoint can only read, search, and wait.
-- Use `/forget_task ID` to delete the local checkpoint. The checkpoint keeps the request, page URL, and progress counts under Windows encryption.
+- Use `/forget_task ID` to delete the local checkpoint. Windows encryption protects the request, page URL, progress counts, and file receipts. Restore checks saved files for later changes.
 
 Example: a group fills Name, then Stop is pressed. `/continue` keeps Name as
 completed, reads the current form, and asks for the unfinished Email/Notes/Save
@@ -107,6 +107,11 @@ repeats each scenario. Add `--recovery-only` to measure interrupted workflows,
 including the failed first attempt. `--legacy-recovery` is only for an archived
 pre-recovery engine, where the original request had to be reissued. Counts cover serialized system/request/history text and
 scripted action/reply text; they are not provider-reported total API usage.
+
+For local comparisons, run `tests/desktop_context_benchmark_.py` with the
+same tokenizer. `--field-groups` compares single actions with a checked group.
+`--handoff` compares passing text through the model with a direct file copy.
+Use `--quiet` for the browser workflow check when collecting only pass/fail.
 
 ## Future work
 
