@@ -62,6 +62,13 @@ class AgentLoopTests(unittest.TestCase):
                 act()
         assert metrics["seconds"] == {"observation": 2, "action": 2, "task": 6}
 
+    def test_browser_stops_with_unverified_work_in_its_metrics(self):
+        """A repeated action ends as a pause, never verified completion."""
+        state = {"playwright": object(), "page": self.page}
+        self.tools["get_reply"].return_value = {"action": "find_elements", "query": "More"}
+        assert "repeated" in agent_.run_agent("Find more", state)
+        assert state["last_metrics"]["outcome"] == "paused"
+
     def test_optional_tools_appear_only_when_relevant_or_requested(self):
         """Simple pages skip extra examples; discovery and visible roles add them."""
         plain = llm_.browser_prompt({}, [], '[12] button "checkbox"')

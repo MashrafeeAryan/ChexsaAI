@@ -33,7 +33,8 @@ def measure_task(state):
         counters["outcome"] = "cancelled"
         raise
     except Exception:
-        counters["outcome"] = "failed"
+        if counters["outcome"] != "uncertain":
+            counters["outcome"] = "failed"
         raise
     finally:
         counters["seconds"]["task"] = perf_counter() - started

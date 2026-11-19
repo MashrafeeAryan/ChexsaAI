@@ -22,7 +22,7 @@ from browser_ import (
 )
 from llm_ import get_reply
 from app_runtime_ import check_cancelled
-from task_metrics_ import measure_task, time_step
+from task_metrics_ import measure_task, record_outcome, time_step
 
 
 # Keep one request and its action history together while working in the browser.
@@ -89,7 +89,7 @@ def _run_request(message, browser):
         task["status"] = "paused"
         raise
     finally:
-        # Limits and repeated-action stops must protect sent clicks too.
+        # Limits and repeated-action stops must protect prior input too.
         if task["status"] == "paused":
             task["review_only"] = (
                 task.get("review_only", False)
@@ -110,6 +110,8 @@ def _run_request(message, browser):
                     or entry["action"]["action"] == "click"
                 )
             )
+            # A pause is useful for recovery, but it does not verify completion.
+            record_outcome("uncertain" if task["review_only"] else "paused")
 
 
 def _canvas_route(message, browser):
