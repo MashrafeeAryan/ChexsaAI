@@ -20,14 +20,26 @@ class AgentLoopTests(unittest.TestCase):
         create.return_value = SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content='{"action":"reply","text":"Hello"}'))]
         )
+        create.return_value.usage = SimpleNamespace(
+            prompt_tokens=40,
+            completion_tokens=8,
+            prompt_tokens_details=SimpleNamespace(cached_tokens=12),
+        )
         state = {}
         with patch.object(llm_, "model_client", return_value=(client, "fake")):
             assert agent_.run_agent("Hello", state) == "Hello"
             assert state["last_metrics"]["model_calls"] == 1
+            assert state["last_metrics"]["input_tokens"] == 40
+            assert state["last_metrics"]["output_tokens"] == 8
+            assert state["last_metrics"]["cached_input_tokens"] == 12
+            assert state["last_metrics"]["calls_with_usage"] == 1
+            create.return_value.usage = None
             create.return_value.choices[0].message.content = "invalid"
             with self.assertRaises(RuntimeError):
                 agent_.run_agent("Next request", state)
             assert state["last_metrics"]["model_calls"] == 1
+        assert state["last_metrics"]["input_tokens"] is None
+        assert state["last_metrics"]["calls_with_usage"] == 0
         assert create.call_count == 2
 
     def setUp(self):
