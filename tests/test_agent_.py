@@ -104,6 +104,8 @@ class AgentLoopTests(unittest.TestCase):
             }, path)
             state = {"_checkpoint_path": path}
             assert "restored" in agent_.run_agent(f"/restore {saved}", state)
+            agent_.run_agent("/checkpoint", state)
+            assert agent_.read_browser_checkpoint(saved, path)["progress"] == {"click": 1}
             self.tools["get_reply"].return_value = {"action": "click", "backend_node_id": 991}
             assert "no new input was sent" in agent_.run_agent("/continue", state)
         self.tools["click_node"].assert_not_called()

@@ -56,7 +56,7 @@ def run_auto_agent(message, state, browser, desktop):
 
 def _save_checkpoint(task, browser):
     """Keep what was verified or sent, without storing live browser IDs."""
-    actions = {}
+    actions = dict(task.get("saved_progress", {}))
     for entry in task["history"]:
         kind = entry["action"]["action"]
         result = entry["result"]
@@ -109,6 +109,7 @@ def _restore_checkpoint(task_id, browser):
         "_observation": observation,
         "scope": tuple(observation.get(key) for key in ("page_id", "document_id", "url")),
         "checkpoint_id": task_id,
+        "saved_progress": record["progress"],
         "history": [{
             "action": {"action": "observe"},
             "result": {
