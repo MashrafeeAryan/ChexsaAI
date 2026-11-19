@@ -167,6 +167,86 @@ def run_case(page, runtime, name, grouped=False, tokenizer=None, delay=0):
     return metrics
 
 
+def check_form_on_an_unfamiliar_layout(page, runtime):
+    """Work through native choices, an attachment, and duplicate submit buttons."""
+    url = "https://chexsa-form.test/application"
+    html = """
+    <main><button onclick="window.wrong += 1">Save</button>
+    <form aria-label="Application" id="form">
+      <label>Experience<select id="experience"><option>Choose</option><option>Experienced</option></select></label>
+      <label><input id="reviewed" type="checkbox"> Reviewed</label>
+      <label>Supporting file<input id="file" type="file"></label>
+      <label>Applicant<input id="applicant"></label>
+      <button>Save</button>
+    </form><p id="status"></p></main>
+    <script>
+      window.wrong = 0;
+      window.saved = [];
+      document.querySelector('#form').addEventListener('submit', event => {
+        event.preventDefault();
+        saved.push([document.querySelector('#applicant').value,
+                    document.querySelector('#experience').value,
+                    document.querySelector('#reviewed').checked,
+                    document.querySelector('#file').files[0].name]);
+        document.querySelector('#status').textContent = 'Application saved';
+      });
+    </script>
+    """
+    page.route(url, lambda route: route.fulfill(body=html, content_type="text/html"))
+    try:
+        page.goto(url)
+        with TemporaryDirectory(prefix="chexsa-form-file-") as folder:
+            file = Path(folder).resolve() / "sample.txt"
+            file.write_text("Disposable fixture", encoding="utf-8")
+            request = f'Fill the application at {url} and attach "{file}".'
+            calls = []
+
+            def choose(**kwargs):
+                payload = json.loads(kwargs["messages"][-1]["content"])
+                lines = payload["page"]["elements"].splitlines()
+
+                def target(role, label, context=""):
+                    choices = [
+                        int(line.split("]")[0][1:]) for line in lines
+                        if f'] {role} "{label}"' in line and context in line
+                    ]
+                    assert len(choices) == 1
+                    return choices[0]
+
+                step = len(calls)
+                calls.append(step)
+                if step == 0:
+                    action = {"action": "select_option", "backend_node_id": target("combobox", "Experience"),
+                              "label": "Experienced"}
+                elif step == 1:
+                    action = {"action": "set_checked", "backend_node_id": target("checkbox", "Reviewed"),
+                              "checked": True}
+                elif step == 2:
+                    action = {"action": "upload_file", "backend_node_id": target("button", "Supporting file"),
+                              "path": str(file)}
+                elif step == 3:
+                    action = {"action": "batch", "actions": [
+                        {"action": "type", "backend_node_id": target("textbox", "Applicant"), "text": "Example Applicant"},
+                        {"action": "click", "backend_node_id": target("button", "Save", 'form "Application"')},
+                    ]}
+                else:
+                    assert page.locator("#status").inner_text() == "Application saved"
+                    action = {"action": "reply", "text": "Verified"}
+                return SimpleNamespace(choices=[SimpleNamespace(
+                    message=SimpleNamespace(content=json.dumps(action))
+                )])
+
+            client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=choose)))
+            with patch.object(llm_, "model_client", return_value=(client, "fixture")):
+                assert agent_.run_agent(request, {"playwright": runtime, "page": page}) == "Verified"
+            assert len(calls) == 5
+            assert page.evaluate("window.wrong") == 0
+            assert page.evaluate("window.saved") == [["Example Applicant", "Experienced", True, "sample.txt"]]
+    finally:
+        page.unroute(url)
+        page.goto("about:blank")
+
+
 def check_renamed_node(page):
     """A still-attached button whose meaning changed must not receive the old click."""
     page.set_content('<button onclick="window.wrong = true">Preview</button>')
@@ -802,6 +882,7 @@ def main():
                         if not args.quiet:
                             print(json.dumps({"run": iteration + 1, **stats}), flush=True)
             if not args.single_only:
+                check_form_on_an_unfamiliar_layout(page, runtime)
                 check_renamed_node(page)
                 check_selection(page)
                 check_file_attachment(page)
