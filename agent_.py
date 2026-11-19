@@ -32,6 +32,7 @@ from files_ import write_file
 from app_runtime_ import (
     check_cancelled,
     delete_browser_checkpoint,
+    list_browser_checkpoints,
     read_browser_checkpoint,
     save_browser_checkpoint,
 )
@@ -47,7 +48,7 @@ def run_auto_agent(message, state, browser, desktop):
         saved = browser.get("_browser_task", {})
         resuming = message.strip().casefold() in ("continue", "resume", "/continue", "/resume")
         first_word = message.strip().casefold().split(maxsplit=1)[:1]
-        is_checkpoint = first_word in (["/checkpoint"], ["/restore"], ["/forget_task"], ["/remember"])
+        is_checkpoint = first_word in (["/checkpoint"], ["/restore"], ["/forget_task"], ["/remember"], ["/tasks"])
         if is_checkpoint or (resuming and saved.get("status") == "paused"):
             choice = {"mode": "browser"}
         else:
@@ -173,6 +174,9 @@ def _run_request(message, browser):
         if len(parts) != 2:
             return "Enter /remember followed by a browser request."
         message = parts[1]
+    if parts and parts[0].casefold() == "/tasks":
+        tasks = list_browser_checkpoints(browser.get("_checkpoint_path"))
+        return "\n".join(f"{task_id} {status}" for task_id, status in tasks) or "No saved browser tasks."
     if parts and parts[0].casefold() == "/checkpoint":
         task = browser.get("_browser_task")
         if task is None:

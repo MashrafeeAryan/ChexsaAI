@@ -248,6 +248,23 @@ def read_browser_checkpoint(task_id, path=None):
     return record
 
 
+def list_browser_checkpoints(path=None):
+    """List recent checkpoint IDs and their status without reading any app."""
+    from contextlib import closing
+    import win32crypt
+
+    with closing(_task_database(path)) as connection:
+        rows = connection.execute(
+            "SELECT id, data FROM browser_tasks ORDER BY rowid DESC LIMIT 20"
+        ).fetchall()
+    summaries = []
+    for task_id, data in rows:
+        record = json.loads(win32crypt.CryptUnprotectData(data, None, None, None, 0)[1])
+        if isinstance(record, dict) and record.get("version") == 1:
+            summaries.append((task_id, record["status"]))
+    return summaries
+
+
 def delete_browser_checkpoint(task_id, path=None):
     """Forget one saved record while leaving other tasks and chats alone."""
     from contextlib import closing

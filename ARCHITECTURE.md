@@ -67,7 +67,7 @@ decision. Autocomplete choices and dependent fields should be handled separately
 - A different request starts a new task. An identical request with an uncertain previous outcome is redirected to inspection first.
 - In-session history disappears when Chexsa closes unless you opt in to a local checkpoint.
 - Enter `/checkpoint` to save existing progress, or start a request with `/remember` to save progress as it happens.
-- Use `/restore ID` to find one open tab at the saved URL, then `/continue` to inspect it. A restored checkpoint can only read, search, and wait.
+- Use `/tasks` to list the newest checkpoint IDs. Use `/restore ID` to find one open tab at the saved URL, then `/continue` to inspect it. A restored checkpoint can only read, search, and wait.
 - Use `/forget_task ID` to delete the local checkpoint. The checkpoint keeps the request, page URL, and progress counts under Windows encryption.
 
 Example: a group fills Name, then Stop is pressed. `/continue` keeps Name as
