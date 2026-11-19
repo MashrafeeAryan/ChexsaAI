@@ -4,6 +4,23 @@ import json
 import re
 
 
+def control_details(target, role, name, state, actions):
+    """Give either engine the same small description of one control.
+
+    Include state flags and supported operation names. Field values stay local.
+    """
+    return {
+        "target": list(target) if isinstance(target, tuple) else target,
+        "role": role.lower(),
+        "name": name[:240],
+        "state": {
+            key: value for key, value in state.items()
+            if type(value) is bool or value == "mixed"
+        },
+        "actions": list(actions),
+    }
+
+
 def shown_control_ids(text, *, browser=False):
     """Read target IDs from the leading label on each displayed control line.
 

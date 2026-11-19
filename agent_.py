@@ -8,6 +8,7 @@ from plugins.canvas_ import assignment_path, canvas_command, canvas_intent
 
 from browser_ import (
     click_node,
+    inspect_control,
     list_tabs,
     select_tab,
     select_option,
@@ -273,6 +274,7 @@ def _run_browser_task(task, browser, resuming=False):
             "inspect_region",
             "list_tabs",
             "read_options",
+            "inspect_control",
             "wait_for",
             "observe",
         ):
@@ -314,6 +316,8 @@ def _run_browser_task(task, browser, resuming=False):
             browser["page"] = page
             listed_tabs = {}
             result = "Selected the listed tab. Read its current page."
+        elif action["action"] == "inspect_control":
+            result = inspect_control(page, observation, action["backend_node_id"])
         elif action["action"] == "read_options":
             result = read_options(page, action["backend_node_id"], action.get("offset", 0))
         elif action["action"] == "scroll":

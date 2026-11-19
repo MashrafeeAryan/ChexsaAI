@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 import unittest
-from unittest.mock import Mock, call
+from unittest.mock import Mock, call, patch
 
 import browser_
 import observations_
@@ -76,6 +76,16 @@ class BrowserObservationTests(unittest.TestCase):
         self.assertIn('[113] textbox "Subject"', observation["elements"])
         self.assertNotIn("heading", observation["elements"])
         self.assertEqual(browser_._observations[self.page]["nodes"], {16, 19, 113})
+
+    def test_control_details_do_not_send_field_contents(self):
+        """Inspection exposes useful operations and keeps the previous field contents local."""
+        observation = browser_.read_page(self.page)
+        with patch.object(browser_, "resolve_node") as resolve:
+            details = browser_.inspect_control(self.page, observation, 113)
+        resolve.assert_called_once_with(self.page, 113)
+        self.assertEqual(details["actions"], ["click", "type"])
+        self.assertEqual(details["role"], "textbox")
+        self.assertNotIn("Old subject", str(details))
 
     def test_region_inspection_separates_identically_named_sections(self):
         """Two regions can look the same and still have different members."""

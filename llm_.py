@@ -53,7 +53,7 @@ Track progress with request and previous_actions; ask for missing information. P
 
 _EXTRA_ACTIONS = {
     'navigation': '{"action":"go_back"} or {"action":"go_forward"} moves in this tab\'s history.\n{"action":"scroll","direction":"down"} scrolls one screen; direction may be up.\n{"action":"list_tabs"} lists open web tabs.\n{"action":"switch_tab","tab":2} selects a tab from the immediately preceding list.',
-    'inspection': '{"action":"find_text","query":"Receipt","offset":0} searches readable page text.\n{"action":"inspect_region","backend_node_id":18,"offset":0} reads nearby controls in its form or dialog.',
+    'inspection': '{"action":"find_text","query":"Receipt","offset":0} searches readable page text.\n{"action":"inspect_region","backend_node_id":18,"offset":0} reads nearby controls in its form or dialog.\n{"action":"inspect_control","backend_node_id":18} shows flags and available operations.',
     'checkboxes': '{"action":"set_checked","backend_node_id":12,"checked":true} sets a checkbox or switch.',
     'choices': '{"action":"read_options","backend_node_id":12,"offset":0} lists choices from a native select.\n{"action":"select_option","backend_node_id":12,"label":"First choice"} selects an exact label.',
 }
@@ -276,6 +276,10 @@ def get_reply(message, observation=None, history=None, previous=None):
             and type(offset) is int
             and offset >= 0
         ):
+            return action
+    elif action.get("action") == "inspect_control" and set(action) == {"action", "backend_node_id"}:
+        target = action["backend_node_id"]
+        if type(target) is int and target in visible_targets:
             return action
     elif action.get("action") in ("inspect_region", "read_options") and set(action) in (
         {"action", "backend_node_id"},

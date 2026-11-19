@@ -10,7 +10,7 @@ from weakref import WeakKeyDictionary
 
 from playwright.sync_api import Error, sync_playwright
 
-from observations_ import validate_action_group, validate_wait
+from observations_ import control_details, validate_action_group, validate_wait
 
 # Remember which Chrome nodes belong to the latest page observation.
 _observations = WeakKeyDictionary()
@@ -445,6 +445,27 @@ def click_node(page, backend_node_id):
                 session.detach()
             except Error:
                 pass
+
+
+def inspect_control(page, observation, target):
+    """Describe the state and useful operations of an exact observed browser control."""
+    resolve_node(page, target)
+    control = observation["controls"][target]
+    role = control["role"]
+    state = control["states"]
+    actions = []
+    if not state.get("disabled"):
+        actions.append("click")
+        if role in ("textbox", "searchbox") and not state.get("readonly"):
+            actions.append("type")
+        if role in ("checkbox", "switch") and type(state.get("checked")) is bool:
+            actions.append("set_checked")
+        if role == "combobox":
+            actions.append("read_options")
+    details = control_details(target, role, control["name"], state, actions)
+    if control["context"]:
+        details["context"] = [name[:120] for name in control["context"][:3]]
+    return details
 
 
 def _node_call(page, target, script, *values):
