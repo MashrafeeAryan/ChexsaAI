@@ -1,7 +1,9 @@
 # Current ChexsaAI architecture
 
 Chexsa uses plain functions and dictionaries. Select a manual engine or use
-Auto in the desktop app or with `python cli_.py auto`. In Auto, one model
+Auto in the desktop app, with `python cli_.py auto`, or with
+`python voice_.py auto`. A request of the form `Open https://example.com/`
+opens directly and checks the actual destination. Otherwise, one model
 decision selects the browser or Windows engine. Both engines retain their
 own state. A request uses one engine at a time. In manual modes, the request
 goes directly to the selected engine. The browser engine can pass captured
@@ -53,6 +55,17 @@ A completed click only means input was sent. Fresh page evidence is still needed
 before reporting that the user's task succeeded. Groups are deliberately
 conservative: even unrelated added or removed controls can require another model
 decision. Autocomplete choices and dependent fields should be handled separately.
+
+## Windows actions
+
+The desktop agent can inspect an already-open application with one matching
+window. It uses accessibility patterns for selection, scrolling, checked
+state, focusing, and expanding a control when the app exposes them.
+
+A field group accepts two to four shown text targets. The engine reads the
+window again after each write and stops before another field if the window
+or its targets change. An interrupted group does not count as completion
+until its remaining fields are checked.
 
 ## Continuing a browser request
 
