@@ -196,6 +196,20 @@ class AgentLoopTests(unittest.TestCase):
                 {"capture": 1, "path": "existing.txt:hidden.txt"},
             )
 
+    def test_checkpoint_distinguishes_sent_click_from_verified_completion(self):
+        """Even after a fresh reading, a sent click can still be pending."""
+        state = {"_browser_task": {
+            "request": "Click Save", "status": "running", "history": [
+                {"action": {"action": "click", "backend_node_id": 42}, "result": "Click sent."},
+            ], "_observation": {"url": "https://example.test/"},
+        }}
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "tasks.sqlite3"
+            state["_checkpoint_path"] = path
+            agent_.run_agent("/checkpoint", state)
+            task_id = state["_browser_task"]["checkpoint_id"]
+            assert agent_.read_browser_checkpoint(task_id, path)["pending"] is True
+
     def test_saved_task_records_input_intent_before_clicking(self):
         """An interruption during a click leaves the disk record uncertain."""
         state = {"playwright": object(), "page": self.page}

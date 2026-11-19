@@ -94,12 +94,25 @@ def _save_checkpoint(task, browser):
             actions["group_actions"] = actions.get("group_actions", 0) + result.get("completed", 0)
 
     reading = task.get("_observation") or {}
+    # A sent click is still unproven if the process stops before a final answer.
+    sent_click = bool(actions.get("click"))
+    sent_click = sent_click or any(
+        entry["action"]["action"] == "batch"
+        and isinstance(entry["result"], dict)
+        and any(item["action"] == "click" for item in entry["action"]["actions"][
+            :entry["result"].get("completed", 0)
+        ])
+        for entry in task["history"]
+    )
     record = {
         "request": task["request"],
         "url": reading.get("url", task.get("saved_url", "")),
         "status": task["status"],
         "progress": actions,
-        "pending": bool(task.get("in_flight") or task.get("review_only")),
+        "pending": bool(
+            task.get("in_flight") or task.get("review_only")
+            or (sent_click and task["status"] != "finished")
+        ),
     }
     task["checkpoint_id"] = save_browser_checkpoint(
         record, browser.get("_checkpoint_path"), task.get("checkpoint_id")
