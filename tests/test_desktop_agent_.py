@@ -603,9 +603,10 @@ def test_csv_tool_reads_a_named_file_without_opening_a_window():
 
 
 def load_tests(loader, tests, pattern):
-    tests.addTest(unittest.FunctionTestCase(test_csv_tool_reads_a_named_file_without_opening_a_window))
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
+        test_csv_tool_reads_a_named_file_without_opening_a_window,
+        test_desktop_counts_model_calls_without_recording_requests,
         test_compact_view_rejects_ids_it_did_not_show,
         test_desktop_search_executes_on_the_full_fresh_reading,
         test_file_save_keeps_the_previous_window_reading,

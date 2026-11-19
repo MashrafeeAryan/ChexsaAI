@@ -177,9 +177,9 @@ def test_voice_routes_auto_requests_and_closes_the_right_browser():
 
 
 def load_tests(loader, tests, pattern):
-    tests.addTest(unittest.FunctionTestCase(test_voice_routes_auto_requests_and_closes_the_right_browser))
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_windows_speech, test_acknowledgment, test_wake_phrase,
+        test_voice_routes_auto_requests_and_closes_the_right_browser,
         test_stop_during_capture_skips_transcription, test_conversation, test_combined_request_and_silence, test_transcription_errors,
         test_voice_check_uses_local_audio_only,
         test_missing_default_microphone_explains_the_problem, test_agent_error_and_cleanup, test_no_task_on_startup_or_invalid_mode,
