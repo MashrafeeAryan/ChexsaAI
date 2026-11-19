@@ -12,8 +12,13 @@ _timing = ContextVar("chexsa_timed_step", default=None)
 
 
 @contextmanager
-def measure_task(state):
-    """Start a fresh set of counters for this request."""
+def measure_task(state, *, share=False):
+    """Measure a request, or use the parent counters when a router sent it."""
+    parent = _current.get()
+    if share and parent is not None:
+        state["last_metrics"] = parent
+        yield parent
+        return
     counters = {
         "model_calls": 0,
         "failed_model_calls": 0,

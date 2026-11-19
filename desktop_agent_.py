@@ -565,7 +565,7 @@ def _observe(state):
 # Keep the goal, tool results, and fresh window readings together until the task ends.
 def run_desktop_agent(request, state):
     """Run one desktop request and keep its local model call count."""
-    with measure_task(state):
+    with measure_task(state, share=True):
         return _run_desktop_request(request, state)
 
 

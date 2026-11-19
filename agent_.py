@@ -25,15 +25,37 @@ from browser_ import (
     run_action_group,
     wait_for_page,
 )
-from llm_ import get_reply
+from llm_ import choose_engine, get_reply
 from app_runtime_ import check_cancelled
 from task_metrics_ import measure_task, record_outcome, time_step
+
+
+def run_auto_agent(message, state, browser, desktop):
+    """Choose an existing engine and keep that engine's objects in its own state."""
+    from desktop_agent_ import run_desktop_agent
+
+    with measure_task(state):
+        check_cancelled(state)
+        saved = browser.get("_browser_task", {})
+        resuming = message.strip().casefold() in ("continue", "resume", "/continue", "/resume")
+        if resuming and saved.get("status") == "paused":
+            choice = {"mode": "browser"}
+        else:
+            choice = choose_engine(message)
+        check_cancelled(state)
+        if "reply" in choice:
+            return choice["reply"]
+        if choice["mode"] == "browser":
+            browser["_cancel"] = state.get("_cancel")
+            return run_agent(message, browser)
+        desktop["_cancel"] = state.get("_cancel")
+        return run_desktop_agent(message, desktop)
 
 
 # Keep one request and its action history together while working in the browser.
 def run_agent(message, browser):
     """Run one browser request and keep its local model call count."""
-    with measure_task(browser):
+    with measure_task(browser, share=True):
         return _run_request(message, browser)
 
 

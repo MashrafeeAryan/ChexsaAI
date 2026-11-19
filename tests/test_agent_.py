@@ -64,6 +64,21 @@ class AgentLoopTests(unittest.TestCase):
                 act()
         assert metrics["seconds"] == {"observation": 2, "action": 2, "task": 6}
 
+    def test_auto_dispatch_keeps_routing_and_engine_calls_in_one_measurement(self):
+        """Auto reuses the browser state and counts the whole request."""
+        client = Mock()
+        create = client.chat.completions.create
+        create.side_effect = [
+            SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"mode":"browser"}'))]),
+            SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"action":"reply","text":"Hi"}'))]),
+        ]
+        self.tools["get_reply"].side_effect = llm_.get_reply
+        state, browser = {}, {}
+        with patch.object(llm_, "model_client", return_value=(client, "fake")):
+            assert agent_.run_auto_agent("Look at the web", state, browser, {}) == "Hi"
+        assert state["last_metrics"]["model_calls"] == 2
+        assert browser["last_metrics"] is state["last_metrics"]
+
     def test_auto_route_only_accepts_supported_engines(self):
         """A bare route can choose an engine or ask, and cannot launch an action."""
         client = Mock()
