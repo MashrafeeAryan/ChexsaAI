@@ -495,6 +495,42 @@ def read_options(page, target, offset=0):
 
 
 @time_step("action")
+def select_option(page, target, label):
+    """Choose one exact native option and check what the select kept."""
+    if not isinstance(label, str) or not label.strip() or len(label) > 240:
+        raise ValueError("Provide one exact option label.")
+    try:
+        result = _node_call(page, target, """function(label) {
+            if (!this.isConnected || this.tagName !== 'SELECT' || this.multiple)
+                return "This is not a native single-choice select.";
+            if (this.matches(':disabled') || this.closest('[aria-disabled="true"], [inert]'))
+                return "This select is disabled.";
+            const rect = this.getBoundingClientRect();
+            if (!rect.width || !rect.height || getComputedStyle(this).visibility !== 'visible')
+                return "This select is hidden.";
+            const choices = Array.from(this.options).filter(option => option.label === label);
+            if (choices.length !== 1 || choices[0].matches(':disabled'))
+                return "The option is absent, disabled, or ambiguous.";
+            const option = choices[0];
+            if (option.selected) return true;
+            this.selectedIndex = option.index;
+            this.dispatchEvent(new Event('input', {bubbles: true}));
+            this.dispatchEvent(new Event('change', {bubbles: true}));
+            return this.isConnected && option.isConnected && option.selected
+                ? true : "The selected option could not be verified.";
+        }""", label)
+    finally:
+        reading = _observations.pop(page, None)
+        if reading:
+            try:
+                reading["session"].detach()
+            except Error:
+                pass
+    if result is not True:
+        raise RuntimeError(str(result) + " Read the page before trying again.")
+
+
+@time_step("action")
 def set_checked(page, reading, target, checked):
     """Click a checkbox only if needed, then check the same node's new state."""
     if type(checked) is not bool:

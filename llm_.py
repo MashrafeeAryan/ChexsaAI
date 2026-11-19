@@ -42,6 +42,7 @@ Actions:
 {"action":"click","backend_node_id":18}
 {"action":"set_checked","backend_node_id":12,"checked":true} sets a checkbox or switch.
 {"action":"read_options","backend_node_id":12,"offset":0} lists choices from a native select.
+{"action":"select_option","backend_node_id":12,"label":"First choice"} selects an exact label.
 {"action":"type","backend_node_id":12,"text":"Hello"} replaces the whole field, without submitting.
 {"action":"find_elements","query":"Send","offset":0} searches all locally collected controls; empty query lists them. Use next_offset for more.
 {"action":"find_text","query":"Receipt","offset":0} searches readable page text.
@@ -210,6 +211,15 @@ def get_reply(message, observation=None, history=None, previous=None):
             and type(target) is int
             and target > 0
             and target in visible_targets
+        ):
+            return action
+    elif action.get("action") == "select_option" and set(action) == {
+        "action", "backend_node_id", "label",
+    }:
+        target, label = action["backend_node_id"], action["label"]
+        if (
+            type(target) is int and target in visible_targets
+            and isinstance(label, str) and 0 < len(label.strip()) and len(label) <= 240
         ):
             return action
     elif action.get("action") == "set_checked" and set(action) == {

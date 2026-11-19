@@ -180,6 +180,16 @@ def check_options(page):
     assert [(row["label"], row["selected"], row["disabled"]) for row in result["options"]] == [
         ("A", False, False), ("B", False, True), ("C", True, False)
     ]
+    browser_.select_option(page, target, "A")
+    assert page.locator("select").input_value() == "A"
+    browser_.read_page(page)
+    try:
+        browser_.select_option(page, target, "B")
+    except RuntimeError as error:
+        assert "disabled" in str(error)
+    else:
+        raise AssertionError("A disabled option was selected.")
+    assert page.locator("select").input_value() == "A"
 
 
 def check_checkbox(page):
