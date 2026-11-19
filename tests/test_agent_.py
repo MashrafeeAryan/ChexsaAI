@@ -87,6 +87,28 @@ class AgentLoopTests(unittest.TestCase):
         assert "991" not in str(checkpoint) and "992" not in str(checkpoint)
         self.tools["get_reply"].assert_not_called()
 
+    def test_restore_after_restart_never_replays_saved_input(self):
+        """Even a new model click cannot escape inspection mode after restore."""
+        from app_runtime_ import save_browser_checkpoint
+
+        url = "https://example.test/form"
+        self.page.url = url
+        self.page.context.pages = [self.page]
+        self.tools["open_browser"].return_value = (object(), self.page)
+        self.tools["read_page"].return_value = {"url": url, "page_id": 10, "document_id": 20}
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "tasks.sqlite3"
+            saved = save_browser_checkpoint({
+                "request": "Click Save", "status": "paused", "pending": True,
+                "url": url, "progress": {"click": 1},
+            }, path)
+            state = {"_checkpoint_path": path}
+            assert "restored" in agent_.run_agent(f"/restore {saved}", state)
+            self.tools["get_reply"].return_value = {"action": "click", "backend_node_id": 991}
+            assert "no new input was sent" in agent_.run_agent("/continue", state)
+        self.tools["click_node"].assert_not_called()
+        self.page.goto.assert_not_called()
+
     def test_terminal_auto_accepts_requests_without_opening_an_app_on_start(self):
         """Only the entered request reaches the Auto dispatcher."""
         import cli_

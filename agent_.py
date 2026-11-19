@@ -38,7 +38,8 @@ def run_auto_agent(message, state, browser, desktop):
         check_cancelled(state)
         saved = browser.get("_browser_task", {})
         resuming = message.strip().casefold() in ("continue", "resume", "/continue", "/resume")
-        if resuming and saved.get("status") == "paused":
+        is_checkpoint = message.strip().split(maxsplit=1)[:1] in (["/checkpoint"], ["/restore"])
+        if is_checkpoint or (resuming and saved.get("status") == "paused"):
             choice = {"mode": "browser"}
         else:
             choice = choose_engine(message)
@@ -79,6 +80,49 @@ def _save_checkpoint(task, browser):
     return task["checkpoint_id"]
 
 
+def _restore_checkpoint(task_id, browser):
+    """Find the saved tab and start a new, inspection-only browser reading."""
+    record = read_browser_checkpoint(task_id, browser.get("_checkpoint_path"))
+    url = record["url"]
+    if not url:
+        return "This checkpoint has no saved page to inspect."
+    if browser.get("playwright") is None:
+        browser["playwright"], browser["page"] = open_browser()
+
+    check_cancelled(browser)
+    pages = [
+        page for page in browser["page"].context.pages
+        if not page.is_closed() and page.url == url
+    ]
+    if len(pages) != 1:
+        return "Open one tab at the saved page in Chexsa's browser, then restore again."
+
+    page = browser["page"] = pages[0]
+    observation = read_page(page)
+    if observation["url"] != url:
+        return "The saved page changed while opening. Restore again after checking the tab."
+    task = {
+        "request": record["request"],
+        "status": "paused",
+        "review_only": True,
+        "in_flight": None,
+        "_observation": observation,
+        "scope": tuple(observation.get(key) for key in ("page_id", "document_id", "url")),
+        "checkpoint_id": task_id,
+        "history": [{
+            "action": {"action": "observe"},
+            "result": {
+                "note": "Saved history is historical. Inspect fresh evidence only.",
+                "saved_status": record["status"],
+                "saved_action_counts": record["progress"],
+                "prior_input_may_have_been_sent": record["pending"],
+            },
+        }],
+    }
+    browser["_browser_task"] = task
+    return "Saved browser task restored for inspection. Enter /continue to check the current page."
+
+
 # Keep one request and its action history together while working in the browser.
 def run_agent(message, browser):
     """Run one browser request and keep its local model call count."""
@@ -100,6 +144,10 @@ def _run_request(message, browser):
             return "There is no browser task to save."
         task_id = _save_checkpoint(task, browser)
         return f"Saved local browser checkpoint {task_id}."
+    if parts and parts[0].casefold() == "/restore":
+        if len(parts) != 2 or not re.fullmatch(r"[0-9a-f]{32}", parts[1]):
+            return "Enter /restore followed by the saved browser checkpoint ID."
+        return _restore_checkpoint(parts[1], browser)
     if parts and parts[0].casefold() == "/canvas":
         return canvas_command(
             parts[1] if len(parts) > 1 else "",
