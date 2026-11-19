@@ -416,8 +416,11 @@ class AgentLoopTests(unittest.TestCase):
         self.tools["get_reply"].side_effect = [
             {"action": "close_tab"}, {"action": "reply", "text": "Done"},
         ]
-        self.page.close.side_effect = lambda **options: setattr(self.page.is_closed, "return_value", True)
+        self.page.wait_for_event.side_effect = lambda *args, **kwargs: setattr(
+            self.page.is_closed, "return_value", True
+        )
         assert agent_.run_agent("Close this new tab", state) == "Done"
+        self.page.wait_for_event.assert_called_once_with("close", timeout=1500)
         assert state["page"] is parent
         self.page.close.assert_called_once_with(run_before_unload=True)
         self.tools["get_reply"].side_effect = None

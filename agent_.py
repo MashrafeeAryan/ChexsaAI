@@ -639,7 +639,11 @@ def _run_browser_task(task, browser, resuming=False):
             # Let the site handle its own unsaved-change prompts.
             page.close(run_before_unload=True)
             if not page.is_closed():
-                raise RuntimeError("Chrome did not confirm the tab closed. Check it before continuing.")
+                try:
+                    page.wait_for_event("close", timeout=1500)
+                except Error:
+                    if not page.is_closed():
+                        raise RuntimeError("Chrome did not confirm the tab closed. Check it before continuing.") from None
             browser["owned_tabs"].pop(page)
             page = browser["page"] = previous_page
             result = "Closed the Chexsa tab and returned to the original tab."
