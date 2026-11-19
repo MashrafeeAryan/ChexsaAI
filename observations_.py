@@ -181,6 +181,34 @@ def find_elements(observation, query, offset=0):
     }
 
 
+def find_page_text(observation, query, offset=0):
+    """Find readable text in a page without adding new action targets.
+
+    Example: search 'receipt' to find a confirmation beyond the first view.
+    """
+    needle = query.lower()
+    matches = []
+    for text in observation.get("text_nodes", {}).values():
+        position = text.lower().find(needle)
+        if position >= 0:
+            matches.append((text, position))
+
+    selected = matches[offset:offset + 12]
+    excerpts = []
+    for text, position in selected:
+        left = max(0, position - 120)
+        right = min(len(text), left + 400)
+        excerpt = text[left:right]
+        excerpts.append(("..." if left else "") + excerpt + ("..." if right < len(text) else ""))
+
+    end = offset + len(selected)
+    return {
+        "matches": excerpts,
+        "total_matches": len(matches),
+        "next_offset": end if end < len(matches) else None,
+    }
+
+
 # Send changes and a small working view, while the full page stays on this computer.
 def page_context(current, previous, request, history):
     if "controls" not in current:
@@ -272,6 +300,11 @@ def page_context(current, previous, request, history):
     if last_action.get("action") == "find_elements":
         # Search fresh local data, rather than replaying IDs from an older page.
         view["search"] = find_elements(
+            current, last_action["query"], last_action.get("offset", 0)
+        )
+
+    if last_action.get("action") == "find_text":
+        view["text_search"] = find_page_text(
             current, last_action["query"], last_action.get("offset", 0)
         )
 

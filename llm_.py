@@ -38,6 +38,7 @@ Actions:
 {"action":"click","backend_node_id":18}
 {"action":"type","backend_node_id":12,"text":"Hello"} replaces the whole field, without submitting.
 {"action":"find_elements","query":"Send","offset":0} searches all locally collected controls; empty query lists them. Use next_offset for more.
+{"action":"find_text","query":"Receipt","offset":0} searches readable page text.
 {"action":"batch","actions":[{"action":"type","backend_node_id":12,"text":"Hello"},{"action":"click","backend_node_id":18}]}
 {"action":"wait_for","text":"Results ready","timeout":3}
 {"action":"wait_for","backend_node_id":18,"state":"enabled","timeout":3}
@@ -220,7 +221,7 @@ def get_reply(message, observation=None, history=None, previous=None):
             and isinstance(action["text"], str)
         ):
             return action
-    elif action.get("action") == "find_elements" and set(action) in (
+    elif action.get("action") in ("find_elements", "find_text") and set(action) in (
         {"action", "query"},
         {"action", "query", "offset"},
     ):
@@ -228,6 +229,7 @@ def get_reply(message, observation=None, history=None, previous=None):
         if (
             observation is not None
             and isinstance(action["query"], str)
+            and (action["action"] == "find_elements" or 0 < len(action["query"].strip()) <= 200)
             and type(offset) is int
             and offset >= 0
         ):

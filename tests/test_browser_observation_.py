@@ -44,6 +44,19 @@ class BrowserObservationTests(unittest.TestCase):
             return {"nodes": self.nodes}
         raise AssertionError(f"Unexpected Chrome command: {command}")
 
+    def test_page_text_search_stays_bounded(self):
+        """A search finds text beyond the first view without inventing action IDs."""
+        observation = {"text_nodes": {i: f"Receipt {i}" for i in range(15)}}
+        first = observations_.find_page_text(observation, "receipt")
+        second = observations_.find_page_text(observation, "receipt", first["next_offset"])
+        self.assertEqual(first["next_offset"], 12)
+        self.assertEqual(second["matches"], ["Receipt 12", "Receipt 13", "Receipt 14"])
+        self.assertIsNone(second["next_offset"])
+        longer = {"text_nodes": {99: "a" * 600 + " Receipt " + "b" * 600}}
+        result = observations_.find_page_text(longer, "receipt")
+        self.assertIn("Receipt", result["matches"][0])
+        self.assertLess(len(result["matches"][0]), 410)
+
     def test_text_is_preserved_without_inline_or_hidden_duplicates(self):
         "Checks that page text is kept without repeating hidden or duplicate text."
         observation = browser_.read_page(self.page)
