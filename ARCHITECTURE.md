@@ -6,7 +6,9 @@ Auto in the desktop app, with `python cli_.py auto`, or with
 opens directly and checks the actual destination. Otherwise, one model
 decision selects the browser or Windows engine. Both engines retain their
 own state. A request uses one engine at a time. In manual modes, the request
-goes directly to the selected engine. The browser engine can pass captured
+goes directly to the selected engine. For an existing editable install,
+refresh the launcher after pulling this change with
+`python -m pip install --no-deps -e .`. The browser engine can pass captured
 page text to the local file engine without sending the full export through
 the model. Auto keeps verified export paths available to the Windows engine
 for a follow-up request. `voice_.py` accepts spoken requests,
