@@ -257,6 +257,16 @@ class AgentLoopTests(unittest.TestCase):
                 agent_.run_agent("/continue", state)
             assert agent_.read_browser_checkpoint(initial["checkpoint_id"], path)["pending"] is True
 
+    def test_restore_can_distinguish_a_saved_file_from_a_later_edit(self):
+        """Recovery checks an export again before reporting that it still matches."""
+        with TemporaryDirectory() as folder:
+            source = Path(folder).resolve() / "sample.txt"
+            source.write_text("Original", encoding="utf-8")
+            receipts = {str(source): agent_.sha256(source.read_bytes()).hexdigest()}
+            assert agent_._check_saved_files(receipts) == ([str(source)], [])
+            source.write_text("Edited after save", encoding="utf-8")
+            assert agent_._check_saved_files(receipts) == ([], [str(source)])
+
     def test_restore_after_restart_never_replays_saved_input(self):
         """Even a new model click cannot escape inspection mode after restore."""
         from app_runtime_ import save_browser_checkpoint

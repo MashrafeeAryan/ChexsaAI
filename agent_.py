@@ -151,6 +151,27 @@ def _save_if_enabled(task, browser):
         _save_checkpoint(task, browser)
 
 
+def _check_saved_files(receipts):
+    """Separate changed or missing exports from those with the saved version."""
+    checked, changed = [], []
+    for name, digest in receipts.items():
+        path = Path(name)
+        try:
+            if (
+                path.is_absolute()
+                and path.resolve(strict=True) == path
+                and path.is_file()
+                and path.stat().st_size < 1_000_000
+                and sha256(path.read_bytes()).hexdigest() == digest
+            ):
+                checked.append(name)
+                continue
+        except OSError:
+            pass
+        changed.append(name)
+    return checked, changed
+
+
 def _restore_checkpoint(task_id, browser):
     """Find the saved tab and start a new, inspection-only browser reading."""
     record = read_browser_checkpoint(task_id, browser.get("_checkpoint_path"))
@@ -172,6 +193,8 @@ def _restore_checkpoint(task_id, browser):
     observation = read_page(page)
     if observation["url"] != url:
         return "The saved page changed while opening. Restore again after checking the tab."
+    receipts = record.get("files", {})
+    kept, changed = _check_saved_files(receipts)
     task = {
         "request": record["request"],
         "status": "paused",
@@ -181,6 +204,7 @@ def _restore_checkpoint(task_id, browser):
         "scope": tuple(observation.get(key) for key in ("page_id", "document_id", "url")),
         "checkpoint_id": task_id,
         "saved_progress": record["progress"],
+        "file_receipts": receipts,
         "history": [{
             "action": {"action": "observe"},
             "result": {
@@ -188,6 +212,8 @@ def _restore_checkpoint(task_id, browser):
                 "saved_status": record["status"],
                 "saved_action_counts": record["progress"],
                 "prior_input_may_have_been_sent": record["pending"],
+                "verified_files": kept,
+                "changed_or_missing_files": changed,
             },
         }],
     }
