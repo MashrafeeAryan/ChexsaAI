@@ -62,6 +62,17 @@ class AgentLoopTests(unittest.TestCase):
                 act()
         assert metrics["seconds"] == {"observation": 2, "action": 2, "task": 6}
 
+    def test_optional_tools_appear_only_when_relevant_or_requested(self):
+        """Simple pages skip extra examples; discovery and visible roles add them."""
+        plain = llm_.browser_prompt({}, [], '[12] button "checkbox"')
+        assert '"action":"set_checked"' not in plain
+        visible = llm_.browser_prompt({}, [], '[12] checkbox "Agree"')
+        assert '"action":"set_checked"' in visible
+        history = [{"action": {"action": "discover", "group": "navigation"}}]
+        discovered = llm_.browser_prompt({}, history, "")
+        assert '"action":"switch_tab"' in discovered
+        assert '"action":"switch_tab"' not in plain
+
     def test_list_tabs_keeps_objects_and_private_url_parts_local(self):
         """Only live web tabs are listed, with a short URL for disambiguation."""
         other = Mock(url="https://person:secret@example.test/form?key=secret#private")

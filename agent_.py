@@ -266,6 +266,7 @@ def _run_browser_task(task, browser, resuming=False):
             return action["text"]
         if task.get("review_only") and action["action"] not in (
             "find_elements",
+            "discover",
             "find_text",
             "inspect_region",
             "list_tabs",
@@ -297,6 +298,8 @@ def _run_browser_task(task, browser, resuming=False):
         # Any action error leaves this function immediately. Uncertain actions are not retried.
         if action["action"] == "observe":
             result = "Browser connected; current page will be read."
+        elif action["action"] == "discover":
+            result = "See the requested group's tool descriptions in the next decision."
         elif action["action"] in ("find_elements", "find_text", "inspect_region"):
             result = "Local search requested; fresh matches are supplied with the next observation."
         elif action["action"] in ("navigate", "go_back", "go_forward"):
