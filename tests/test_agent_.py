@@ -91,6 +91,7 @@ class AgentLoopTests(unittest.TestCase):
             assert agent_.run_auto_agent("Look at the web", state, browser, {}) == "Hi"
         assert state["last_metrics"]["model_calls"] == 2
         assert browser["last_metrics"] is state["last_metrics"]
+        assert state["engine"] == "browser"
 
     def test_auto_route_only_accepts_supported_engines(self):
         """A bare route can choose an engine or ask, and cannot launch an action."""

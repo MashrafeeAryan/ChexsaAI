@@ -43,6 +43,7 @@ def run_auto_agent(message, state, browser, desktop):
         else:
             choice = choose_engine(message)
         check_cancelled(state)
+        state["engine"] = choice.get("mode")
         if "reply" in choice:
             return choice["reply"]
         if choice["mode"] == "browser":
