@@ -713,6 +713,7 @@ def _run_desktop_request(request, state):
 
     # Track confirmed writes and saves so a reply alone cannot prove success.
     verified_write = None
+    pending_fields = {}
     verified_file = None
     created_paths = []
 
@@ -748,6 +749,8 @@ def _run_desktop_request(request, state):
         # A completion claim must agree with the results we checked locally.
         if name == "reply":
             if arguments["done"]:
+                if pending_fields:
+                    raise RuntimeError("Some fields from an interrupted group were never verified.")
                 for path, version in saved_versions.items():
                     if sha256(Path(path).read_bytes()).hexdigest() != version:
                         raise RuntimeError("A saved file changed before completion. Read it again.")
@@ -951,6 +954,12 @@ def _run_desktop_request(request, state):
                 raise RuntimeError("Use one text field for a request with a word count.")
             fields = arguments["fields"]
             completed, group_reading = _type_field_group(fields, observation, state)
+            for field in fields[len(completed):]:
+                pending_fields[tuple(field["node_id"])] = field["text"]
+            for field in completed:
+                target = tuple(field["node_id"])
+                if pending_fields.get(target) == field["text"]:
+                    pending_fields.pop(target)
             if completed:
                 final = completed[-1]
                 verified_write = {
@@ -966,6 +975,9 @@ def _run_desktop_request(request, state):
                 result = f"Nothing typed: the text has {count} words; the request requires {expected_words}. Revise the text first."
             else:
                 result = type_text(observation, arguments["node_id"], arguments["text"])
+                target = tuple(arguments["node_id"])
+                if pending_fields.get(target) == arguments["text"]:
+                    pending_fields.pop(target)
                 verified_write = {
                     "node_id": arguments["node_id"],
                     "text": arguments["text"].replace("\r\n", "\n").replace("\r", "\n"),

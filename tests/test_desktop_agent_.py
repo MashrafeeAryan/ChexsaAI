@@ -673,6 +673,26 @@ def test_windows_agent_can_offer_one_group_for_multiple_fields():
             agent.get_desktop_action("Write 300 words", reading)
 
 
+def test_partial_field_group_cannot_claim_verified_completion():
+    """Verified first-field input cannot prove the entire request is complete."""
+    reading = {
+        "window_id": (42,), "controls": {(1,): object(), (2,): object()},
+        "elements": '[1] Edit "First"\n[2] Edit "Second"',
+    }
+    fields = [{"node_id": [1], "text": "A"}, {"node_id": [2], "text": "B"}]
+    steps = [
+        {"tool": "type_fields", "arguments": {"fields": fields}},
+        {"tool": "reply", "arguments": {"text": "Done", "done": True}},
+    ]
+    with (
+        patch.object(agent, "get_desktop_action", side_effect=steps),
+        patch.object(agent, "_observe", return_value=reading),
+        patch.object(agent, "_type_field_group", return_value=(fields[:1], reading)),
+    ):
+        with unittest.TestCase().assertRaisesRegex(RuntimeError, "never verified"):
+            agent.run_desktop_agent("Fill both fields", {"window": object()})
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_busy_window_keeps_changes_and_can_find_hidden_duplicates,
@@ -681,6 +701,7 @@ def load_tests(loader, tests, pattern):
         test_field_group_rejects_unseen_duplicate_and_noninteger_ids,
         test_field_group_stops_before_a_replaced_target,
         test_windows_agent_can_offer_one_group_for_multiple_fields,
+        test_partial_field_group_cannot_claim_verified_completion,
         test_desktop_counts_model_calls_without_recording_requests,
         test_compact_view_rejects_ids_it_did_not_show,
         test_desktop_search_executes_on_the_full_fresh_reading,
