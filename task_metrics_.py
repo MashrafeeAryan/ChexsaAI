@@ -39,6 +39,13 @@ def measure_task(state):
         _current.reset(token)
 
 
+def record_outcome(outcome):
+    """Set a trusted outcome at the point where the agent knows it."""
+    counters = _current.get()
+    if counters is not None:
+        counters["outcome"] = outcome
+
+
 def time_step(phase):
     """Measure a step in a task, leaving calls outside tasks untouched."""
     def wrap(function):

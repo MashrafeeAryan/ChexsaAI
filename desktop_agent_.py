@@ -12,7 +12,7 @@ from hashlib import sha256
 import json  # Convert model arguments between JSON text and Python data.
 import os  # Read the API settings loaded from .env.
 from app_runtime_ import check_cancelled
-from task_metrics_ import call_model, measure_task
+from task_metrics_ import call_model, measure_task, record_outcome
 from pathlib import Path
 import re  # Find word counts and file requests in the user's message.
 from time import monotonic, sleep  # Set waiting limits and pause between checks.
@@ -656,6 +656,7 @@ def _run_desktop_request(request, state):
             # STEP 6: A final verified file save can also end the task.
             # The save already read the file back. A final save needs no extra model call.
             if arguments["done"]:
+                record_outcome("verified")
                 return "Created and saved:\n" + "\n".join(created_paths)
 
         elif name == "copy_file_text":
@@ -691,6 +692,7 @@ def _run_desktop_request(request, state):
             created_paths.append(path)
             state["recent_files"] = created_paths.copy()
             if arguments["done"]:
+                record_outcome("verified")
                 return "Copied and verified:\n" + "\n".join(created_paths)
             saved_versions[path] = sha256(Path(path).read_bytes()).hexdigest()
             result = {"path": path, "saved": True}
@@ -726,6 +728,7 @@ def _run_desktop_request(request, state):
                 state["recent_files"] = list(dict.fromkeys([*created_paths, *file_versions]))
                 result = {"path": path, "saved": True}
                 if arguments["done"]:
+                    record_outcome("verified")
                     return "Updated and verified:\n" + "\n".join(saved_versions)
 
             # Keep the latest excerpt for this file. Old excerpts are no longer current.

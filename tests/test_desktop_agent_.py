@@ -572,6 +572,7 @@ def test_desktop_counts_model_calls_without_recording_requests():
     state = {}
     with patch.dict(os.environ, {"LLM_MODEL": "fake"}), patch.object(agent, "_client", client):
         assert agent.run_desktop_agent("Message", state) == "Hi"
+        assert state["last_metrics"]["outcome"] == "unverified"
         assert state["last_metrics"]["model_calls"] == 1
         create.return_value = _response("invalid", {})
         with unittest.TestCase().assertRaises(RuntimeError):
