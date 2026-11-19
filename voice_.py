@@ -9,7 +9,7 @@ from random import choice
 import re
 import sys
 
-from agent_ import is_canvas_request, run_agent
+from agent_ import is_canvas_request, run_agent, run_auto_agent
 from desktop_agent_ import run_desktop_agent
 from browser_ import close_browser
 from plugins.gmail import run_gmail_agent
@@ -97,11 +97,12 @@ def open_microphone():
 
 # Listen for requests, pass them to the chosen agent, and speak its response.
 def main(mode="desktop"):
-    if mode not in ("desktop", "browser", "gmail"):
-        print("Choose desktop, browser, or gmail mode.")
+    if mode not in ("desktop", "browser", "gmail", "auto"):
+        print("Choose desktop, browser, gmail, or auto mode.")
         return
     # Reuse the same app or browser connection across spoken requests.
     state = {}
+    browser, desktop = {}, {}
     try:
         recognizer, microphone = open_microphone()
         print(f"Chexsa voice - {mode} mode")
@@ -129,6 +130,8 @@ def main(mode="desktop"):
             try:
                 if mode == "gmail":
                     response = run_gmail_agent(request, state)
+                elif mode == "auto":
+                    response = run_auto_agent(request, state, browser, desktop)
                 elif mode == "browser" or is_canvas_request(request, state):
                     response = run_agent(request, state)
                 else:
@@ -152,8 +155,9 @@ def main(mode="desktop"):
         print("Voice stopped. Check that Windows speech and your audio device are available.")
     finally:
         # Disconnect Chrome on exit; leave desktop documents open.
-        if state.get("playwright") is not None:
-            close_browser(state["playwright"])
+        connection = (browser if mode == "auto" else state).get("playwright")
+        if connection is not None:
+            close_browser(connection)
         print("Voice stopped.")
 
 

@@ -152,7 +152,32 @@ def test_voice_check_uses_local_audio_only():
 
 
 # Run these plain test functions without introducing application classes.
+def test_voice_routes_auto_requests_and_closes_the_right_browser():
+    """Voice can use the same Auto engine and clean up its browser session."""
+    connection = object()
+
+    def run(request, state, browser, desktop):
+        assert request == "Read the page" and browser is not desktop
+        browser["playwright"] = connection
+        return "Read"
+
+    with (
+        patch.object(voice_, "open_microphone", return_value=(None, None)),
+        patch.object(voice_, "listen", side_effect=["Hey Chexsa read", "Hey Chexsa stop"]),
+        patch.object(voice_, "get_request", side_effect=["Read the page", "stop"]),
+        patch.object(voice_, "speak"),
+        patch.object(voice_, "acknowledge"),
+        patch.object(voice_, "run_auto_agent", side_effect=run) as auto,
+        patch.object(voice_, "close_browser") as close,
+        patch("builtins.print"),
+    ):
+        voice_.main("auto")
+    auto.assert_called_once()
+    close.assert_called_once_with(connection)
+
+
 def load_tests(loader, tests, pattern):
+    tests.addTest(unittest.FunctionTestCase(test_voice_routes_auto_requests_and_closes_the_right_browser))
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_windows_speech, test_acknowledgment, test_wake_phrase,
         test_stop_during_capture_skips_transcription, test_conversation, test_combined_request_and_silence, test_transcription_errors,
