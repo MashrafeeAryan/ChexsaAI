@@ -3,20 +3,20 @@
 import sys
 
 # Browser agent
-from agent_ import is_canvas_request, run_agent
+from agent_ import is_canvas_request, run_agent, run_auto_agent
 from desktop_agent_ import run_desktop_agent
 from browser_ import close_browser
 from plugins.gmail import run_gmail_agent
 
 
-def main(mode=None):  # modes: browser, desktop, or gmail
-    """Run a simple chat in desktop, browser, or Gmail mode."""
+def main(mode=None):
+    """Run a terminal chat with an automatic or manually selected engine."""
 
     # Read the mode here so the installed chexsa command works like this file.
     if mode is None:
         mode = sys.argv[1] if len(sys.argv) > 1 else "desktop"
-    if mode not in ("desktop", "browser", "gmail"):
-        print("Choose desktop, browser, or gmail mode.")
+    if mode not in ("desktop", "browser", "gmail", "auto"):
+        print("Choose desktop, browser, gmail, or auto mode.")
         return
     print(f"ChexsaAI — {mode} mode")
     print("Type 'exit' or 'quit' to close.\n")
@@ -24,6 +24,7 @@ def main(mode=None):  # modes: browser, desktop, or gmail
     browser = {}
     desktop = {}
     gmail = {}
+    automatically = {}
     if mode == "gmail":
         print("Use /connect to sign in, /disconnect to forget access, and /send after reviewing a draft.\n")
     try:
@@ -49,6 +50,8 @@ def main(mode=None):  # modes: browser, desktop, or gmail
             try:
                 if mode == "gmail":
                     response = run_gmail_agent(message, gmail)
+                elif mode == "auto":
+                    response = run_auto_agent(message, automatically, browser, desktop)
                 elif mode == "browser" or is_canvas_request(message, browser):
                     response = run_agent(message, browser)
                 else:

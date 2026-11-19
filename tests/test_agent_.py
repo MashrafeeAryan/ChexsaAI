@@ -64,6 +64,19 @@ class AgentLoopTests(unittest.TestCase):
                 act()
         assert metrics["seconds"] == {"observation": 2, "action": 2, "task": 6}
 
+    def test_terminal_auto_accepts_requests_without_opening_an_app_on_start(self):
+        """Only the entered request reaches the Auto dispatcher."""
+        import cli_
+
+        with (
+            patch("builtins.input", side_effect=["Search the web", "exit"]),
+            patch("builtins.print"),
+            patch.object(cli_, "run_auto_agent", return_value="Done") as dispatch,
+        ):
+            cli_.main("auto")
+        assert dispatch.call_args.args[0] == "Search the web"
+        assert dispatch.call_count == 1
+
     def test_auto_dispatch_keeps_routing_and_engine_calls_in_one_measurement(self):
         """Auto reuses the browser state and counts the whole request."""
         client = Mock()
