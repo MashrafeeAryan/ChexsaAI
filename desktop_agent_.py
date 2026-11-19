@@ -40,6 +40,7 @@ from desktop_ import (
     open_app,
     press_key,
     read_selection,
+    scroll_control,
     read_text,
     read_window,
     type_text,
@@ -389,6 +390,12 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
         "Use a single already-open window by installed executable name. Never launches an app.",
         {"executable": {"type": "string"}},
     )]
+    if observation and re.search(r"\] (Document|List|Tree|DataGrid|Table) ", observation["elements"]):
+        tools = [*tools, _tool(
+            "scroll_control",
+            "Scroll a shown Windows container up or down.",
+            {"node_id": _ID, "direction": {"type": "string"}},
+        )]
     search_tip = ""
     if observation is not None and "view" in observation:
         payload["window"]["view"] = observation["view"]
@@ -526,7 +533,7 @@ def get_desktop_action(request, observation=None, history=None, *, recent_files=
 
     if name in (
         "click_control", "type_text", "toggle_control", "select_control",
-        "expand_control", "inspect_control", "read_selection", "focus_control",
+        "expand_control", "inspect_control", "read_selection", "focus_control", "scroll_control",
     ):
         if (
             observation is None
@@ -822,6 +829,9 @@ def _run_desktop_request(request, state):
 
         elif name == "expand_control":
             result = expand_control(observation, arguments["node_id"], arguments["expanded"])
+
+        elif name == "scroll_control":
+            result = scroll_control(observation, arguments["node_id"], arguments["direction"])
 
         elif name == "focus_control":
             result = focus_control(observation, arguments["node_id"])

@@ -348,6 +348,18 @@ def test_find_open_app_matches_full_program_path():
             desktop_.find_open_app(windows[10])
 
 
+def test_scroll_control_reads_the_native_scroll_position():
+    """Scroll reports movement without assuming a mouse wheel went to the right window."""
+    reading, control = _reading("List")
+    node = next(iter(reading["controls"]))
+    scrolling = control.iface_scroll
+    scrolling.CurrentVerticallyScrollable = True
+    scrolling.CurrentVerticalScrollPercent = 25
+    scrolling.Scroll.side_effect = lambda *args: setattr(scrolling, "CurrentVerticalScrollPercent", 50)
+    assert desktop_.scroll_control(reading, node, "down") == {"moved": True}
+    scrolling.Scroll.assert_called_once_with(2, 3)
+
+
 def load_tests(loader, tests, pattern):
     return unittest.TestSuite(unittest.FunctionTestCase(test) for test in (
         test_window_selection, test_invalid_launches,
@@ -356,6 +368,7 @@ def load_tests(loader, tests, pattern):
         test_find_open_app_matches_full_program_path,
         test_expand_control_checks_the_pattern_state, test_inspect_disabled_control_without_sending_input,
         test_read_selection_keeps_password_fields_private, test_focus_control_requires_the_exact_focused_id,
+        test_scroll_control_reads_the_native_scroll_position,
         test_click_exact_control_and_refresh, test_action_target_guards,
         test_click_failure_is_not_retried, test_type_field_verification,
         test_type_document_focus_and_verification, test_click_covered_target,

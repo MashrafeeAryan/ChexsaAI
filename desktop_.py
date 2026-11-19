@@ -66,6 +66,7 @@ def open_app(executable):
 # Keep controls and useful text; leave out boxes used only to arrange the layout.
 _READABLE_TYPES = {
     "Button", "Edit", "Document", "ComboBox", "CheckBox", "RadioButton",
+    "List", "Tree", "DataGrid", "Table",
     "MenuItem", "TabItem", "ListItem", "TreeItem", "Hyperlink", "Slider",
     "Spinner", "ScrollBar", "Text", "StatusBar", "DataItem",
 }
@@ -326,6 +327,29 @@ def click_control(observation, node_id):
         raise RuntimeError("The click outcome is uncertain. Read the window before continuing; do not repeat it automatically.") from error
 
     return "Click sent. Read the window again to check the result."
+
+
+@time_step("action")
+def scroll_control(observation, node_id, direction):
+    """Scroll an observed Windows container and report how its position changed."""
+    if direction not in ("up", "down"):
+        raise ValueError("Choose up or down.")
+    control = _get_control(observation, node_id)
+    try:
+        scrolling = control.iface_scroll
+        if not scrolling.CurrentVerticallyScrollable:
+            return {"moved": False}
+        before = scrolling.CurrentVerticalScrollPercent
+    except (NoPatternInterfaceError, COMError, OSError):
+        raise RuntimeError("This control does not expose a scroll action.") from None
+
+    _observations.pop(observation["window_id"], None)
+    # 2 leaves horizontal scroll alone. 0 and 3 move one page vertically.
+    try:
+        scrolling.Scroll(2, 0 if direction == "up" else 3)
+        return {"moved": scrolling.CurrentVerticalScrollPercent != before}
+    except (COMError, OSError):
+        raise RuntimeError("The scroll result is uncertain. Read the window again.") from None
 
 
 @time_step("action")
