@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from dotenv import load_dotenv
 from openai import APIError, OpenAI, RateLimitError
 
+from task_metrics_ import call_model
 from observations_ import (
     compact_history,
     page_context,
@@ -143,7 +144,8 @@ def get_reply(message, observation=None, history=None, previous=None):
     user_message = json.dumps(user_message, ensure_ascii=False)
 
     try:
-        response = client.chat.completions.create(
+        response = call_model(
+            client.chat.completions.create,
             model=model,
             messages=[
                 {

@@ -51,6 +51,7 @@ py-modules = [
     "llm_",
     "mcp_server_",
     "observations_",
+    "task_metrics_",
     "voice_",
     "visual_",
     "files_",

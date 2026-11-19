@@ -12,6 +12,24 @@ import llm_
 
 
 class AgentLoopTests(unittest.TestCase):
+    def test_browser_model_calls_are_scoped_to_one_request(self):
+        """Count real call attempts through the fake client, even on invalid output."""
+        self.tools["get_reply"].side_effect = llm_.get_reply
+        client = Mock()
+        create = client.chat.completions.create
+        create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"action":"reply","text":"Hello"}'))]
+        )
+        state = {}
+        with patch.object(llm_, "model_client", return_value=(client, "fake")):
+            assert agent_.run_agent("Hello", state) == "Hello"
+            assert state["last_metrics"]["model_calls"] == 1
+            create.return_value.choices[0].message.content = "invalid"
+            with self.assertRaises(RuntimeError):
+                agent_.run_agent("Next request", state)
+            assert state["last_metrics"]["model_calls"] == 1
+        assert create.call_count == 2
+
     def setUp(self):
         replacements = patch.multiple(
             agent_,

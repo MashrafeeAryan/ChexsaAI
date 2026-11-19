@@ -16,10 +16,17 @@ from browser_ import (
 )
 from llm_ import get_reply
 from app_runtime_ import check_cancelled
+from task_metrics_ import measure_task
 
 
 # Keep one request and its action history together while working in the browser.
 def run_agent(message, browser):
+    """Run one browser request and keep its local model call count."""
+    with measure_task(browser):
+        return _run_request(message, browser)
+
+
+def _run_request(message, browser):
     """Start a request, or continue its saved progress using a new page reading.
 
     Example: after Stop, enter 'continue' in the same browser session.
