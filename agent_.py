@@ -85,6 +85,12 @@ def _save_checkpoint(task, browser):
     return task["checkpoint_id"]
 
 
+def _save_if_enabled(task, browser):
+    """Update a task only after the user has enabled its disk checkpoint."""
+    if task.get("checkpoint_id"):
+        _save_checkpoint(task, browser)
+
+
 def _restore_checkpoint(task_id, browser):
     """Find the saved tab and start a new, inspection-only browser reading."""
     record = read_browser_checkpoint(task_id, browser.get("_checkpoint_path"))
@@ -234,6 +240,11 @@ def _run_request(message, browser):
             )
             # A pause is useful for recovery, but it does not verify completion.
             record_outcome("uncertain" if task["review_only"] else "paused")
+            # A failed write must leave the last durable intent available.
+            try:
+                _save_if_enabled(task, browser)
+            except Exception as error:
+                raise RuntimeError("Could not update the local task checkpoint. Check its previous state.") from error
 
 
 def _canvas_route(message, browser):
@@ -409,6 +420,7 @@ def _run_browser_task(task, browser, resuming=False):
     # Old snapshots are comparison data only. All action IDs come from the new reading.
     previous = task.get("_observation") if resuming and same_document else None
     task["_observation"] = observation
+    _save_if_enabled(task, browser)
 
     # Each turn can make one model call. This fixed limit prevents endless API calls.
     for step in range(10):
@@ -421,6 +433,7 @@ def _run_browser_task(task, browser, resuming=False):
         if action["action"] == "reply":
             # A reply ends the run: an answer, missing information, or a final report.
             task["status"] = "finished"
+            _save_if_enabled(task, browser)
             return action["text"]
         if task.get("review_only") and action["action"] not in (
             "find_elements",
@@ -454,6 +467,7 @@ def _run_browser_task(task, browser, resuming=False):
         # Save input intent before execution. An exception must not erase it.
         if action["action"] in ("click", "type", "set_checked", "select_option", "upload_file"):
             task["in_flight"] = action.copy()
+            _save_if_enabled(task, browser)
         # Any action error leaves this function immediately. Uncertain actions are not retried.
         if action["action"] == "observe":
             result = "Browser connected; current page will be read."
@@ -507,6 +521,7 @@ def _run_browser_task(task, browser, resuming=False):
                 task["in_flight"] = progress["attempting"]
                 if progress.get("observation") is not None:
                     task["_observation"] = progress["observation"]
+                _save_if_enabled(task, browser)
 
             # The browser rechecks targets between actions without consulting the model.
             group = run_action_group(
@@ -550,6 +565,7 @@ def _run_browser_task(task, browser, resuming=False):
         task["scope"] = tuple(
             observation.get(key) for key in ("page_id", "document_id", "url")
         )
+        _save_if_enabled(task, browser)
 
     task["status"] = "paused"
     return "Stopped after 10 model decisions. The request may be unfinished; please check the page."

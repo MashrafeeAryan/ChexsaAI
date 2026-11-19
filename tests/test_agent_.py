@@ -87,6 +87,33 @@ class AgentLoopTests(unittest.TestCase):
         assert "991" not in str(checkpoint) and "992" not in str(checkpoint)
         self.tools["get_reply"].assert_not_called()
 
+    def test_saved_task_records_input_intent_before_clicking(self):
+        """An interruption during a click leaves the disk record uncertain."""
+        state = {"playwright": object(), "page": self.page}
+        self.tools["read_page"].return_value = {
+            "url": "https://example.test/form", "page_id": 1, "document_id": 2,
+        }
+        self.tools["get_reply"].return_value = {"action": "click", "backend_node_id": 42}
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "tasks.sqlite3"
+            initial = {
+                "request": "Click Save", "status": "paused", "in_flight": None,
+                "_observation": self.tools["read_page"].return_value,
+                "scope": (1, 2, "https://example.test/form"), "history": [],
+            }
+            state.update(_checkpoint_path=path, _browser_task=initial)
+            agent_.run_agent("/checkpoint", state)
+
+            def click(*args):
+                record = agent_.read_browser_checkpoint(initial["checkpoint_id"], path)
+                assert record["pending"] is True
+                raise KeyboardInterrupt
+
+            self.tools["click_node"].side_effect = click
+            with self.assertRaises(KeyboardInterrupt):
+                agent_.run_agent("/continue", state)
+            assert agent_.read_browser_checkpoint(initial["checkpoint_id"], path)["pending"] is True
+
     def test_restore_after_restart_never_replays_saved_input(self):
         """Even a new model click cannot escape inspection mode after restore."""
         from app_runtime_ import save_browser_checkpoint
