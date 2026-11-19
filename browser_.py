@@ -315,6 +315,14 @@ def scroll_page(page, direction):
 
 
 @time_step("action")
+def press_navigation_key(page, key):
+    """Move focus or dismiss a popup with a short list of supported keys."""
+    if key not in ("Tab", "Shift+Tab", "Escape"):
+        raise ValueError("Use Tab, Shift+Tab, or Escape for browser navigation.")
+    page.keyboard.press(key)
+
+
+@time_step("action")
 def scroll_region(page, target, direction):
     """Scroll the nearest scrollable ancestor of a shown control."""
     if direction not in ("up", "down"):

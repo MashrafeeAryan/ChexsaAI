@@ -18,6 +18,7 @@ from browser_ import (
     selected_page_text,
     set_checked,
     open_browser,
+    press_navigation_key,
     read_page,
     read_options,
     scroll_page,
@@ -593,6 +594,9 @@ def _run_browser_task(task, browser, resuming=False):
             result = inspect_control(page, observation, action["backend_node_id"])
         elif action["action"] == "read_options":
             result = read_options(page, action["backend_node_id"], action.get("offset", 0))
+        elif action["action"] == "press_navigation_key":
+            press_navigation_key(page, action["key"])
+            result = "Navigation key sent. Check the current focus or dialog."
         elif action["action"] == "scroll":
             if "backend_node_id" in action:
                 moved = scroll_region(page, action["backend_node_id"], action["direction"])

@@ -259,6 +259,10 @@ def check_scroll(page):
     target = next(iter(reading["controls"]))
     assert browser_.scroll_region(page, target, "down") is True
     assert page.locator("#panel").evaluate("node => node.scrollTop") > 0
+    page.set_content("<button>First</button><button>Second</button>")
+    page.get_by_role("button", name="First").focus()
+    browser_.press_navigation_key(page, "Tab")
+    assert page.evaluate("document.activeElement.innerText") == "Second"
 
 
 def check_action_groups(page):
