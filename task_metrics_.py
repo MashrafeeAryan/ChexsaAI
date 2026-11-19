@@ -15,6 +15,8 @@ def measure_task(state):
     """Start a fresh set of counters for this request."""
     counters = {
         "model_calls": 0,
+        "failed_model_calls": 0,
+        "outcome": "unverified",
         "input_tokens": None,
         "output_tokens": None,
         "cached_input_tokens": None,
@@ -26,6 +28,12 @@ def measure_task(state):
     started = perf_counter()
     try:
         yield counters
+    except KeyboardInterrupt:
+        counters["outcome"] = "cancelled"
+        raise
+    except Exception:
+        counters["outcome"] = "failed"
+        raise
     finally:
         counters["seconds"]["task"] = perf_counter() - started
         _current.reset(token)
@@ -55,7 +63,12 @@ def call_model(create, **arguments):
     counters = _current.get()
     if counters is not None:
         counters["model_calls"] += 1
-    response = create(**arguments)
+    try:
+        response = create(**arguments)
+    except Exception:
+        if counters is not None:
+            counters["failed_model_calls"] += 1
+        raise
     if counters is not None:
         _add_usage(counters, getattr(response, "usage", None))
     return response

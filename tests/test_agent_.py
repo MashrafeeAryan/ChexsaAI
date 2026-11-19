@@ -42,7 +42,14 @@ class AgentLoopTests(unittest.TestCase):
             assert state["last_metrics"]["model_calls"] == 1
         assert state["last_metrics"]["input_tokens"] is None
         assert state["last_metrics"]["calls_with_usage"] == 0
-        assert create.call_count == 2
+        assert state["last_metrics"]["outcome"] == "failed"
+        create.side_effect = RuntimeError("fixture connection error")
+        with patch.object(llm_, "model_client", return_value=(client, "fake")):
+            with self.assertRaises(RuntimeError):
+                agent_.run_agent("One more request", state)
+        assert state["last_metrics"]["model_calls"] == 1
+        assert state["last_metrics"]["failed_model_calls"] == 1
+        assert create.call_count == 3
 
     def setUp(self):
         replacements = patch.multiple(
