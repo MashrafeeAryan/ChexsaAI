@@ -77,6 +77,15 @@ class BrowserObservationTests(unittest.TestCase):
         self.assertNotIn("heading", observation["elements"])
         self.assertEqual(browser_._observations[self.page]["nodes"], {16, 19, 113})
 
+    def test_region_inspection_separates_identically_named_sections(self):
+        """Two regions can look the same and still have different members."""
+        self.nodes[1].update(role={"value": "dialog"}, name={"value": "New Message"})
+        observation = browser_.read_page(self.page)
+        result = observations_.inspect_region(observation, 19)
+        self.assertIn("[19]", result["elements"])
+        self.assertIn("[113]", result["elements"])
+        self.assertNotIn("[16]", result["elements"])
+
     def test_full_original_tree_stays_local_including_values_and_hierarchy(self):
         "Checks that the complete page structure stays on the computer."
         original = deepcopy(self.nodes)

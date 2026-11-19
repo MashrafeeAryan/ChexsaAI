@@ -144,6 +144,7 @@ def read_page(page):
 
             # Walk up the page structure to show where duplicate controls belong.
             context = []
+            region_id = None
             # Track real parents locally; identical names can belong to different forms.
             ancestors = []
             parent = by_id.get(node.get("parentId"))
@@ -159,6 +160,8 @@ def read_page(page):
                     "navigation",
                     "region",
                 ):
+                    if region_id is None:
+                        region_id = parent.get("backendDOMNodeId", parent["nodeId"])
                     parent_name = parent.get("name", {}).get("value", "")
                     context.append(
                         f"{parent_role} {json.dumps(parent_name, ensure_ascii=False)}"
@@ -189,6 +192,7 @@ def read_page(page):
                 "role": role,
                 "name": name,
                 "context": context,
+                "region_id": region_id,
                 "ancestors": ancestors,
                 "value": node.get("value", {}).get("value", ""),
                 "states": states,

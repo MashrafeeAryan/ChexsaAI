@@ -39,6 +39,7 @@ Actions:
 {"action":"type","backend_node_id":12,"text":"Hello"} replaces the whole field, without submitting.
 {"action":"find_elements","query":"Send","offset":0} searches all locally collected controls; empty query lists them. Use next_offset for more.
 {"action":"find_text","query":"Receipt","offset":0} searches readable page text.
+{"action":"inspect_region","backend_node_id":18,"offset":0} reads nearby controls in its form or dialog.
 {"action":"batch","actions":[{"action":"type","backend_node_id":12,"text":"Hello"},{"action":"click","backend_node_id":18}]}
 {"action":"wait_for","text":"Results ready","timeout":3}
 {"action":"wait_for","backend_node_id":18,"state":"enabled","timeout":3}
@@ -232,6 +233,16 @@ def get_reply(message, observation=None, history=None, previous=None):
             and (action["action"] == "find_elements" or 0 < len(action["query"].strip()) <= 200)
             and type(offset) is int
             and offset >= 0
+        ):
+            return action
+    elif action.get("action") == "inspect_region" and set(action) in (
+        {"action", "backend_node_id"},
+        {"action", "backend_node_id", "offset"},
+    ):
+        target, offset = action["backend_node_id"], action.get("offset", 0)
+        if (
+            type(target) is int and target in visible_targets
+            and type(offset) is int and offset >= 0
         ):
             return action
     elif action == {"action": "observe"} and observation is None:

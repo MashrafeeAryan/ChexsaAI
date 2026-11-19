@@ -181,6 +181,29 @@ def find_elements(observation, query, offset=0):
     }
 
 
+def inspect_region(observation, anchor_id, offset=0):
+    """Show controls in the anchor's real form or dialog.
+
+    Example: inspect an observed Send button to see the fields beside it.
+    The nearest region ID keeps two forms with the same label separate.
+    """
+    controls = observation.get("controls", {})
+    anchor = controls.get(anchor_id)
+    region_id = anchor.get("region_id") if anchor else None
+    matches = (
+        [control for control in controls.values() if control.get("region_id") == region_id]
+        if region_id is not None else ([anchor] if anchor else [])
+    )
+    selected = matches[offset:offset + 40]
+    end = offset + len(selected)
+    return {
+        "query": f"Region of [{anchor_id}]",
+        "elements": "\n".join(describe_control(control) for control in selected),
+        "total_matches": len(matches),
+        "next_offset": end if end < len(matches) else None,
+    }
+
+
 def find_page_text(observation, query, offset=0):
     """Find readable text in a page without adding new action targets.
 
@@ -303,6 +326,10 @@ def page_context(current, previous, request, history):
             current, last_action["query"], last_action.get("offset", 0)
         )
 
+    if last_action.get("action") == "inspect_region":
+        view["search"] = inspect_region(
+            current, last_action["backend_node_id"], last_action.get("offset", 0)
+        )
     if last_action.get("action") == "find_text":
         view["text_search"] = find_page_text(
             current, last_action["query"], last_action.get("offset", 0)

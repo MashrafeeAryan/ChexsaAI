@@ -243,6 +243,7 @@ def _run_browser_task(task, browser, resuming=False):
         if task.get("review_only") and action["action"] not in (
             "find_elements",
             "find_text",
+            "inspect_region",
             "wait_for",
             "observe",
         ):
@@ -270,7 +271,7 @@ def _run_browser_task(task, browser, resuming=False):
         # Any action error leaves this function immediately. Uncertain actions are not retried.
         if action["action"] == "observe":
             result = "Browser connected; current page will be read."
-        elif action["action"] in ("find_elements", "find_text"):
+        elif action["action"] in ("find_elements", "find_text", "inspect_region"):
             result = "Local search requested; fresh matches are supplied with the next observation."
         elif action["action"] == "navigate":
             page.goto(action["url"], wait_until="domcontentloaded", timeout=30000)
