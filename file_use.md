@@ -1,120 +1,102 @@
 # What each file does
 
-The new Python files end in `_`. The old code was removed; Git history keeps it.
+ChexsaAI's main Python code now lives under the `chexsa/` package. Root files such as
+`agent_.py`, `browser_.py`, and `cli_.py` are compatibility shims so existing
+commands, tests, and editable installs keep working during the package transition.
 
-Gmail integration code stays together in `plugins/gmail/`. Other service integrations can get their own folder under `plugins/`.
+## Package layout
 
-## App files
+```text
+chexsa/
+├── core/
+│   ├── metrics.py
+│   └── observations.py
+├── browser/
+│   ├── agent.py
+│   ├── model.py
+│   └── runtime.py
+├── desktop/
+│   ├── agent.py
+│   ├── runtime.py
+│   └── visual.py
+├── files/
+│   └── runtime.py
+├── app/
+│   ├── runtime.py
+│   └── ui.py
+├── interfaces/
+│   ├── cli.py
+│   └── voice.py
+└── mcp/
+    └── server.py
+```
+
+## Core
 
 | File | Simple purpose |
 | --- | --- |
-| `app_.py` | Shows the desktop chat, sidebar, mascots, controls, and settings dialog. |
-| `chexsa_assets/` | Keeps Foxy, Fluffy, and Bruhhh artwork packaged with the app. |
-| `app_runtime_.py` | Saves encrypted settings and runs tasks and audio away from the window. |
-| `DESKTOP_APP_.md` | Explains the desktop app, development command, storage, and future updates. |
-| `cli_.py` | Shows the terminal chat and sends your request to the selected engine. |
-| `agent_.py` | Holds the browser task together and keeps in-memory progress for /continue. |
-| `browser_.py` | Opens Chrome, reads exact controls, runs checked actions/groups, and waits locally. |
-| `llm_.py` | Sends the browser request to the model and checks its JSON answer. |
-| `observations_.py` | Chooses smaller page context, checks inputs, and compacts completed/unfinished action history. |
-| `desktop_agent_.py` | Gives the model desktop tools and checks progress on its task. |
-| `files_.py` | Creates text, code, or Word (.docx) files, saves them, and checks the contents. |
-| `desktop_.py` | Finds Windows apps, reads controls, clicks, types, and sends shortcuts. |
-| `plugins/gmail/gmail_auth_.py` | Opens Google sign-in and saves encrypted account access outside Git. |
-| `plugins/gmail/gmail_.py` | Searches and reads mail, verifies drafts, and records sends to prevent duplicates. |
-| `plugins/gmail/gmail_agent_.py` | Lets the AI choose Gmail tools and remembers the selected draft. |
-| `plugins/gmail/GMAIL_SETUP_.md` | Explains Google setup, Gmail commands, draft editing, and voice use. |
-| `voice_.py` | Listens for Hey Chexsa, sends requests to the selected agent, and speaks the result. |
+| `chexsa/core/metrics.py` | Counts model calls, tokens, outcomes, and local task timing. |
+| `chexsa/core/observations.py` | Builds compact browser/desktop views, change summaries, and action validation. |
 
-## Setup and docs
+## Browser
 
 | File | Simple purpose |
 | --- | --- |
-| `pyproject.toml` | Lists required libraries and makes the `chexsa` terminal command. |
-| `.gitignore` | Keeps keys, installed libraries, caches, and local browser data out of Git. |
-| `.env` (local only) | Stores your API key, model name, and API address. |
-| `README.md` | Explains setup, commands, working features, and current limits. |
-| `ARCHITECTURE.md` | Explains how the browser and desktop pieces connect. |
-| `file_use.md` | This file: explains the purpose of each file. |
-| `.github/workflows/ci.yml` | Runs unit tests and an isolated Chrome fixture in GitHub Actions. |
-| `.github/workflows/release.yml` | Builds a Python package when a version tag is pushed. |
+| `chexsa/browser/agent.py` | Runs browser tasks, recovery, checkpoints, Canvas routing, and verified progress. |
+| `chexsa/browser/runtime.py` | Opens Chrome, reads accessibility nodes, resolves exact targets, and executes browser actions. |
+| `chexsa/browser/model.py` | Builds browser prompts, calls the configured model, and validates model actions. |
 
-## Tests
+## Desktop
 
 | File | Simple purpose |
 | --- | --- |
-| `tests/test_agent_.py` | Checks the browser task loop and model action validation with fake replies. |
-| `tests/test_browser_observation_.py` | Checks page reading, node identity, changes, search, clicks, and typing. |
-| `tests/test_desktop_.py` | Checks Windows control selection, clicking, typing, and stale-target guards. |
-| `tests/test_desktop_agent_.py` | Checks desktop model tools, task progress, word counts, limits, and CLI modes. |
-| `tests/test_files_.py` | Checks file creation, saved contents, and protection against overwriting existing files. |
-| `tests/test_app_runtime_.py` | Checks encrypted app settings and the Stop flag. |
-| `tests/test_app_worker_.py` | Checks ordered background work, state reuse, and cancellation before a job. |
-| `tests/test_app_cancel_.py` | Checks that a late model reply cannot act after Stop. |
-| `tests/test_app_ui_.py` | Checks real Tk widgets, chat, Stop, dictation review, layout, and closing. |
-| `tests/test_app_audio_.py` | Checks microphone parsing and stopped speech with fake audio. |
-| `tests/test_voice_.py` | Checks wake phrases, spoken replies, agent selection, and cleanup with fake audio. |
-| `tests/browser_changes_integration_.py` | Runs the new browser loop on a large local page in isolated Chrome. |
-| `tests/browser_context_benchmark_.py` | Compares smaller browser views and optional MCP snapshots without live model calls. |
-| `tests/test_browser_actions_.py` | Rejects invalid action groups and unbounded or unknown wait conditions. |
-| `tests/browser_workflows_integration_.py` | Checks browser groups, interruptions, recovery, and token counts with fake model replies. |
-| `tests/fixtures/browser_workflows_.html` | Provides disposable forms, duplicate controls, and delayed updates for Chrome checks. |
-| `tests/desktop_actions_integration_.py` | Manually tests real disposable Windows controls and a temporary Word document. |
+| `chexsa/desktop/agent.py` | Runs Windows tasks and coordinates desktop/file tools. |
+| `chexsa/desktop/runtime.py` | Reads Windows UI Automation controls and performs checked desktop actions. |
+| `chexsa/desktop/visual.py` | Provides screenshot-based Windows fallback when accessibility controls are insufficient. |
 
-`.venv/`, `.chexsa/`, `__pycache__/`, `build/`, `dist/`, and `*.egg-info/` are local
-runtime or generated folders, not extra implementations. Do not put API keys in docs.
+## Files
 
-## Run voice
+| File | Simple purpose |
+| --- | --- |
+| `chexsa/files/runtime.py` | Creates, reads, edits, copies, and verifies text, Python, CSV, and Word files. |
 
-Install the optional microphone support:
+## Application and interfaces
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install -e ".[voice]"
-```
+| File | Simple purpose |
+| --- | --- |
+| `chexsa/app/ui.py` | Builds the Windows chat application. |
+| `chexsa/app/runtime.py` | Stores local settings/chats and runs agent work away from the UI thread. |
+| `chexsa/interfaces/cli.py` | Runs terminal Browser, Desktop, Gmail, or Auto mode. |
+| `chexsa/interfaces/voice.py` | Runs the spoken-request interface. |
+| `chexsa/mcp/server.py` | Exposes selected local file tools through MCP. |
 
-Desktop mode:
+## Integrations
 
-```powershell
-.\.venv\Scripts\python.exe voice_.py
-```
+Service-specific integrations remain under `plugins/` so they stay isolated from
+the computer-use engines.
 
-Browser mode:
+| Path | Simple purpose |
+| --- | --- |
+| `plugins/gmail/` | Gmail OAuth, search/read tools, draft review, and duplicate-send protection. |
+| `plugins/canvas_.py` | Canvas assignment reading, drafting, upload, and submission-status helpers. |
 
-```powershell
-.\.venv\Scripts\python.exe voice_.py browser
-```
+## Compatibility files
 
-Say **Hey Chexsa**, wait for the greeting, then give a request. You can also say
-**Hey Chexsa, open YouTube** in one sentence when running browser mode.
-Chexsa acknowledges the request, runs the selected agent, and speaks its result.
+The old root module names remain intentionally small. They forward imports to the
+package modules so older scripts and tests continue to work:
 
-Say **Hey Chexsa, stop** or press **Ctrl+C** to close it. During a running task,
-Ctrl+C cancels that task; voice then returns to listening.
+`agent_.py`, `browser_.py`, `desktop_.py`, `desktop_agent_.py`, `llm_.py`,
+`observations_.py`, `task_metrics_.py`, `files_.py`, `visual_.py`,
+`app_runtime_.py`, `app_.py`, `cli_.py`, `voice_.py`, and `mcp_server_.py`.
 
-- You choose browser or desktop mode at startup; there is no automatic mode choice yet.
-- Speech recognition sends recordings to Google's speech service and needs internet.
-- The wake phrase is detected from transcribed speech, not by an offline wake-word detector.
-- Windows speaks fixed greetings and acknowledgments without an AI model call.
-- Agent tasks use your existing model settings and API quota, like terminal tasks.
-- Listening pauses during speech and task execution. Spoken stop commands work while listening.
-- Voice must be running to hear the wake phrase; it does not start with Windows.
+New code should import from `chexsa.*` instead of adding new root modules.
 
-## Create a file without opening an editor
+## Other repository folders
 
-Start desktop mode with `python cli_.py`. For example:
-
-- `Create fibonacci.py with a function that returns the first 10 Fibonacci numbers.`
-- `Create notes.txt containing Hello Mashrafee.`
-- `Create a Markdown file called ideas.md with my project ideas.`
-- `Create ai_essay.docx with a short essay about AI in education.`
-
-The model chooses the path and text; `files_.py` creates and saves the file.
-Relative paths go inside the repository's `output/` folder. You can also request
-an absolute path. Chexsa reads the contents back before reporting success.
-Existing files are never overwritten, and generated code is not executed.
-Python files receive a syntax check. A `.docx` file is a real Word document, with
-each line saved as a paragraph; no Word installation is needed to create it.
-Other Office formats and images need different tools.
-
-When a save is the final requested step, Chexsa reports the saved paths immediately
-after verification. Requests for more files or actions can continue before finishing.
+| Path | Simple purpose |
+| --- | --- |
+| `tests/` | Unit, integration, benchmark, and disposable browser/desktop fixtures. |
+| `chexsa_assets/` | Packaged mascot and UI artwork. |
+| `.github/workflows/ci.yml` | Windows CI for package compilation, unit tests, and isolated Chrome workflows. |
+| `README.md` | Setup and usage overview. |
+| `ARCHITECTURE.md` | Runtime architecture, recovery behavior, benchmarks, and future work. |
