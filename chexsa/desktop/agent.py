@@ -11,7 +11,7 @@
 from hashlib import sha256
 import json  # Convert model arguments between JSON text and Python data.
 import os  # Read the API settings loaded from .env.
-from app_runtime_ import check_cancelled
+from chexsa.app.runtime import check_cancelled
 from chexsa.core.metrics import call_model, measure_task, record_outcome
 from pathlib import Path
 import re  # Find word counts and file requests in the user's message.
