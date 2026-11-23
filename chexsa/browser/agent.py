@@ -33,7 +33,7 @@ from chexsa.browser.runtime import (
 from chexsa.browser.model import choose_engine, get_reply
 from chexsa.core.observations import find_page_text, page_outline
 from chexsa.files.runtime import write_file
-from app_runtime_ import (
+from chexsa.app.runtime import (
     check_cancelled,
     delete_browser_checkpoint,
     list_browser_checkpoints,
@@ -62,7 +62,7 @@ def _simple_open_url(request):
 
 def run_auto_agent(message, state, browser, desktop):
     """Choose an existing engine and keep that engine's objects in its own state."""
-    from desktop_agent_ import run_desktop_agent
+    from chexsa.desktop.agent import run_desktop_agent
 
     with measure_task(state):
         check_cancelled(state)
