@@ -517,7 +517,7 @@ def record_message(stop):
     Example speech: 'Hey Chexsa, open a website'. Output: 'open a website'.
     The existing recognizer sends this recording to Google for transcription.
     """
-    from voice_ import get_request, listen, open_microphone
+    from chexsa.interfaces.voice import get_request, listen, open_microphone
 
     if stop.is_set():
         raise InterruptedError("Recording cancelled.")
@@ -538,7 +538,7 @@ def play_reply(text, stop):
 
     pythoncom.CoInitialize()
     try:
-        from voice_ import speak
+        from chexsa.interfaces.voice import speak
 
         if not stop.is_set():
             speak(text, cancel=stop)
