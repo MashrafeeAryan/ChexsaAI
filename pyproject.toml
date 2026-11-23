@@ -33,11 +33,11 @@ gmail = ["google-api-python-client>=2,<3", "google-auth-oauthlib>=1,<2", "google
 
 [project.scripts]
 # Both terminal modes start from the new CLI.
-chexsa = "cli_:main"
-chexsa-mcp = "mcp_server_:main"
+chexsa = "chexsa.interfaces.cli:main"
+chexsa-mcp = "chexsa.mcp.server:main"
 
 [project.gui-scripts]
-chexsa-app = "app_:main"
+chexsa-app = "chexsa.app.ui:main"
 
 [tool.setuptools]
 py-modules = [
@@ -59,7 +59,7 @@ py-modules = [
 
 # Include service folders when installing Chexsa.
 [tool.setuptools.packages.find]
-include = ["plugins", "plugins.*", "chexsa_assets"]
+include = ["chexsa", "chexsa.*", "plugins", "plugins.*", "chexsa_assets"]
 
 [tool.setuptools.package-data]
 "plugins.gmail" = ["*.md"]

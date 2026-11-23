@@ -11,22 +11,21 @@ refresh the launcher after pulling this change with
 `python -m pip install --no-deps -e .`. The browser engine can pass captured
 page text to the local file engine without sending the full export through
 the model. Auto keeps verified export paths available to the Windows engine
-for a follow-up request. `voice_.py` accepts spoken requests,
-calls the selected agent, and speaks its response.
+for a follow-up request. `chexsa/interfaces/voice.py` accepts spoken requests, calls the selected agent, and speaks its response. Root files such as `cli_.py` and `agent_.py` are compatibility shims for existing commands and tests.
 
 ```text
-cli_.py: user request
+chexsa/interfaces/cli.py: user request
     |
     +-- desktop (default)
-    |     desktop_agent_.py: ask the model for one tool call
-    |           -> desktop_.py: validate and execute
+    |     chexsa/desktop/agent.py: ask the model for one tool call
+    |           -> chexsa/desktop/runtime.py: validate and execute
     |           -> read the app again -> verify -> next model decision
     |
     +-- browser
-          agent_.py -> browser_.py: read the page
-                    -> observations_.py: select current controls and changes
-                    -> llm_.py: ask for one action or a checked action group
-                    -> browser_.py: validate, execute, and check locally
+          chexsa/browser/agent.py -> chexsa/browser/runtime.py: read the page
+                    -> chexsa/core/observations.py: select current controls and changes
+                    -> chexsa/browser/model.py: ask for one action or a checked action group
+                    -> chexsa/browser/runtime.py: validate, execute, and check locally
                     -> read again -> next model decision
 ```
 

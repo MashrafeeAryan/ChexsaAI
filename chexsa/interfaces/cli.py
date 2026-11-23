@@ -1,0 +1,75 @@
+"""Command-line input for ChexsaAI."""
+# Helps reads the words after filename; ex: python cli_.py desktop
+import sys
+
+# Browser agent
+from chexsa.browser.agent import is_canvas_request, run_agent, run_auto_agent
+from chexsa.desktop.agent import run_desktop_agent
+from chexsa.browser.runtime import close_browser
+from plugins.gmail import run_gmail_agent
+
+
+def main(mode=None):
+    """Run a terminal chat with an automatic or manually selected engine."""
+
+    # Read the mode here so the installed chexsa command works like this file.
+    if mode is None:
+        mode = sys.argv[1] if len(sys.argv) > 1 else "desktop"
+    if mode not in ("desktop", "browser", "gmail", "auto"):
+        print("Choose desktop, browser, gmail, or auto mode.")
+        return
+    print(f"ChexsaAI — {mode} mode")
+    print("Type 'exit' or 'quit' to close.\n")
+
+    browser = {}
+    desktop = {}
+    gmail = {}
+    automatically = {}
+    if mode == "gmail":
+        print("Use /connect to sign in, /disconnect to forget access, and /send after reviewing a draft.\n")
+    try:
+        while True:
+            try:
+                # strip() removes spaces from the ends of your message.
+                message = input("You > ").strip()
+
+            except (EOFError, KeyboardInterrupt):
+                # Leave cleanly if input closes or you press Ctrl+C or Ctrl+Z
+                print("\nGoodbye.")
+                break
+
+            # lower() lets EXIT and Quit work too.
+            if message.lower() in ("exit", "quit"):
+                print("Goodbye.")
+                break
+
+            if not message:
+                # Skip empty messages and wait for another one.
+                continue
+
+            try:
+                if mode == "gmail":
+                    response = run_gmail_agent(message, gmail)
+                elif mode == "auto":
+                    response = run_auto_agent(message, automatically, browser, desktop)
+                elif mode == "browser" or is_canvas_request(message, browser):
+                    response = run_agent(message, browser)
+                else:
+                    response = run_desktop_agent(message, desktop)
+                print(f"Chexsa > {response}")
+            except KeyboardInterrupt:
+                print("\nChexsa > Request cancelled.")
+            except (RuntimeError, ValueError) as error:
+                print(f"Chexsa > {error}")
+            except Exception:
+                # Keep the chat open without showing private connection details.
+                print("Chexsa > Could not complete the request. Check your connection and the selected app.")
+    finally:
+        # Release the browser connection when the chat ends.
+        if browser.get("playwright") is not None:
+            close_browser(browser["playwright"])
+
+
+# Start the chat only when you run this file directly.
+if __name__ == "__main__":
+    main()
