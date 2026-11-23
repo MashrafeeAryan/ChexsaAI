@@ -50,7 +50,7 @@ from chexsa.desktop.runtime import (
     select_control,
 )
 
-load_dotenv(Path(__file__).with_name(".env"))  # Reuse the existing API settings.
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")  # Reuse the existing API settings.
 _client = None  # Create the API client once, then reuse it.
 
 
