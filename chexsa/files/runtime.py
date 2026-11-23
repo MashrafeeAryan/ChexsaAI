@@ -6,7 +6,7 @@ from itertools import islice
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
-from task_metrics_ import time_step
+from chexsa.core.metrics import time_step
 import os
 import re
 from tempfile import NamedTemporaryFile
